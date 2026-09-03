@@ -24,6 +24,14 @@
       </p>
     </header>
 
+    <!-- View tabs: orçamento (canvas) vs. busca avançada por item, mutuamente exclusivos para o
+         canvas aproveitar a tela inteira em vez de dividir espaço com o formulário de busca. -->
+    <div class="view-tabs">
+      <button type="button" class="view-tab-btn active" data-tab="budget">🗂️ Orçamento</button>
+      <button type="button" class="view-tab-btn" data-tab="search">🔍 Busca avançada por item</button>
+    </div>
+
+    <div id="tab-budget" class="tab-view">
     <!-- Budget Builder: n8n-style flow canvas -->
     <section class="budget-card">
       <div class="flow-toolbar">
@@ -63,14 +71,24 @@
 
       <div id="budget-empty" class="budget-empty">Nenhum item no fluxo ainda. Adicione o equipamento principal (ex: Câmera IP) para começar.</div>
 
-      <div id="drawflow" class="drawflow-canvas"></div>
+      <div class="flow-workspace">
+        <div id="drawflow" class="drawflow-canvas"></div>
+        <aside class="flow-suggestions-panel">
+          <h3 class="flow-suggestions-title">Sugestões para o orçamento</h3>
+          <p class="flow-suggestions-hint">Segure e arraste um item para o quadro, depois puxe a conexão até o equipamento correspondente.</p>
+          <div id="flow-suggestions-list" class="flow-suggestions-list"></div>
+          <p id="flow-suggestions-empty" class="flow-suggestions-empty hidden">Nenhuma sugestão pendente.</p>
+        </aside>
+      </div>
 
       <div id="budget-prices-loading" class="loading-container hidden">
         <div class="spinner"></div>
         <p class="loading-title">Buscando preço de cada item do orçamento...</p>
       </div>
     </section>
+    </div>
 
+    <div id="tab-search" class="tab-view hidden">
     <!-- Search Form Box -->
     <section class="search-card">
       <h2 class="search-card-title">Busca avançada por item</h2>
@@ -210,6 +228,7 @@
       </div>
       <div id="compare-table-wrap" class="compare-table-wrap"></div>
     </section>
+    </div>
   </main>
 
   <footer class="footer">

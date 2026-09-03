@@ -744,6 +744,38 @@ body {
   display: none !important;
 }
 
+/* Abas de visão: orçamento (canvas) x busca avançada, mutuamente exclusivas para o canvas usar a
+   tela inteira em vez de dividir espaço vertical com o formulário de busca abaixo dele. */
+.view-tabs {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 1.25rem;
+}
+
+.view-tab-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  padding: 0.6rem 1.1rem;
+  border-radius: 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.view-tab-btn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.view-tab-btn.active {
+  background: var(--accent-gradient);
+  border-color: transparent;
+  color: #ffffff;
+}
+
 /* Budget Builder — quebra o max-width do .container de propósito: é a área de trabalho principal
    (estilo n8n), então usa a largura inteira da janela em vez de ficar espremida na coluna central. */
 .budget-card {
@@ -910,8 +942,15 @@ body {
 /* Flow canvas (Drawflow) — visual reference: Supabase's Schema Visualizer (Database > Schema
    Visualizer): dark canvas with a graph-paper grid, table-style cards with a solid color header bar,
    dark row body, and dashed right-angle connectors between cards. */
+.flow-workspace {
+  display: flex;
+  gap: 1rem;
+  align-items: stretch;
+}
+
 .drawflow-canvas {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   height: 78vh;
   min-height: 560px;
   max-height: 1100px;
@@ -922,6 +961,91 @@ body {
   border: 1px solid var(--border-color);
   border-radius: 1rem;
   overflow: hidden;
+}
+
+.drawflow-canvas.flow-drop-target {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15) inset;
+}
+
+/* Sugestões: painel lateral do qual o usuário arrasta um nó até o canvas e conecta ele mesmo —
+   nada aqui aparece pré-posicionado ou pré-conectado no quadro. */
+.flow-suggestions-panel {
+  flex: 0 0 240px;
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.flow-suggestions-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin: 0 0 0.35rem;
+}
+
+.flow-suggestions-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0 0 0.9rem;
+  line-height: 1.4;
+}
+
+.flow-suggestions-empty {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.flow-suggestions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.flow-suggestion-item {
+  cursor: grab;
+  border-radius: 0.6rem;
+  border-left: 4px solid var(--flow-gray);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.55rem 0.7rem;
+  user-select: none;
+}
+
+.flow-suggestion-item:active {
+  cursor: grabbing;
+}
+
+.flow-suggestion-item.flow-suggestion-item--essential {
+  border-left-color: var(--flow-amber);
+}
+
+.flow-suggestion-item.flow-suggestion-item--dragging {
+  opacity: 0.4;
+}
+
+.flow-suggestion-item-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+}
+
+.flow-suggestion-item-kind {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
+}
+
+.flow-suggestion-item-reason {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.35;
 }
 
 /* Drawflow ships its own default node/connection styling — override it here to match the dark theme
@@ -963,8 +1087,6 @@ body {
   box-shadow: var(--shadow-lg);
 }
 
-.flow-node--suggestion { opacity: 0.94; }
-
 /* Header bar: table-name-style, solid saturated color, dark bold text — same pattern as Supabase's
    card header, one color per node state instead of Supabase's uniform green. */
 .flow-node-header {
@@ -978,8 +1100,6 @@ body {
 }
 
 .flow-node--confirmed .flow-node-header { background: var(--flow-green); color: var(--flow-green-text); }
-.flow-node--essential .flow-node-header { background: var(--flow-amber); color: var(--flow-amber-text); }
-.flow-node--recommended .flow-node-header { background: var(--flow-gray); color: var(--flow-gray-text); }
 
 .flow-node-header-text {
   overflow: hidden;
@@ -1070,31 +1190,6 @@ body {
   color: #e2e8f0;
 }
 
-.flow-node-reason {
-  color: var(--text-muted);
-  font-size: 0.74rem;
-  line-height: 1.4;
-  padding: 0.1rem 0.8rem 0.5rem;
-}
-
-.flow-node-confirm {
-  display: block;
-  width: calc(100% - 1.2rem);
-  margin: 0.1rem 0.6rem 0.6rem;
-  background: transparent;
-  border: 1px dashed rgba(255, 255, 255, 0.25);
-  color: #e2e8f0;
-  padding: 0.35rem 0.6rem;
-  border-radius: 0.4rem;
-  font-size: 0.76rem;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-  transition: var(--transition);
-}
-
-.flow-node-confirm:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.4); }
-
 .search-card-title {
   font-size: 1.25rem;
   font-weight: 600;
@@ -1123,5 +1218,13 @@ body {
   }
   .drawflow-canvas {
     height: 480px;
+  }
+  .flow-workspace {
+    flex-direction: column;
+  }
+  .flow-suggestions-panel {
+    width: auto;
+    flex: none;
+    max-height: 220px;
   }
 }

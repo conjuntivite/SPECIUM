@@ -10,6 +10,17 @@ if (typeof Drawflow !== 'undefined') {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // View tabs: orçamento (canvas) x busca avançada — mutuamente exclusivos, só um <div class="tab-view">
+  // fica visível por vez, para o canvas usar a tela inteira em vez de dividir espaço com a busca.
+  const viewTabButtons = document.querySelectorAll('.view-tab-btn');
+  const tabViews = { budget: document.getElementById('tab-budget'), search: document.getElementById('tab-search') };
+  viewTabButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      viewTabButtons.forEach((b) => b.classList.toggle('active', b === btn));
+      Object.entries(tabViews).forEach(([key, el]) => el.classList.toggle('hidden', key !== btn.dataset.tab));
+    });
+  });
+
   const form = document.getElementById('search-form');
   const itemNameInput = document.getElementById('item_name');
   const brandInput = document.getElementById('brand');
@@ -408,6 +419,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnZoomReset = document.getElementById('btn-zoom-reset');
   const budgetPricesLoading = document.getElementById('budget-prices-loading');
   const flowContainer = document.getElementById('drawflow');
+  const flowSuggestionsList = document.getElementById('flow-suggestions-list');
+  const flowSuggestionsEmpty = document.getElementById('flow-suggestions-empty');
 
   let nextItemId = 0;
   let budgetItems = loadBudget();
@@ -461,7 +474,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const itemFlowKey = (item) => `item-${item.id}`;
-  const suggestionFlowKey = (reqKey) => `sugg-${reqKey}`;
 
   // Nós no estilo "tabela" do Schema Visualizer do Supabase: barra de cabeçalho colorida com o
   // nome, corpo escuro com linhas tipo coluna (ícone · rótulo · valor à direita).
@@ -500,17 +512,19 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
   }
 
-  function suggestionNodeHtml(req, flowKey) {
+  // Item da listinha lateral: o usuário segura e arrasta para o canvas — nada aparece
+  // pré-posicionado ou pré-conectado no quadro, a conexão é feita à mão pelo usuário.
+  function suggestionListItemHtml(req) {
     return `
-      <div class="flow-node flow-node--suggestion ${req.essential ? 'flow-node--essential' : 'flow-node--recommended'}" data-flow-key="${escapeHtml(flowKey)}">
-        <div class="flow-node-header">
-          <span class="flow-node-header-text" title="${escapeHtml(req.label)}">${escapeHtml(req.label)}</span>
-        </div>
-        <div class="flow-node-body">
-          <div class="flow-node-row"><span class="flow-node-row-icon">◆</span><span class="flow-node-row-label">${req.essential ? 'Essencial' : 'Recomendado'}</span></div>
-          <div class="flow-node-reason">${escapeHtml(req.reason || '')}</div>
-          <button type="button" class="flow-node-confirm" data-add-label="${escapeHtml(req.label)}" onmousedown="event.stopPropagation()">+ Adicionar</button>
-        </div>
+      <div
+        class="flow-suggestion-item ${req.essential ? 'flow-suggestion-item--essential' : ''}"
+        draggable="true"
+        data-add-label="${escapeHtml(req.label)}"
+        title="Arraste para o quadro"
+      >
+        <span class="flow-suggestion-item-label">${escapeHtml(req.label)}</span>
+        <span class="flow-suggestion-item-kind">${req.essential ? '◆ Essencial' : '◇ Recomendado'}</span>
+        <span class="flow-suggestion-item-reason">${escapeHtml(req.reason || '')}</span>
       </div>
     `;
   }
@@ -550,10 +564,26 @@ document.addEventListener('DOMContentLoaded', () => {
           saveBudget();
           renderFlow();
         }
-        return;
       }
-      const addBtn = e.target.closest('.flow-node-confirm');
-      if (addBtn) addBudgetItem(addBtn.dataset.addLabel);
+    });
+
+    // Drag-and-drop de sugestão (listinha lateral) para dentro do canvas: o nó nasce onde o
+    // usuário soltar, e é ele quem puxa a conexão até o equipamento correspondente.
+    flowContainer.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      flowContainer.classList.add('flow-drop-target');
+    });
+    flowContainer.addEventListener('dragleave', () => flowContainer.classList.remove('flow-drop-target'));
+    flowContainer.addEventListener('drop', (e) => {
+      e.preventDefault();
+      flowContainer.classList.remove('flow-drop-target');
+      const label = e.dataTransfer.getData('text/plain');
+      if (!label) return;
+      const rect = editor.precanvas.getBoundingClientRect();
+      const pos = { x: (e.clientX - rect.x) / editor.zoom, y: (e.clientY - rect.y) / editor.zoom };
+      nodePositions[itemFlowKey({ id: nextItemId + 1 })] = pos;
+      savePositions();
+      addBudgetItem(label);
     });
   }
 
@@ -571,7 +601,11 @@ document.addEventListener('DOMContentLoaded', () => {
     btnBudgetPrices.disabled = budgetItems.length === 0 || priceLoading;
     editor.clear();
     updateBudgetTotal();
-    if (!budgetItems.length) return;
+    if (!budgetItems.length) {
+      flowSuggestionsList.innerHTML = '';
+      flowSuggestionsEmpty.classList.remove('hidden');
+      return;
+    }
 
     let suggestionsData = { requirements_by_category: {}, items: [] };
     try {
@@ -595,33 +629,37 @@ document.addEventListener('DOMContentLoaded', () => {
       drawflowIdByFlowKey.set(flowKey, id);
     });
 
-    // Linha 2: requisitos ainda não satisfeitos, um nó por chave (deduplicado entre âncoras que
-    // compartilham o mesmo requisito, ex.: câmera analógica e DVR ambos pedem fonte 12V).
+    // Sugestões ainda não satisfeitas viram itens da listinha lateral (deduplicadas entre âncoras
+    // que compartilham o mesmo requisito, ex.: câmera analógica e DVR ambos pedem fonte 12V) — o
+    // usuário arrasta uma para o canvas e conecta ele mesmo, nada é pré-posicionado no quadro.
     const unsatisfiedByKey = new Map();
     Object.values(suggestionsData.requirements_by_category || {}).forEach((requirements) => {
       requirements.forEach((req) => {
         if (!req.satisfied_by && !unsatisfiedByKey.has(req.key)) unsatisfiedByKey.set(req.key, req);
       });
     });
-    let suggestionIndex = 0;
-    unsatisfiedByKey.forEach((req, key) => {
-      const flowKey = suggestionFlowKey(key);
-      const pos = nodePositions[flowKey] || { x: 60 + suggestionIndex * 260, y: 380 };
-      const id = editor.addNode(flowKey, 1, 1, pos.x, pos.y, 'flow-node-wrap', {}, suggestionNodeHtml(req, flowKey));
-      drawflowIdByFlowKey.set(flowKey, id);
-      suggestionIndex += 1;
+    flowSuggestionsList.innerHTML = [...unsatisfiedByKey.values()].map(suggestionListItemHtml).join('');
+    flowSuggestionsEmpty.classList.toggle('hidden', unsatisfiedByKey.size > 0);
+    flowSuggestionsList.querySelectorAll('.flow-suggestion-item').forEach((el) => {
+      el.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', el.dataset.addLabel);
+        e.dataTransfer.effectAllowed = 'copy';
+        el.classList.add('flow-suggestion-item--dragging');
+      });
+      el.addEventListener('dragend', () => el.classList.remove('flow-suggestion-item--dragging'));
     });
 
-    // Arestas: de cada item-âncora para quem satisfaz cada requisito seu (nó real já confirmado)
-    // ou, se ainda não satisfeito, para o nó de sugestão correspondente.
+    // Arestas: de cada item-âncora para quem já satisfaz cada requisito seu (nó real já
+    // confirmado no orçamento) — requisitos ainda não satisfeitos ficam sem aresta até o usuário
+    // arrastar a sugestão correspondente para o canvas.
     budgetItems.forEach((item, index) => {
       const category = suggestionsData.items?.[index]?.category;
       const requirements = category && suggestionsData.requirements_by_category?.[category];
       if (!requirements) return;
       const fromId = drawflowIdByFlowKey.get(itemFlowKey(item));
       requirements.forEach((req) => {
-        const targetFlowKey = req.satisfied_by ? itemFlowKey(firstItemByTitle.get(req.satisfied_by) || {}) : suggestionFlowKey(req.key);
-        const toId = drawflowIdByFlowKey.get(targetFlowKey);
+        if (!req.satisfied_by) return;
+        const toId = drawflowIdByFlowKey.get(itemFlowKey(firstItemByTitle.get(req.satisfied_by) || {}));
         if (toId && fromId !== toId) editor.addConnection(fromId, toId, 'output_1', 'input_1');
       });
     });
