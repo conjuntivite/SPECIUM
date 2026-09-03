@@ -1,0 +1,17 @@
+# Segredos / configuração local
+.env
+.env.local
+.env.*.local
+
+# Dependências
+node_modules/
+
+# Logs e artefatos de teste
+npm-debug.log*
+coverage/
+
+# Arquivos de SO e editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
