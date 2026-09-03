@@ -221,9 +221,15 @@ const REQUIREMENT_PATTERNS = {
   cabo_rede: /\bcabo\b|\bcat\s?5e?\b|\bcat\s?6\b|\butp\b|\bpar\s+tran[cç]ado\b/i,
   cabo_coaxial: /\bcoaxial\b/i,
   conectores_bnc_p4: /\bconector(?:es)?\b|\bbnc\b|\bp4\b/i,
+  baluns: /\bbaluns?\b/i,
   switch_poe: /(?=.*\bswitch\b)(?=.*\bpoe\b)/i,
+  switch_giga: /(?=.*\bswitch\b)(?=.*\b(?:giga(?:bit)?|10\/100\/1000)\b)/i,
+  // Alimentação da câmera IP PoE: satisfeita por um switch PoE OU por uma fonte 12V avulsa (itens
+  // separados no orçamento) — qualquer um dos dois já resolve, não precisam estar no mesmo título.
+  alimentacao_poe_ou_fonte: /(?=.*\bswitch\b)(?=.*\bpoe\b)|\bfonte\b/i,
   caixa_steck: /\bcaixa\s+steck\b/i,
-  canaleta: /\bcanaleta\b/i,
+  // Além de canaleta, cobre o resto do "kit de acabamento" que quase sempre acompanha cabeamento.
+  canaleta: /\bcanaletas?\b|\bcorrugados?\b|\bcaixa\s+de\s+passagem\b|\bcotovelos?\b|\babra[çc]adeiras?\b|\beletroduto\b|\badaptadores?\b/i,
   gravacao: /\b(dvr|nvr|gravador)\b|\bcart[aã]o\s+de\s+mem[oó]ria\b|\bmicro\s?sd\b/i,
   dvr: /\b(dvr|gravador)\b/i,
   hd_interno: /\bhd\b|\bhdd\b|\bssd\b|\bdisco\s*r[ií]gido\b/i,
@@ -232,6 +238,7 @@ const REQUIREMENT_PATTERNS = {
   fechadura: /\bfechadura\b|\beletro[ií]m[aã]\b/i,
   nobreak: /\bnobreak\b/i,
   rack: /\brack\b/i,
+  central_alarme: /\bcentral\s+de\s+alarme\b/i,
 };
 
 function requirement(key, label, reason, search_term, essential = true) {
@@ -239,23 +246,44 @@ function requirement(key, label, reason, search_term, essential = true) {
 }
 
 const RECIPES = {
+  // Câmera IP sem "PoE" explícito no título: tratada como não-PoE (mesmo critério de default já usado
+  // para IP x Analógica) — sem PoE ela não liga só com o cabo de rede, precisa de fonte 12V própria.
   camera_ip: {
     requires: [
       requirement('cabo_rede', 'Cabo de rede (CAT5e/CAT6)', 'Liga a câmera IP ao switch/rede.', 'cabo de rede cat5e'),
-      requirement('switch_poe', 'Switch PoE', 'Alimenta e conecta câmeras IP sem precisar de fonte dedicada em cada ponto.', 'switch poe'),
-      requirement('caixa_steck', 'Caixa Steck', 'Protege emendas e conexões do cabeamento.', 'caixa steck'),
-      requirement('canaleta', 'Canaleta', 'Acabamento e proteção do cabeamento aparente.', 'canaleta'),
+      requirement('fonte_12v', 'Fonte 12V', 'Câmera IP sem PoE não liga só com o cabo de rede — precisa de fonte própria.', 'fonte 12v 1a'),
+      requirement('switch_giga', 'Switch Gigabit', 'Toda câmera IP deve ir com switch Giga, para priorizar qualidade e evitar travamento.', 'switch giga'),
       requirement('gravacao', 'NVR ou cartão de memória', 'Sem gravação a câmera só transmite ao vivo, sem histórico. Alternativa mais barata ao NVR: cartão de memória na própria câmera, se o modelo suportar.', 'nvr'),
+      requirement('caixa_steck', 'Caixa Steck', 'Protege emendas e conexões do cabeamento.', 'caixa steck'),
+      requirement('canaleta', 'Canaleta / acabamento de cabeamento', 'Canaleta, corrugado, caixa de passagem, cotovelos, abraçadeiras, eletroduto ou adaptadores — acabamento e proteção do cabeamento aparente.', 'canaleta', false),
+    ],
+  },
+  camera_ip_poe: {
+    requires: [
+      requirement('cabo_rede', 'Cabo de rede (CAT5e/CAT6)', 'Liga a câmera IP ao switch/rede.', 'cabo de rede cat5e'),
+      requirement('alimentacao_poe_ou_fonte', 'Switch PoE ou fonte 12V', 'Câmera IP PoE recebe energia pelo próprio cabo de rede através de um switch PoE — sem switch PoE, precisa de fonte 12V dedicada.', 'switch poe'),
+      requirement('switch_giga', 'Switch Gigabit', 'Toda câmera IP deve ir com switch Giga, para priorizar qualidade e evitar travamento.', 'switch giga'),
+      requirement('gravacao', 'NVR ou cartão de memória', 'Sem gravação a câmera só transmite ao vivo, sem histórico. Alternativa mais barata ao NVR: cartão de memória na própria câmera, se o modelo suportar.', 'nvr'),
+      requirement('caixa_steck', 'Caixa Steck', 'Protege emendas e conexões do cabeamento.', 'caixa steck'),
+      requirement('canaleta', 'Canaleta / acabamento de cabeamento', 'Canaleta, corrugado, caixa de passagem, cotovelos, abraçadeiras, eletroduto ou adaptadores — acabamento e proteção do cabeamento aparente.', 'canaleta', false),
     ],
   },
   camera_analogica: {
     requires: [
       requirement('cabo_coaxial', 'Cabo coaxial (CFTV)', 'Leva vídeo e energia da câmera analógica até o DVR.', 'cabo coaxial cftv'),
+      requirement('baluns', 'Baluns (transformador de vídeo)', 'Sem baluns a câmera analógica não transmite em instalação por par trançado/rede.', 'balun cftv'),
       requirement('conectores_bnc_p4', 'Conectores BNC/P4', 'Fecha as pontas do cabo coaxial na câmera e no DVR.', 'conector bnc p4'),
       requirement('fonte_12v', 'Fonte 12V', 'Câmera analógica não recebe energia pelo cabo de vídeo — precisa de fonte própria.', 'fonte 12v 1a'),
       requirement('dvr', 'DVR', 'Câmera analógica não grava sozinha — sem DVR não há gravação nem visualização centralizada.', 'dvr'),
       requirement('caixa_steck', 'Caixa Steck', 'Protege emendas e conexões do cabeamento.', 'caixa steck'),
-      requirement('canaleta', 'Canaleta', 'Acabamento e proteção do cabeamento aparente.', 'canaleta'),
+      requirement('canaleta', 'Canaleta / acabamento de cabeamento', 'Canaleta, corrugado, caixa de passagem, cotovelos, abraçadeiras, eletroduto ou adaptadores — acabamento e proteção do cabeamento aparente.', 'canaleta', false),
+    ],
+  },
+  // Overlay: câmera AcuSense (Hikvision) soma este requisito ao do tipo de câmera (IP/analógica)
+  // detectado no mesmo título — ver detectOverlayCategories.
+  camera_acusense: {
+    requires: [
+      requirement('central_alarme', 'Central de alarme', 'Câmera AcuSense sozinha não é monitorada: sem central de alarme os disparos de linha virtual não geram evento via contact ID. Exceção: cliente quer monitorar só pelo aplicativo Hikvision, sem central de alarme — nesse caso não é necessária.', 'central de alarme'),
     ],
   },
   dvr_nvr: {
@@ -307,7 +335,17 @@ const RECIPES = {
 function detectRecipeCategory(title) {
   const category = detectSecurityCategory(title);
   if (category !== 'camera') return category;
-  return /\bip\b/i.test(title) ? 'camera_ip' : 'camera_analogica';
+  if (!/\bip\b/i.test(title)) return 'camera_analogica';
+  // Sem "PoE" explícito, trata como não-PoE — mesmo critério de default já usado para IP x Analógica:
+  // a variante mais restritiva/comum, para não deixar de sugerir a fonte 12V que ela vai precisar.
+  return /\bpoe\b/i.test(title) ? 'camera_ip_poe' : 'camera_ip';
+}
+
+// Overlay: some anchors add requirements on top of the base category detected above, without
+// replacing it (ex.: uma câmera AcuSense continua precisando do kit normal de câmera IP/analógica).
+function detectOverlayCategories(title, baseCategory) {
+  if (!/^camera/.test(baseCategory || '')) return [];
+  return /\bacusense\b/i.test(title) ? ['camera_acusense'] : [];
 }
 
 function findSatisfyingTitle(pattern, titles, lowerTitles) {
@@ -321,7 +359,10 @@ function findSatisfyingTitle(pattern, titles, lowerTitles) {
 function computeMissingEssentials(cartTitles) {
   const titles = (Array.isArray(cartTitles) ? cartTitles : []).map(normalize).filter(Boolean);
   const lowerTitles = titles.map((title) => title.toLowerCase());
-  const detected_categories = [...new Set(titles.map(detectRecipeCategory).filter((category) => RECIPES[category]))];
+  const detected_categories = [...new Set(titles.flatMap((title) => {
+    const baseCategory = detectRecipeCategory(title);
+    return [baseCategory, ...detectOverlayCategories(title, baseCategory)];
+  }).filter((category) => RECIPES[category]))];
   const requirementsByKey = new Map();
   const requirements_by_category = {};
   for (const category of detected_categories) {
@@ -829,6 +870,7 @@ module.exports = {
   buildGoogleShoppingUrl,
   buildIntelbrasSpecs,
   computeMissingEssentials,
+  detectOverlayCategories,
   detectRecipeCategory,
   detectSecurityCategory,
   excludePriceOutliers,

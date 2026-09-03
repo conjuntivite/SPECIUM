@@ -55,6 +55,20 @@ Cada categoria tem um extrator de atributos (`extractDvrNvrSpecs`, `extractSwitc
 - `POST /api/recipe/suggestions` não faz nenhuma chamada de rede — é regra pura sobre o orçamento recebido.
 - Adicionar um item ao orçamento que satisfaça um requisito já sugerido faz esse requisito sumir da próxima chamada de `/api/recipe/suggestions`, mesmo que o item tenha sido digitado livremente (não precisa vir do botão de sugestão).
 
+## Regras impeditivas de venda (2026-09-03)
+
+Fonte: `comprador inviolavel regras de mercado.txt` (fora do repo, enviado pelo usuário) — lista os produtos que "não podem ser vendidos separados" para funcionar. Isso já mapeia direto para `essential: true` em `RECIPES`, que já existia; a mudança foi tornar as regras corretas tecnicamente, não criar um novo mecanismo:
+
+- **Câmera IP** sem "PoE" explícito no título é tratada como não-PoE (mesmo critério de default já usado para IP x Analógica — a variante mais restritiva): passa a exigir `fonte_12v` própria (essencial), já que não liga só com o cabo de rede.
+- **Câmera IP com "PoE" no título** vira categoria própria (`camera_ip_poe`): a alimentação é satisfeita por switch PoE **ou** fonte 12V avulsa (`alimentacao_poe_ou_fonte`, requisito único com padrão OR — qualquer um dos dois itens no orçamento resolve).
+- **Toda câmera IP** (PoE ou não) passa a exigir `switch_giga` (essencial) — regra do usuário: câmera IP sem switch Gigabit trava.
+- **Câmera analógica** ganhou `baluns` como requisito essencial, ao lado de coaxial/BNC-P4/fonte/DVR já existentes.
+- **AcuSense (Hikvision)** é um *overlay*, não uma categoria substituta: `detectOverlayCategories` soma `camera_acusense` (exige `central_alarme`) por cima da categoria base de câmera (IP ou analógica) quando o título contém "acusense" — a câmera continua precisando do kit normal, só ganha esse requisito extra. A exceção do usuário (cliente quer monitorar só pelo app Hikvision, sem central) fica só no texto do `reason`, não é modelável por regex — decisão fica com o comercial.
+- **Canaleta** deixou de ser essencial (era o default implícito de `requirement()`) e virou `essential: false`, com o padrão ampliado para cobrir todo o "kit de acabamento" que o usuário listou como recomendado (não impeditivo): corrugado, caixa de passagem, cotovelos, abraçadeiras, eletroduto, adaptadores.
+- **DVR/NVR precisa de HD** e **cabo de rede/coaxial são essenciais para as câmeras** já eram `essential: true` antes desta mudança — nenhum código novo, só confirma que já estava certo.
+
+Fora de escopo: nada no app hoje bloqueia de fato o fechamento de um orçamento (não existe ação de "finalizar"/exportar) — `essential: true` continua sendo só o sinal mais forte na listinha lateral de sugestões (◆ Essencial vs ◇ Recomendado), a decisão final é sempre do comercial.
+
 ## Próximos passos (fora de escopo por enquanto)
 
 - **Importar orçamento existente**: ler um arquivo com um orçamento já montado, apontar o que está errado/faltando e sugerir os equipamentos corretos — reaproveitando a mesma engine de `RECIPES`, só trocando a origem dos itens (arquivo em vez de texto livre no formulário). Pedido explicitamente adiado pelo usuário ("mais para frente") — não implementar sem confirmação.
