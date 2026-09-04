@@ -1,4 +1,7 @@
 :root {
+  /* Mesmo fator do `zoom` do body — usado pra compensar elementos full-bleed (100vw), já que vw
+     sempre mede a janela real, não o resultado já encolhido pelo zoom (ver .budget-card). */
+  --page-zoom: 0.8;
   --bg-dark: #0b0f19;
   --bg-card: rgba(22, 30, 49, 0.75);
   --bg-card-hover: rgba(30, 41, 68, 0.9);
@@ -17,6 +20,8 @@
   --flow-amber-text: #3a2705;
   --flow-gray: #9aa5b1;
   --flow-gray-text: #1c2430;
+  --flow-red: #e5484d;
+  --flow-orange: #f5793f;
   --flow-body-bg: #161b26;
   --shadow-lg: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
   --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -37,6 +42,9 @@ body {
   flex-direction: column;
   position: relative;
   overflow-x: hidden;
+  /* Reduz a página toda, tipo um Ctrl - do navegador (não é rem, então encolhe fonte, padding e
+     px fixo — inclusive o canvas do Drawflow — junto, não só texto). */
+  zoom: var(--page-zoom);
 }
 
 /* Background Ambient Glow */
@@ -56,7 +64,6 @@ body {
   max-width: 1100px;
   margin: 0 auto;
   padding: 1.75rem 1.5rem;
-  flex: 1;
   width: 100%;
 }
 
@@ -779,14 +786,17 @@ body {
 /* Budget Builder — quebra o max-width do .container de propósito: é a área de trabalho principal
    (estilo n8n), então usa a largura inteira da janela em vez de ficar espremida na coluna central. */
 .budget-card {
+  --card-px: clamp(1rem, 4vw, 3rem);
   background: var(--bg-card);
   backdrop-filter: blur(16px);
   border-top: 1px solid var(--border-color);
   border-bottom: 1px solid var(--border-color);
   box-shadow: var(--shadow-lg);
-  padding: 1.5rem clamp(1rem, 4vw, 3rem);
+  padding: 1.5rem var(--card-px);
   margin-bottom: 2rem;
-  width: 100vw;
+  /* vw sempre mede a janela real, não o resultado já encolhido pelo zoom do body — sem compensar,
+     100vw aqui renderiza como só 80% da tela (a barra fica com margem dos dois lados). */
+  width: calc(100vw / var(--page-zoom));
   position: relative;
   left: 50%;
   transform: translateX(-50%);
@@ -798,7 +808,8 @@ body {
   margin-bottom: 1.25rem;
 }
 
-.budget-add-form input {
+.budget-add-form input,
+.budget-add-form select {
   flex: 1;
   background: rgba(11, 15, 25, 0.6);
   border: 1px solid var(--border-color);
@@ -810,7 +821,8 @@ body {
   transition: var(--transition);
 }
 
-.budget-add-form input:focus {
+.budget-add-form input:focus,
+.budget-add-form select:focus {
   outline: none;
   border-color: var(--accent-cyan);
   box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15);
@@ -936,24 +948,30 @@ body {
 }
 
 .legend-dot--confirmed { background: var(--flow-green); }
+.legend-dot--critical { background: var(--flow-red); }
 .legend-dot--essential { background: var(--flow-amber); }
+.legend-dot--optional { background: var(--flow-orange); }
 .legend-dot--recommended { background: var(--flow-gray); }
 
 /* Flow canvas (Drawflow) — visual reference: Supabase's Schema Visualizer (Database > Schema
    Visualizer): dark canvas with a graph-paper grid, table-style cards with a solid color header bar,
    dark row body, and dashed right-angle connectors between cards. */
+/* Canvas vai até a borda da tela — só ele, não a toolbar/legenda/sugestões acima, que mantêm o
+   respiro do padding do .budget-card (--card-px). */
 .flow-workspace {
   display: flex;
-  gap: 1rem;
-  align-items: stretch;
+  margin-inline: calc(-1 * var(--card-px));
 }
 
 .drawflow-canvas {
   flex: 1;
   min-width: 0;
-  height: 78vh;
-  min-height: 560px;
-  max-height: 1100px;
+  /* vh/px também renderizam encolhidos pelo zoom do body — compensa (mesma lógica do .budget-card)
+     pra o canvas ficar realmente maior na tela, não só "maior no CSS". Pode estourar a viewport e
+     pedir rolagem da página — tudo bem, foi pedido assim. */
+  height: calc(92vh / var(--page-zoom));
+  min-height: calc(700px / var(--page-zoom));
+  max-height: calc(1400px / var(--page-zoom));
   background:
     linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px) 0 0 / 90px 90px,
     linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px) 0 0 / 90px 90px,
@@ -968,51 +986,84 @@ body {
   box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15) inset;
 }
 
-/* Sugestões: painel lateral do qual o usuário arrasta um nó até o canvas e conecta ele mesmo —
-   nada aqui aparece pré-posicionado ou pré-conectado no quadro. */
+/* Sugestões: faixa única no topo (não mais painel lateral) — o usuário arrasta ou clica no + de um
+   card pra mandar pro canvas embaixo e conecta ele mesmo; nada aqui nasce pré-posicionado/conectado. */
 .flow-suggestions-panel {
-  flex: 0 0 240px;
-  width: 240px;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
   border: 1px solid var(--border-color);
   border-radius: 1rem;
   background: rgba(255, 255, 255, 0.02);
-  padding: 1rem;
-  overflow-y: auto;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.flow-suggestions-header {
+  flex: 0 0 190px;
+  min-width: 0;
 }
 
 .flow-suggestions-title {
-  font-size: 0.85rem;
+  font-size: 1rem;
   font-weight: 700;
-  margin: 0 0 0.35rem;
+  margin: 0 0 0.3rem;
 }
 
 .flow-suggestions-hint {
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   color: var(--text-muted);
-  margin: 0 0 0.9rem;
-  line-height: 1.4;
+  margin: 0;
+  line-height: 1.35;
 }
 
 .flow-suggestions-empty {
-  font-size: 0.8rem;
+  font-size: 0.92rem;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .flow-suggestions-list {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: stretch;
   gap: 0.6rem;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 0.3rem;
 }
 
 .flow-suggestion-item {
+  position: relative;
+  flex: 0 0 220px;
+  width: 220px;
   cursor: grab;
   border-radius: 0.6rem;
   border-left: 4px solid var(--flow-gray);
   background: rgba(255, 255, 255, 0.04);
   padding: 0.55rem 0.7rem;
   user-select: none;
+}
+
+.flow-suggestion-item-add {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  width: 1.1rem;
+  height: 1.1rem;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.flow-suggestion-item-add:hover {
+  background: var(--flow-green);
+  color: var(--flow-green-text);
 }
 
 .flow-suggestion-item:active {
@@ -1023,27 +1074,37 @@ body {
   border-left-color: var(--flow-amber);
 }
 
+.flow-suggestion-item.flow-suggestion-item--critical {
+  border-left-color: var(--flow-red);
+  background: rgba(229, 72, 77, 0.12);
+}
+
+.flow-suggestion-item.flow-suggestion-item--optional {
+  border-left-color: var(--flow-orange);
+}
+
 .flow-suggestion-item.flow-suggestion-item--dragging {
   opacity: 0.4;
 }
 
 .flow-suggestion-item-label {
   display: block;
-  font-size: 0.85rem;
+  padding-right: 1.4rem;
+  font-size: 1rem;
   font-weight: 600;
   margin-bottom: 0.2rem;
 }
 
 .flow-suggestion-item-kind {
   display: block;
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   color: var(--text-muted);
   margin-bottom: 0.3rem;
 }
 
 .flow-suggestion-item-reason {
   display: block;
-  font-size: 0.72rem;
+  font-size: 0.85rem;
   color: var(--text-muted);
   line-height: 1.35;
 }
@@ -1055,7 +1116,7 @@ body {
   border: none;
   padding: 0;
   min-height: auto;
-  width: 260px;
+  width: 220px;
 }
 
 .drawflow .drawflow-node.selected .flow-node {
@@ -1096,7 +1157,7 @@ body {
   gap: 0.5rem;
   padding: 0.55rem 0.8rem;
   font-weight: 700;
-  font-size: 0.86rem;
+  font-size: 0.98rem;
 }
 
 .flow-node--confirmed .flow-node-header { background: var(--flow-green); color: var(--flow-green-text); }
@@ -1133,7 +1194,7 @@ body {
   align-items: center;
   gap: 0.5rem;
   padding: 0.4rem 0.8rem;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
 }
 
 .flow-node-row-icon {
@@ -1141,7 +1202,7 @@ body {
   width: 1rem;
   text-align: center;
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: 0.82rem;
 }
 
 .flow-node-row-label {
@@ -1156,7 +1217,7 @@ body {
   flex-shrink: 0;
   font-family: 'JetBrains Mono', monospace;
   color: var(--text-muted);
-  font-size: 0.74rem;
+  font-size: 0.84rem;
 }
 
 .flow-node-row-value a { color: var(--flow-green); text-decoration: none; }
@@ -1186,7 +1247,7 @@ body {
   min-width: 1.4rem;
   text-align: center;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   color: #e2e8f0;
 }
 
@@ -1217,14 +1278,13 @@ body {
     align-items: stretch;
   }
   .drawflow-canvas {
-    height: 480px;
-  }
-  .flow-workspace {
-    flex-direction: column;
+    height: calc(480px / var(--page-zoom));
   }
   .flow-suggestions-panel {
-    width: auto;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .flow-suggestions-header {
     flex: none;
-    max-height: 220px;
   }
 }

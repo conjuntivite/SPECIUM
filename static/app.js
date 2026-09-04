@@ -406,6 +406,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // sobrevive ao próximo add/remove/verificar-preço. Posição e zoom/pan são livres e persistem.
   const BUDGET_STORAGE_KEY = 'comprador-inviolavel:budget:v2';
   const POSITIONS_STORAGE_KEY = 'comprador-inviolavel:budget:positions';
+  // Nó tem 220px de largura (.drawflow .drawflow-node) — 300px de passo deixa ~80px de vão entre eles.
+  const NODE_SPACING_X = 300;
 
   const budgetAddForm = document.getElementById('budget-add-form');
   const budgetItemInput = document.getElementById('budget-item-input');
@@ -514,22 +516,53 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Item da listinha lateral: o usuário segura e arrasta para o canvas — nada aparece
   // pré-posicionado ou pré-conectado no quadro, a conexão é feita à mão pelo usuário.
+  // Ordem de urgência da listinha lateral: crítico (vermelho) sempre primeiro, depois essencial
+  // (âmbar), depois alternativa opcional (laranja), recomendado (cinza) por último.
+  function suggestionSeverityRank(req) {
+    if (req.severity === 'critical') return 0;
+    if (req.essential) return 1;
+    if (req.severity === 'optional') return 2;
+    return 3;
+  }
+
+  // Dentro do grupo "cinza" (recomendado), Nobreak vem primeiro — pedido explícito, não segue a
+  // ordem padrão (que sairia por categoria/posição na receita).
+  const RECOMMENDED_PRIORITY_KEYS = ['nobreak'];
+  function recommendedPriorityRank(req) {
+    const index = RECOMMENDED_PRIORITY_KEYS.indexOf(req.key);
+    return index === -1 ? RECOMMENDED_PRIORITY_KEYS.length : index;
+  }
+
+  // severity vem só de requisitos alternativos (ex.: switch PoE OU fonte 12V): "critical" quando
+  // nenhuma das opções foi escolhida ainda (vermelho), "optional" quando a outra opção já resolveu
+  // o requisito e esta virou só um reforço opcional (laranja).
   function suggestionListItemHtml(req) {
+    const severityClass = req.severity === 'critical' ? 'flow-suggestion-item--critical'
+      : req.severity === 'optional' ? 'flow-suggestion-item--optional'
+      : req.essential ? 'flow-suggestion-item--essential' : '';
+    const kindLabel = req.severity === 'critical' ? '⛔ Sem isso não liga'
+      : req.severity === 'optional' ? '◇ Alternativa (opcional)'
+      : req.essential ? '◆ Essencial' : '◇ Recomendado';
     return `
       <div
-        class="flow-suggestion-item ${req.essential ? 'flow-suggestion-item--essential' : ''}"
+        class="flow-suggestion-item ${severityClass}"
         draggable="true"
         data-add-label="${escapeHtml(req.label)}"
         title="Arraste para o quadro"
       >
+        <button type="button" class="flow-suggestion-item-add" data-add-label="${escapeHtml(req.label)}" title="Adicionar ao quadro" onmousedown="event.stopPropagation()">+</button>
         <span class="flow-suggestion-item-label">${escapeHtml(req.label)}</span>
-        <span class="flow-suggestion-item-kind">${req.essential ? '◆ Essencial' : '◇ Recomendado'}</span>
+        <span class="flow-suggestion-item-kind">${kindLabel}</span>
         <span class="flow-suggestion-item-reason">${escapeHtml(req.reason || '')}</span>
       </div>
     `;
   }
 
   let editor = null;
+  // Sobrevive entre renders (ao contrário de drawflowIdByFlowKey, local a cada renderFlow) porque o
+  // listener 'nodeRemoved' do Drawflow é registrado uma vez em initFlow e precisa consultá-lo depois
+  // que o DOM do nó já foi removido.
+  let itemIdByDrawflowId = new Map();
 
   function initFlow() {
     editor = new Drawflow(flowContainer);
@@ -543,6 +576,19 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!flowKey || !node) return;
       nodePositions[flowKey] = { x: node.pos_x, y: node.pos_y };
       savePositions();
+    });
+
+    // Drawflow apaga nó nativamente (selecionar + Delete/Backspace) sem passar pelo nosso botão ✕ —
+    // sem isso, o orçamento fica com um item "fantasma" que some do quadro mas continua contando pras
+    // sugestões (ex.: fonte 12V apagada assim não voltaria a ficar vermelha). O elemento já foi
+    // removido do DOM quando esse evento dispara, então a busca do item precisa vir do mapa guardado
+    // em renderFlow, não do dataset do nó.
+    editor.on('nodeRemoved', (drawflowId) => {
+      const itemId = itemIdByDrawflowId.get(Number(drawflowId));
+      if (itemId === undefined) return;
+      budgetItems = budgetItems.filter((item) => item.id !== itemId);
+      saveBudget();
+      renderFlow();
     });
 
     flowContainer.addEventListener('click', (e) => {
@@ -590,13 +636,34 @@ document.addEventListener('DOMContentLoaded', () => {
   function addBudgetItem(rawTitle, rawQuantity = 1) {
     const title = (rawTitle || '').trim();
     if (!title) return;
+    const previousItem = budgetItems[budgetItems.length - 1];
     nextItemId += 1;
-    budgetItems.push({ id: nextItemId, title, quantity: clampQuantity(rawQuantity), averagePrice: null, bestOffer: null });
+    const newItem = { id: nextItemId, title, quantity: clampQuantity(rawQuantity), averagePrice: null, bestOffer: null };
+    budgetItems.push(newItem);
+    const flowKey = itemFlowKey(newItem);
+    // Já tem posição (ex.: soltou num ponto específico do canvas via drag-and-drop)? Não mexe. Senão,
+    // empilha à direita da posição REAL do último item — não do índice dele no array — pra não pular
+    // pra uma coluna/linha genérica quando esse último item foi movido pra outro lugar do quadro.
+    // Horizontal (não vertical) porque o canvas agora usa a largura toda, sem painel lateral disputando espaço.
+    if (!nodePositions[flowKey]) {
+      const previousPos = previousItem && nodePositions[itemFlowKey(previousItem)];
+      nodePositions[flowKey] = previousPos ? { x: previousPos.x + NODE_SPACING_X, y: previousPos.y } : { x: 60, y: 60 };
+      savePositions();
+    }
     saveBudget();
     renderFlow();
   }
 
+  // Cada renderFlow() dispara seu próprio fetch de sugestões — se o usuário adicionar itens rápido
+  // (arrastar uma sugestão e, antes da resposta voltar, escolher outro produto no <select>), duas
+  // chamadas ficam "no ar" ao mesmo tempo. Sem controle de ordem, a resposta da chamada mais antiga
+  // pode voltar DEPOIS da mais nova e sobrescrever a listinha lateral com sugestões de um carrinho já
+  // desatualizado (os nós do quadro sempre ficam certos, porque são redesenhados do budgetItems atual
+  // — só a lista de sugestões, calculada a partir da resposta de CADA chamada, que ficava velha).
+  let renderGeneration = 0;
+
   async function renderFlow() {
+    const generation = ++renderGeneration;
     budgetEmpty.classList.toggle('hidden', budgetItems.length > 0);
     btnBudgetPrices.disabled = budgetItems.length === 0 || priceLoading;
     editor.clear();
@@ -617,17 +684,31 @@ document.addEventListener('DOMContentLoaded', () => {
       if (response.ok) suggestionsData = await response.json();
     } catch { /* segue exibindo só os itens confirmados, sem sugestões, se o servidor não responder */ }
 
+    // Uma chamada mais nova já assumiu enquanto esta esperava a resposta — descarta esta sem tocar
+    // no DOM, pra não sobrescrever a sugestão certa com uma desatualizada.
+    if (generation !== renderGeneration) return;
+
     const drawflowIdByFlowKey = new Map();
     const firstItemByTitle = new Map();
     budgetItems.forEach((item) => { if (!firstItemByTitle.has(item.title)) firstItemByTitle.set(item.title, item); });
+    itemIdByDrawflowId = new Map();
 
     // Linha 1: itens confirmados do orçamento.
+    let backfilledPosition = false;
     budgetItems.forEach((item, index) => {
       const flowKey = itemFlowKey(item);
-      const pos = nodePositions[flowKey] || { x: 60 + index * 260, y: 60 };
+      // addBudgetItem já resolve a posição de item novo (empilhado ao lado do anterior) — isso aqui é
+      // só um resgate pra item carregado sem posição salva (ex.: estado antigo no localStorage).
+      if (!nodePositions[flowKey]) {
+        nodePositions[flowKey] = { x: 60 + index * NODE_SPACING_X, y: 60 };
+        backfilledPosition = true;
+      }
+      const pos = nodePositions[flowKey];
       const id = editor.addNode(flowKey, 1, 1, pos.x, pos.y, 'flow-node-wrap', {}, confirmedNodeHtml(item, flowKey));
       drawflowIdByFlowKey.set(flowKey, id);
+      itemIdByDrawflowId.set(id, item.id);
     });
+    if (backfilledPosition) savePositions();
 
     // Sugestões ainda não satisfeitas viram itens da listinha lateral (deduplicadas entre âncoras
     // que compartilham o mesmo requisito, ex.: câmera analógica e DVR ambos pedem fonte 12V) — o
@@ -638,7 +719,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!req.satisfied_by && !unsatisfiedByKey.has(req.key)) unsatisfiedByKey.set(req.key, req);
       });
     });
-    flowSuggestionsList.innerHTML = [...unsatisfiedByKey.values()].map(suggestionListItemHtml).join('');
+    const sortedSuggestions = [...unsatisfiedByKey.values()].sort((a, b) => {
+      const severityDiff = suggestionSeverityRank(a) - suggestionSeverityRank(b);
+      return severityDiff !== 0 ? severityDiff : recommendedPriorityRank(a) - recommendedPriorityRank(b);
+    });
+    flowSuggestionsList.innerHTML = sortedSuggestions.map(suggestionListItemHtml).join('');
     flowSuggestionsEmpty.classList.toggle('hidden', unsatisfiedByKey.size > 0);
     flowSuggestionsList.querySelectorAll('.flow-suggestion-item').forEach((el) => {
       el.addEventListener('dragstart', (e) => {
@@ -647,6 +732,14 @@ document.addEventListener('DOMContentLoaded', () => {
         el.classList.add('flow-suggestion-item--dragging');
       });
       el.addEventListener('dragend', () => el.classList.remove('flow-suggestion-item--dragging'));
+    });
+    // Botão "+" discreto: adiciona direto no quadro com um clique, empilhado embaixo do último —
+    // mesma regra de posição padrão do <select>, sem soltar num ponto específico como o arraste.
+    flowSuggestionsList.querySelectorAll('.flow-suggestion-item-add').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        addBudgetItem(btn.dataset.addLabel);
+      });
     });
 
     // Arestas: de cada item-âncora para quem já satisfaz cada requisito seu (nó real já

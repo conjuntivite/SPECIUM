@@ -224,25 +224,62 @@ const REQUIREMENT_PATTERNS = {
   baluns: /\bbaluns?\b/i,
   switch_poe: /(?=.*\bswitch\b)(?=.*\bpoe\b)/i,
   switch_giga: /(?=.*\bswitch\b)(?=.*\b(?:giga(?:bit)?|10\/100\/1000)\b)/i,
-  // Alimentação da câmera IP PoE: satisfeita por um switch PoE OU por uma fonte 12V avulsa (itens
-  // separados no orçamento) — qualquer um dos dois já resolve, não precisam estar no mesmo título.
-  alimentacao_poe_ou_fonte: /(?=.*\bswitch\b)(?=.*\bpoe\b)|\bfonte\b/i,
   caixa_steck: /\bcaixa\s+steck\b/i,
-  // Além de canaleta, cobre o resto do "kit de acabamento" que quase sempre acompanha cabeamento.
-  canaleta: /\bcanaletas?\b|\bcorrugados?\b|\bcaixa\s+de\s+passagem\b|\bcotovelos?\b|\babra[çc]adeiras?\b|\beletroduto\b|\badaptadores?\b/i,
-  gravacao: /\b(dvr|nvr|gravador)\b|\bcart[aã]o\s+de\s+mem[oó]ria\b|\bmicro\s?sd\b/i,
+  // Kit de acabamento: cada item vira sua própria sugestão/caixa na lateral, não uma só combinada.
+  canaleta: /\bcanaletas?\b/i,
+  corrugado: /\bcorrugados?\b/i,
+  caixa_passagem: /\bcaixa\s+de\s+passagem\b/i,
+  cotovelo: /\bcotovelos?\b/i,
+  abracadeira: /\babra[çc]adeiras?\b/i,
+  eletroduto: /\beletroduto\b/i,
+  adaptador: /\badaptador(?:es)?\b/i,
+  nvr: /\b(dvr|nvr|gravador)\b/i,
+  // Cartão de memória só entra como opção de gravação pra câmera AcuSense (ver camera_acusense) — a
+  // regra original não estende essa alternativa pra câmera IP/analógica comum.
+  cartao_memoria: /\bcart[aã]o\s+de\s+mem[oó]ria\b|\bmicro\s?sd\b/i,
   dvr: /\b(dvr|gravador)\b/i,
-  hd_interno: /\bhd\b|\bhdd\b|\bssd\b|\bdisco\s*r[ií]gido\b/i,
+  // "HD" sozinho é ambíguo demais pra casar: em título de câmera/DVR quase sempre é resolução
+  // ("Multi HD", "Full HD"), não armazenamento — achado testando a rotina de combinações aleatórias
+  // (uma câmera "Multi HD" no orçamento satisfazia o HD de armazenamento do DVR por engano). Só conta
+  // como storage quando vem com contexto inequívoco: HDD/SSD/disco rígido, "HD interno", "HD para
+  // DVR/NVR", ou uma capacidade em TB/GB (câmera nunca é anunciada em TB/GB).
+  hd_interno: /\bhdd\b|\bssd\b|\bdisco\s*r[ií]gido\b|\bhd\s+interno\b|\bhd\s+para\s+(dvr|nvr)\b|\b\d+\s?(tb|gb)\b/i,
   cameras: /\bc[aâ]mera(s)?\b/i,
   fonte_12v: /\bfonte\b/i,
+  // Mesmo padrão de fonte_12v, chave própria: opção alternativa dentro de alternativeRequirement,
+  // não pode compartilhar chave com o fonte_12v "obrigatório" usado por outras categorias.
+  fonte_poe_alt: /\bfonte\b/i,
   fechadura: /\bfechadura\b|\beletro[ií]m[aã]\b/i,
   nobreak: /\bnobreak\b/i,
   rack: /\brack\b/i,
   central_alarme: /\bcentral\s+de\s+alarme\b/i,
 };
 
-function requirement(key, label, reason, search_term, essential = true) {
-  return { key, label, reason, search_term, essential, pattern: REQUIREMENT_PATTERNS[key] };
+// critical: mesmo vermelho "⛔ Sem isso não liga" usado pelas opções de alternativeRequirement, mas
+// pra um requisito único (não alternativo) onde não ter o item impede o equipamento de funcionar —
+// ex.: câmera IP sem PoE não liga sem fonte 12V própria, não é só "recomendado".
+function requirement(key, label, reason, search_term, essential = true, { critical = false } = {}) {
+  return { key, label, reason, search_term, essential, critical, pattern: REQUIREMENT_PATTERNS[key] };
+}
+
+// Compartilhado pelas 3 recipes de câmera (IP, IP PoE, analógica): sete caixas separadas na lateral,
+// uma por item do kit de acabamento — recomendadas (não essenciais), não uma sugestão combinada.
+const FINISHING_KIT_REQUIREMENTS = [
+  requirement('canaleta', 'Canaleta', 'Acabamento e proteção do cabeamento aparente.', 'canaleta', false),
+  requirement('corrugado', 'Cano corrugado', 'Proteção extra para cabeamento embutido em parede/laje.', 'cano corrugado', false),
+  requirement('caixa_passagem', 'Caixa de passagem', 'Facilita emendas e mudanças de direção do cabeamento embutido.', 'caixa de passagem', false),
+  requirement('cotovelo', 'Cotovelo', 'Faz a curva do eletroduto/canaleta sem forçar o cabo.', 'cotovelo eletroduto', false),
+  requirement('abracadeira', 'Abraçadeira', 'Organiza e fixa o cabeamento aparente.', 'abraçadeira nylon', false),
+  requirement('eletroduto', 'Eletroduto', 'Proteção rígida para cabeamento embutido.', 'eletroduto', false),
+  requirement('adaptador', 'Adaptador', 'Conecta trechos de tamanhos/tipos diferentes de eletroduto ou canaleta.', 'adaptador eletroduto', false),
+];
+
+// Requisito satisfeito por QUALQUER UMA de duas ou mais opções (ex.: câmera IP PoE liga com switch
+// PoE OU fonte 12V — não precisa das duas). Ao contrário de requirement(), cada opção vira sua própria
+// sugestão no canvas (ver computeMissingEssentials): as duas em vermelho enquanto nenhuma foi
+// escolhida, e a que sobra em laranja assim que a outra é adicionada ao orçamento.
+function alternativeRequirement(key, reason, options) {
+  return { key, reason, alternatives: options.map(({ key: altKey, label, search_term }) => ({ key: altKey, label, search_term, pattern: REQUIREMENT_PATTERNS[altKey] })) };
 }
 
 const RECIPES = {
@@ -251,21 +288,24 @@ const RECIPES = {
   camera_ip: {
     requires: [
       requirement('cabo_rede', 'Cabo de rede (CAT5e/CAT6)', 'Liga a câmera IP ao switch/rede.', 'cabo de rede cat5e'),
-      requirement('fonte_12v', 'Fonte 12V', 'Câmera IP sem PoE não liga só com o cabo de rede — precisa de fonte própria.', 'fonte 12v 1a'),
+      requirement('fonte_12v', 'Fonte 12V', 'Câmera IP sem PoE não liga só com o cabo de rede — precisa de fonte própria. Câmera IP normal não liga num switch PoE, o switch PoE não é opção aqui.', 'fonte 12v 1a', true, { critical: true }),
       requirement('switch_giga', 'Switch Gigabit', 'Toda câmera IP deve ir com switch Giga, para priorizar qualidade e evitar travamento.', 'switch giga'),
-      requirement('gravacao', 'NVR ou cartão de memória', 'Sem gravação a câmera só transmite ao vivo, sem histórico. Alternativa mais barata ao NVR: cartão de memória na própria câmera, se o modelo suportar.', 'nvr'),
+      requirement('nvr', 'NVR', 'Sem gravação a câmera só transmite ao vivo, sem histórico.', 'nvr'),
       requirement('caixa_steck', 'Caixa Steck', 'Protege emendas e conexões do cabeamento.', 'caixa steck'),
-      requirement('canaleta', 'Canaleta / acabamento de cabeamento', 'Canaleta, corrugado, caixa de passagem, cotovelos, abraçadeiras, eletroduto ou adaptadores — acabamento e proteção do cabeamento aparente.', 'canaleta', false),
+      ...FINISHING_KIT_REQUIREMENTS,
     ],
   },
   camera_ip_poe: {
     requires: [
       requirement('cabo_rede', 'Cabo de rede (CAT5e/CAT6)', 'Liga a câmera IP ao switch/rede.', 'cabo de rede cat5e'),
-      requirement('alimentacao_poe_ou_fonte', 'Switch PoE ou fonte 12V', 'Câmera IP PoE recebe energia pelo próprio cabo de rede através de um switch PoE — sem switch PoE, precisa de fonte 12V dedicada.', 'switch poe'),
+      alternativeRequirement('alimentacao_poe_ou_fonte', 'Câmera IP PoE recebe energia pelo próprio cabo de rede através de um switch PoE — sem switch PoE, precisa de fonte 12V dedicada. Sem nenhum dos dois a câmera não liga.', [
+        { key: 'switch_poe', label: 'Switch PoE', search_term: 'switch poe' },
+        { key: 'fonte_poe_alt', label: 'Fonte 12V', search_term: 'fonte 12v 1a' },
+      ]),
       requirement('switch_giga', 'Switch Gigabit', 'Toda câmera IP deve ir com switch Giga, para priorizar qualidade e evitar travamento.', 'switch giga'),
-      requirement('gravacao', 'NVR ou cartão de memória', 'Sem gravação a câmera só transmite ao vivo, sem histórico. Alternativa mais barata ao NVR: cartão de memória na própria câmera, se o modelo suportar.', 'nvr'),
+      requirement('nvr', 'NVR', 'Sem gravação a câmera só transmite ao vivo, sem histórico.', 'nvr'),
       requirement('caixa_steck', 'Caixa Steck', 'Protege emendas e conexões do cabeamento.', 'caixa steck'),
-      requirement('canaleta', 'Canaleta / acabamento de cabeamento', 'Canaleta, corrugado, caixa de passagem, cotovelos, abraçadeiras, eletroduto ou adaptadores — acabamento e proteção do cabeamento aparente.', 'canaleta', false),
+      ...FINISHING_KIT_REQUIREMENTS,
     ],
   },
   camera_analogica: {
@@ -276,7 +316,7 @@ const RECIPES = {
       requirement('fonte_12v', 'Fonte 12V', 'Câmera analógica não recebe energia pelo cabo de vídeo — precisa de fonte própria.', 'fonte 12v 1a'),
       requirement('dvr', 'DVR', 'Câmera analógica não grava sozinha — sem DVR não há gravação nem visualização centralizada.', 'dvr'),
       requirement('caixa_steck', 'Caixa Steck', 'Protege emendas e conexões do cabeamento.', 'caixa steck'),
-      requirement('canaleta', 'Canaleta / acabamento de cabeamento', 'Canaleta, corrugado, caixa de passagem, cotovelos, abraçadeiras, eletroduto ou adaptadores — acabamento e proteção do cabeamento aparente.', 'canaleta', false),
+      ...FINISHING_KIT_REQUIREMENTS,
     ],
   },
   // Overlay: câmera AcuSense (Hikvision) soma este requisito ao do tipo de câmera (IP/analógica)
@@ -284,14 +324,35 @@ const RECIPES = {
   camera_acusense: {
     requires: [
       requirement('central_alarme', 'Central de alarme', 'Câmera AcuSense sozinha não é monitorada: sem central de alarme os disparos de linha virtual não geram evento via contact ID. Exceção: cliente quer monitorar só pelo aplicativo Hikvision, sem central de alarme — nesse caso não é necessária.', 'central de alarme'),
+      // Reaproveita a chave 'nvr' da câmera IP/analógica de propósito — mesmo padrão, então um NVR
+      // já no orçamento satisfaz as duas ao mesmo tempo. Cartão de memória só é opção aqui: é a
+      // exceção específica da AcuSense, não vale pra câmera comum (ver REQUIREMENT_PATTERNS.cartao_memoria).
+      alternativeRequirement('gravacao_acusense', 'AcuSense grava por NVR ou, se o modelo suportar, direto num cartão de memória — sem nenhum dos dois só dá pra ver ao vivo, sem histórico.', [
+        { key: 'nvr', label: 'NVR', search_term: 'nvr' },
+        { key: 'cartao_memoria', label: 'Cartão de Memória', search_term: 'cartão de memória 128gb' },
+      ]),
     ],
   },
-  dvr_nvr: {
+  // DVR e NVR viraram categorias próprias (não mais uma "dvr_nvr" combinada): DVR é o gravador
+  // clássico de câmera analógica (coaxial), NVR é o gravador de câmera IP (rede) — na prática pedem
+  // cabeamento diferente, então misturar os dois numa receita só estava errado. `detectSecurityCategory`
+  // (usada pela busca/comparação de preço) continua tratando os dois como "dvr_nvr" combinado —
+  // essa distinção é só pra receita de orçamento, ver detectRecipeCategory.
+  dvr: {
     requires: [
-      requirement('hd_interno', 'HD interno (armazenamento)', 'Sem HD o DVR/NVR não grava, só exibe ao vivo.', 'hd para dvr'),
-      requirement('cameras', 'Câmeras compatíveis', 'Um gravador sozinho não gera imagem — precisa das câmeras nos canais.', 'câmera'),
+      requirement('hd_interno', 'HD interno (armazenamento)', 'Sem HD o DVR não grava, só exibe ao vivo.', 'hd para dvr', true, { critical: true }),
+      requirement('cameras', 'Câmeras analógicas compatíveis', 'Um gravador sozinho não gera imagem — precisa das câmeras nos canais.', 'câmera analógica'),
       requirement('fonte_12v', 'Fonte', 'Alimentação do equipamento, caso não esteja inclusa.', 'fonte 12v'),
-      requirement('cabo_coaxial', 'Cabeamento (coaxial ou de rede conforme DVR/NVR)', 'Liga as câmeras ao gravador.', 'cabo coaxial cftv'),
+      requirement('cabo_coaxial', 'Cabo coaxial (CFTV)', 'DVR trabalha com câmeras analógicas ligadas por cabo coaxial.', 'cabo coaxial cftv'),
+      requirement('nobreak', 'Nobreak', 'Evita perda de gravação e corrupção do HD em queda de energia.', 'nobreak', false),
+    ],
+  },
+  nvr: {
+    requires: [
+      requirement('hd_interno', 'HD interno (armazenamento)', 'Sem HD o NVR não grava, só exibe ao vivo.', 'hd para nvr', true, { critical: true }),
+      requirement('cameras', 'Câmeras IP compatíveis', 'Um gravador sozinho não gera imagem — precisa das câmeras nos canais.', 'câmera ip'),
+      requirement('fonte_12v', 'Fonte', 'Alimentação do equipamento, caso não esteja inclusa.', 'fonte 12v'),
+      requirement('cabo_rede', 'Cabo de rede (CAT5e/CAT6)', 'NVR trabalha com câmeras IP ligadas por rede, não por cabo coaxial.', 'cabo de rede cat5e'),
       requirement('nobreak', 'Nobreak', 'Evita perda de gravação e corrupção do HD em queda de energia.', 'nobreak', false),
     ],
   },
@@ -334,6 +395,12 @@ const RECIPES = {
 
 function detectRecipeCategory(title) {
   const category = detectSecurityCategory(title);
+  if (category === 'dvr_nvr') {
+    // DVR é pra câmera analógica (coaxial), NVR é pra câmera IP (rede) — cabeamento diferente, então
+    // viram receitas separadas aqui. Sem "NVR" explícito, o default é DVR: é o mais comum/tradicional
+    // em CFTV nacional, mesmo critério de "variante mais comum" já usado pra câmera IP x analógica.
+    return /\bnvr\b/i.test(title) ? 'nvr' : 'dvr';
+  }
   if (category !== 'camera') return category;
   if (!/\bip\b/i.test(title)) return 'camera_analogica';
   // Sem "PoE" explícito, trata como não-PoE — mesmo critério de default já usado para IP x Analógica:
@@ -353,6 +420,23 @@ function findSatisfyingTitle(pattern, titles, lowerTitles) {
   return index === -1 ? null : titles[index];
 }
 
+// Um requisito com alternatives vira uma linha por opção, nunca uma linha combinada: nenhuma
+// escolhida ainda = as duas "critical" (vermelho); uma escolhida = ela some (satisfied_by aponta
+// pra ela) e a outra vira "optional" (laranja) — ainda dá pra arrastar, só deixou de ser obrigatória.
+function evaluateAlternativeRequirement(item, titles, lowerTitles) {
+  const evaluated = item.alternatives.map((alt) => ({ ...alt, satisfied_by: findSatisfyingTitle(alt.pattern, titles, lowerTitles) }));
+  const anySatisfied = evaluated.some((alt) => alt.satisfied_by);
+  return evaluated.map((alt) => ({
+    key: alt.key,
+    label: alt.label,
+    reason: item.reason,
+    search_term: alt.search_term,
+    essential: true,
+    severity: alt.satisfied_by ? null : (anySatisfied ? 'optional' : 'critical'),
+    satisfied_by: alt.satisfied_by,
+  }));
+}
+
 // requirements_by_category dá ao front-end (canvas estilo n8n) a árvore completa por âncora, já
 // com quem satisfaz cada requisito — assim ele desenha a aresta certa (âncora → nó real quando já
 // satisfeito, âncora → nó de sugestão quando ainda falta) sem duplicar a lógica de casamento em JS.
@@ -365,11 +449,27 @@ function computeMissingEssentials(cartTitles) {
   }).filter((category) => RECIPES[category]))];
   const requirementsByKey = new Map();
   const requirements_by_category = {};
+  // AcuSense soma seu próprio par alternativo NVR-ou-cartão (ver camera_acusense) — o 'nvr' isolado e
+  // obrigatório da câmera IP/analógica base fica redundante (e contradiz a regra: AcuSense pode ser
+  // vendida sem NVR quando usa cartão), então some daqui quando o overlay estiver ativo.
+  const hasAcusense = detected_categories.includes('camera_acusense');
   for (const category of detected_categories) {
-    requirements_by_category[category] = RECIPES[category].requires.map(({ key, label, reason, search_term, essential, pattern }) => ({
-      key, label, reason, search_term, essential, satisfied_by: findSatisfyingTitle(pattern, titles, lowerTitles),
-    }));
-    for (const item of RECIPES[category].requires) requirementsByKey.set(item.key, item);
+    const requires = hasAcusense && (category === 'camera_ip' || category === 'camera_ip_poe')
+      ? RECIPES[category].requires.filter((item) => item.key !== 'nvr')
+      : RECIPES[category].requires;
+    requirements_by_category[category] = requires.flatMap((item) => {
+      if (item.alternatives) return evaluateAlternativeRequirement(item, titles, lowerTitles);
+      const { key, label, reason, search_term, essential, critical, pattern } = item;
+      const satisfied_by = findSatisfyingTitle(pattern, titles, lowerTitles);
+      return [{ key, label, reason, search_term, essential, severity: critical && !satisfied_by ? 'critical' : undefined, satisfied_by }];
+    });
+    for (const item of requires) {
+      if (item.alternatives) {
+        for (const alt of item.alternatives) requirementsByKey.set(alt.key, { key: alt.key, label: alt.label, reason: item.reason, search_term: alt.search_term, essential: true, pattern: alt.pattern });
+      } else {
+        requirementsByKey.set(item.key, item);
+      }
+    }
   }
   const missing = [...requirementsByKey.values()]
     .filter((item) => !lowerTitles.some((title) => item.pattern.test(title)))

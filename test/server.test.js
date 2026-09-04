@@ -1,6 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const {
   buildGoogleShoppingUrl,
@@ -393,7 +395,9 @@ test('detectRecipeCategory defaults an unqualified camera query to analógica, t
   assert.equal(detectRecipeCategory('Câmera IP Intelbras VIP 1230 PoE'), 'camera_ip_poe');
   assert.equal(detectRecipeCategory('Câmera Intelbras Multi HD'), 'camera_analogica');
   assert.equal(detectRecipeCategory('Câmera de segurança'), 'camera_analogica');
-  assert.equal(detectRecipeCategory('DVR Intelbras 16 canais'), 'dvr_nvr');
+  assert.equal(detectRecipeCategory('DVR Intelbras 16 canais'), 'dvr');
+  assert.equal(detectRecipeCategory('NVR Intelbras 16 canais'), 'nvr');
+  assert.equal(detectRecipeCategory('Gravador Intelbras 16 canais'), 'dvr');
   assert.equal(detectRecipeCategory('Monitor Gamer LG 27"'), null);
 });
 
@@ -402,26 +406,100 @@ test('detectOverlayCategories adds camera_acusense on top of the base camera cat
   assert.deepEqual(detectOverlayCategories('Câmera Multi HD AcuSense', 'camera_analogica'), ['camera_acusense']);
   assert.deepEqual(detectOverlayCategories('Câmera IP Intelbras VIP 1230', 'camera_ip'), []);
   // "acusense" só vale como overlay de câmera — um DVR AcuSense não é regrado por essa exceção.
-  assert.deepEqual(detectOverlayCategories('DVR AcuSense Intelbras', 'dvr_nvr'), []);
+  assert.deepEqual(detectOverlayCategories('DVR AcuSense Intelbras', 'dvr'), []);
 });
 
 test('computeMissingEssentials suggests the full IP-camera kit when only the camera is in the budget, non-PoE by default needs its own fonte 12V', () => {
   const { detected_categories, missing } = computeMissingEssentials(['Câmera IP Intelbras VIP 1230']);
   assert.deepEqual(detected_categories, ['camera_ip']);
-  assert.deepEqual(missing.map((item) => item.key).sort(), ['cabo_rede', 'caixa_steck', 'canaleta', 'fonte_12v', 'gravacao', 'switch_giga']);
-  assert.equal(missing.find((item) => item.key === 'canaleta').essential, false);
+  assert.deepEqual(missing.map((item) => item.key).sort(), [
+    'abracadeira', 'adaptador', 'cabo_rede', 'caixa_passagem', 'caixa_steck', 'canaleta', 'corrugado', 'cotovelo', 'eletroduto', 'fonte_12v', 'nvr', 'switch_giga',
+  ].sort());
+  // Kit de acabamento: 7 caixas separadas, todas recomendadas (não essenciais) — não uma sugestão combinada.
+  for (const key of ['canaleta', 'corrugado', 'caixa_passagem', 'cotovelo', 'abracadeira', 'eletroduto', 'adaptador']) {
+    assert.equal(missing.find((item) => item.key === key).essential, false);
+  }
 });
 
-test('computeMissingEssentials treats an explicit PoE camera as satisfied by either a PoE switch or a standalone fonte 12V', () => {
-  const { detected_categories, missing: withNeither } = computeMissingEssentials(['Câmera IP PoE Intelbras VIP 1230']);
+test('computeMissingEssentials marks fonte 12V as critical (red) for a plain, non-PoE camera IP — it has no PoE-switch alternative, unlike the PoE variant', () => {
+  const { requirements_by_category } = computeMissingEssentials(['Câmera IP Intelbras VIP 1230']);
+  const fonteReq = requirements_by_category.camera_ip.find((item) => item.key === 'fonte_12v');
+  assert.equal(fonteReq.severity, 'critical');
+  const switchReq = requirements_by_category.camera_ip.find((item) => item.key === 'switch_poe');
+  assert.equal(switchReq, undefined);
+
+  const { requirements_by_category: withFonte } = computeMissingEssentials(['Câmera IP Intelbras VIP 1230', 'Fonte 12V 2A']);
+  assert.equal(withFonte.camera_ip.find((item) => item.key === 'fonte_12v').severity, undefined);
+});
+
+test('computeMissingEssentials marks HD as the critical (red), first-listed suggestion for a DVR or NVR — without it the gravador não grava', () => {
+  const { requirements_by_category } = computeMissingEssentials(['DVR Intelbras 16 canais']);
+  assert.equal(requirements_by_category.dvr[0].key, 'hd_interno');
+  assert.equal(requirements_by_category.dvr[0].severity, 'critical');
+
+  const { requirements_by_category: withHd } = computeMissingEssentials(['DVR Intelbras 16 canais', 'HD para DVR 1TB']);
+  assert.equal(withHd.dvr.find((item) => item.key === 'hd_interno').severity, undefined);
+
+  const { requirements_by_category: nvrReqs } = computeMissingEssentials(['NVR Intelbras 16 canais']);
+  assert.equal(nvrReqs.nvr[0].key, 'hd_interno');
+  assert.equal(nvrReqs.nvr[0].severity, 'critical');
+});
+
+test('computeMissingEssentials pairs DVR with coax/analog-camera suggestions and NVR with network-cable/IP-camera suggestions', () => {
+  const { requirements_by_category: dvrReqs } = computeMissingEssentials(['DVR Intelbras 16 canais']);
+  assert.ok(dvrReqs.dvr.some((item) => item.key === 'cabo_coaxial'));
+  assert.ok(!dvrReqs.dvr.some((item) => item.key === 'cabo_rede'));
+
+  const { requirements_by_category: nvrReqs } = computeMissingEssentials(['NVR Intelbras 16 canais']);
+  assert.ok(nvrReqs.nvr.some((item) => item.key === 'cabo_rede'));
+  assert.ok(!nvrReqs.nvr.some((item) => item.key === 'cabo_coaxial'));
+});
+
+test('computeMissingEssentials: HD keeps being suggested for a DVR/NVR regardless of order — regression for a camera with "HD" in its title (resolution, not storage) falsely satisfying it', () => {
+  // "Multi HD"/"Full HD" é resolução de câmera, não HD de armazenamento — antes desse fix, ter uma
+  // dessas câmeras no orçamento ANTES do DVR fazia o hd_interno já aparecer "satisfeito".
+  const { requirements_by_category: cameraFirst } = computeMissingEssentials(['Câmera Intelbras Multi HD', 'DVR Intelbras 16 canais']);
+  assert.equal(cameraFirst.dvr.find((item) => item.key === 'hd_interno').satisfied_by, null);
+
+  const { requirements_by_category: dvrFirst } = computeMissingEssentials(['DVR Intelbras 16 canais', 'Câmera Intelbras Multi HD']);
+  assert.equal(dvrFirst.dvr.find((item) => item.key === 'hd_interno').satisfied_by, null);
+
+  // Um HD de verdade (com capacidade, ou "HD interno") continua satisfazendo normalmente.
+  const { requirements_by_category: withRealHd } = computeMissingEssentials(['DVR Intelbras 16 canais', 'HD Interno (armazenamento)']);
+  assert.equal(withRealHd.dvr.find((item) => item.key === 'hd_interno').satisfied_by, 'HD Interno (armazenamento)');
+  const { requirements_by_category: withCapacityHd } = computeMissingEssentials(['DVR Intelbras 16 canais', 'HD Seagate Purple 1TB']);
+  assert.equal(withCapacityHd.dvr.find((item) => item.key === 'hd_interno').satisfied_by, 'HD Seagate Purple 1TB');
+});
+
+test('computeMissingEssentials matches each finishing-kit item by its singular form (regression: "Adaptador" alone, not just "Adaptadores")', () => {
+  const { missing } = computeMissingEssentials([
+    'Câmera IP Intelbras VIP 1230', 'Canaleta', 'Cano Corrugado', 'Caixa de Passagem', 'Cotovelo', 'Abraçadeira', 'Eletroduto', 'Adaptador',
+  ]);
+  for (const key of ['canaleta', 'corrugado', 'caixa_passagem', 'cotovelo', 'abracadeira', 'eletroduto', 'adaptador']) {
+    assert.ok(!missing.some((item) => item.key === key), `${key} deveria estar satisfeito`);
+  }
+});
+
+test('computeMissingEssentials shows both PoE-camera power options as critical until one is chosen, then flips the other to optional', () => {
+  const { detected_categories, requirements_by_category: neither } = computeMissingEssentials(['Câmera IP PoE Intelbras VIP 1230']);
   assert.deepEqual(detected_categories, ['camera_ip_poe']);
-  assert.ok(withNeither.some((item) => item.key === 'alimentacao_poe_ou_fonte'));
+  const altsNeither = neither.camera_ip_poe.filter((item) => item.key === 'switch_poe' || item.key === 'fonte_poe_alt');
+  assert.equal(altsNeither.length, 2);
+  assert.ok(altsNeither.every((item) => item.severity === 'critical' && !item.satisfied_by));
 
-  const { missing: withFonte } = computeMissingEssentials(['Câmera IP PoE Intelbras VIP 1230', 'Fonte 12V 2A']);
-  assert.ok(!withFonte.some((item) => item.key === 'alimentacao_poe_ou_fonte'));
+  const { requirements_by_category: withFonte } = computeMissingEssentials(['Câmera IP PoE Intelbras VIP 1230', 'Fonte 12V 2A']);
+  const fonteAlt = withFonte.camera_ip_poe.find((item) => item.key === 'fonte_poe_alt');
+  const switchAlt = withFonte.camera_ip_poe.find((item) => item.key === 'switch_poe');
+  assert.equal(fonteAlt.satisfied_by, 'Fonte 12V 2A');
+  assert.equal(fonteAlt.severity, null);
+  assert.equal(switchAlt.satisfied_by, null);
+  assert.equal(switchAlt.severity, 'optional');
 
-  const { missing: withSwitchPoe } = computeMissingEssentials(['Câmera IP PoE Intelbras VIP 1230', 'Switch Intelbras 8 Portas PoE']);
-  assert.ok(!withSwitchPoe.some((item) => item.key === 'alimentacao_poe_ou_fonte'));
+  const { requirements_by_category: withSwitchPoe } = computeMissingEssentials(['Câmera IP PoE Intelbras VIP 1230', 'Switch Intelbras 8 Portas PoE']);
+  const switchAlt2 = withSwitchPoe.camera_ip_poe.find((item) => item.key === 'switch_poe');
+  const fonteAlt2 = withSwitchPoe.camera_ip_poe.find((item) => item.key === 'fonte_poe_alt');
+  assert.equal(switchAlt2.satisfied_by, 'Switch Intelbras 8 Portas PoE');
+  assert.equal(fonteAlt2.severity, 'optional');
 });
 
 test('computeMissingEssentials requires a central de alarme for an AcuSense camera, on top of the normal camera kit', () => {
@@ -434,7 +512,25 @@ test('computeMissingEssentials requires a central de alarme for an AcuSense came
 
 test('computeMissingEssentials requires baluns for an analog camera, alongside coax/BNC/fonte/DVR', () => {
   const { missing } = computeMissingEssentials(['Câmera Intelbras Multi HD']);
-  assert.deepEqual(missing.map((item) => item.key).sort(), ['baluns', 'cabo_coaxial', 'canaleta', 'caixa_steck', 'conectores_bnc_p4', 'dvr', 'fonte_12v'].sort());
+  assert.deepEqual(missing.map((item) => item.key).sort(), [
+    'abracadeira', 'adaptador', 'baluns', 'cabo_coaxial', 'caixa_passagem', 'caixa_steck', 'canaleta', 'conectores_bnc_p4', 'corrugado', 'cotovelo', 'dvr', 'eletroduto', 'fonte_12v',
+  ].sort());
+});
+
+test('POST /api/recipe/suggestions exposes the same critical/optional severity over HTTP', async (t) => {
+  const server = http.createServer(requestHandler);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+
+  const response = await fetch(`${baseUrl}/api/recipe/suggestions`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items: [{ title: 'Switch Intelbras 8 Portas' }, { title: 'Câmera IP PoE Intelbras VIP 1230' }] }),
+  });
+  const result = await response.json();
+  const alts = result.requirements_by_category.camera_ip_poe.filter((item) => item.key === 'switch_poe' || item.key === 'fonte_poe_alt');
+  assert.equal(alts.length, 2);
+  assert.ok(alts.every((item) => item.severity === 'critical'));
 });
 
 test('computeMissingEssentials clears a requirement once a matching item is added to the budget', () => {
@@ -442,19 +538,44 @@ test('computeMissingEssentials clears a requirement once a matching item is adde
   // sugestão de rack (não essencial) — cabo_rede e switch_giga já estão cobertos pelo switch PoE giga
   // adicionado ao orçamento.
   const { missing } = computeMissingEssentials(['Câmera IP Intelbras VIP 1230', 'Switch Intelbras 8 Portas PoE Gigabit', 'Cabo de Rede CAT5e 305m']);
-  assert.deepEqual(missing.map((item) => item.key).sort(), ['caixa_steck', 'canaleta', 'fonte_12v', 'gravacao', 'rack']);
+  assert.deepEqual(missing.map((item) => item.key).sort(), [
+    'abracadeira', 'adaptador', 'caixa_passagem', 'caixa_steck', 'canaleta', 'corrugado', 'cotovelo', 'eletroduto', 'fonte_12v', 'nvr', 'rack',
+  ].sort());
   assert.equal(missing.find((item) => item.key === 'rack').essential, false);
   assert.equal(missing.find((item) => item.key === 'canaleta').essential, false);
 });
 
-test('computeMissingEssentials treats a memory card as satisfying the recording requirement, no NVR needed', () => {
+test('computeMissingEssentials: a memory card does NOT satisfy the recording need for a plain camera — only NVR does, cartão is AcuSense-only', () => {
   const { missing } = computeMissingEssentials(['Câmera IP Intelbras VIP 1230', 'Cartão de Memória 128GB']);
-  assert.ok(!missing.some((item) => item.key === 'gravacao'));
+  assert.ok(missing.some((item) => item.key === 'nvr'));
+});
+
+test('computeMissingEssentials shows "Cartão de Memória" as a recording option only for an AcuSense camera, not for a plain IP camera', () => {
+  const { requirements_by_category: plain } = computeMissingEssentials(['Câmera IP Intelbras VIP 1230']);
+  assert.ok(!plain.camera_ip.some((item) => item.key === 'cartao_memoria'));
+
+  const { detected_categories, requirements_by_category: acusense } = computeMissingEssentials(['Câmera IP AcuSense Intelbras VIP 1230']);
+  assert.ok(detected_categories.includes('camera_acusense'));
+  const cartaoReq = acusense.camera_acusense.find((item) => item.key === 'cartao_memoria');
+  const nvrReq = acusense.camera_acusense.find((item) => item.key === 'nvr');
+  assert.equal(cartaoReq.severity, 'critical');
+  assert.equal(nvrReq.severity, 'critical');
+
+  // Cartão de memória sozinho já resolve a gravação pra AcuSense — NVR vira só alternativa opcional,
+  // não crítica (mesmo padrão de severidade usado pro par switch PoE / fonte 12V).
+  const { requirements_by_category: withCartao } = computeMissingEssentials(['Câmera IP AcuSense Intelbras VIP 1230', 'Cartão de Memória 128GB']);
+  const cartaoAfter = withCartao.camera_acusense.find((item) => item.key === 'cartao_memoria');
+  const nvrAfter = withCartao.camera_acusense.find((item) => item.key === 'nvr');
+  assert.equal(cartaoAfter.satisfied_by, 'Cartão de Memória 128GB');
+  assert.equal(nvrAfter.satisfied_by, null);
+  assert.equal(nvrAfter.severity, 'optional');
+  // A câmera IP base não repete um "NVR obrigatório" avulso quando o overlay AcuSense já cobre isso.
+  assert.ok(!withCartao.camera_ip.some((item) => item.key === 'nvr'));
 });
 
 test('computeMissingEssentials merges requirements from multiple anchors and dedupes shared ones', () => {
   const { detected_categories, missing } = computeMissingEssentials(['Câmera Intelbras Multi HD', 'DVR Intelbras 16 canais']);
-  assert.deepEqual(detected_categories.sort(), ['camera_analogica', 'dvr_nvr']);
+  assert.deepEqual(detected_categories.sort(), ['camera_analogica', 'dvr']);
   // "fonte_12v" e "cabo_coaxial" são exigidos tanto pela câmera quanto pelo DVR — deve aparecer uma vez só.
   assert.equal(missing.filter((item) => item.key === 'fonte_12v').length, 1);
   assert.equal(missing.filter((item) => item.key === 'cabo_coaxial').length, 1);
@@ -518,4 +639,101 @@ test('POST /api/recipe/prices searches each suggested item and reports its avera
   assert.equal(response.status, 200);
   assert.equal(result.results[0].label, 'Switch PoE');
   assert.equal(result.results[0].average_price, 'R$ 899,90');
+});
+
+// --- Rotina: itens do orçamento em combinações aleatórias ---
+// Regra pedida pelo usuário: um acessório sozinho (ex.: Fonte 12V) nunca obriga a adicionar mais nada;
+// um item-âncora sozinho (ex.: qualquer câmera, DVR/NVR, switch, facial, porteiro, Mikrotik, roteador)
+// sempre obriga pelo menos uma sugestão. Catálogo abaixo é o mesmo do <select> em static/index.html.
+// PRNG determinístico (não Math.random) pra rodar sempre igual entre execuções.
+const ANCHOR_ITEMS = [
+  'Câmera IP PoE', 'Câmera IP', 'Câmera Analógica', 'Câmera IP AcuSense',
+  'DVR', 'NVR', 'Switch PoE Gigabit', 'Switch Gigabit', 'Mikrotik', 'Roteador Wi-Fi',
+  'Terminal Facial', 'Vídeo Porteiro',
+];
+const ACCESSORY_ITEMS = [
+  'HD Interno (armazenamento)', 'Cartão de Memória', 'Cabo de Rede CAT6', 'Cabo Coaxial CFTV', 'Baluns',
+  'Conector BNC/P4', 'Rack', 'Fonte 12V', 'Nobreak', 'Fechadura Elétrica', 'Central de Alarme',
+  'Caixa Steck', 'Canaleta', 'Cano Corrugado', 'Caixa de Passagem', 'Cotovelo', 'Abraçadeira',
+  'Eletroduto', 'Adaptador',
+];
+const CATALOG = [...ANCHOR_ITEMS, ...ACCESSORY_ITEMS];
+
+function seededRandom(seed) {
+  let state = seed;
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
+function randomSubset(items, rng, size) {
+  const pool = [...items];
+  const picked = [];
+  for (let i = 0; i < size && pool.length; i++) picked.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
+  return picked;
+}
+
+test('rotina: cada item-âncora sozinho (câmeras, DVR/NVR, switch, facial, porteiro, Mikrotik, roteador) força pelo menos uma sugestão', () => {
+  for (const anchorTitle of ANCHOR_ITEMS) {
+    const { detected_categories, missing } = computeMissingEssentials([anchorTitle]);
+    assert.ok(detected_categories.length > 0, `"${anchorTitle}" deveria ser detectado como âncora`);
+    assert.ok(missing.length > 0, `"${anchorTitle}" sozinho deveria gerar pelo menos uma sugestão`);
+  }
+});
+
+test('rotina: cada acessório sozinho (fonte, cabo, baluns, kit de acabamento etc.) não força nada — nem câmera, nem qualquer outro item', () => {
+  for (const accessoryTitle of ACCESSORY_ITEMS) {
+    const { detected_categories, missing } = computeMissingEssentials([accessoryTitle]);
+    assert.deepEqual(detected_categories, [], `"${accessoryTitle}" sozinho não deveria ancorar categoria nenhuma`);
+    assert.deepEqual(missing, [], `"${accessoryTitle}" sozinho não deveria gerar sugestão nenhuma`);
+  }
+});
+
+test('rotina: 50 combinações aleatórias só de acessórios (sem âncora) continuam sem exigir nada', () => {
+  const rng = seededRandom(20260903);
+  for (let i = 0; i < 50; i++) {
+    const combo = randomSubset(ACCESSORY_ITEMS, rng, 1 + Math.floor(rng() * ACCESSORY_ITEMS.length));
+    const { detected_categories, missing } = computeMissingEssentials(combo);
+    assert.deepEqual(detected_categories, [], `combinação só de acessórios não deveria ancorar: ${combo.join(', ')}`);
+    assert.deepEqual(missing, [], `combinação só de acessórios não deveria sugerir nada: ${combo.join(', ')}`);
+  }
+});
+
+test('rotina: 200 orçamentos aleatórios (âncoras + acessórios misturados) nunca quebram e nunca ficam inconsistentes', () => {
+  const rng = seededRandom(42);
+  for (let i = 0; i < 200; i++) {
+    const combo = randomSubset(CATALOG, rng, 1 + Math.floor(rng() * 8));
+    const { detected_categories, missing, requirements_by_category } = computeMissingEssentials(combo);
+
+    // Toda categoria com sugestões precisa estar em detected_categories, e vice-versa.
+    assert.deepEqual(Object.keys(requirements_by_category).sort(), [...detected_categories].sort(), combo.join(', '));
+
+    for (const category of Object.keys(requirements_by_category)) {
+      for (const req of requirements_by_category[category]) {
+        // Coerência: se o requisito diz que algo do carrinho o satisfez, esse item precisa realmente
+        // estar no carrinho (não pode ser inventado).
+        if (req.satisfied_by) assert.ok(combo.includes(req.satisfied_by), `satisfied_by "${req.satisfied_by}" não está no carrinho: ${combo.join(', ')}`);
+        assert.ok(req.key && req.label && req.search_term, `requisito malformado em "${category}": ${JSON.stringify(req)}`);
+      }
+    }
+
+    // Combinação sem nenhum item-âncora nunca deveria ter categoria detectada nem sugestão.
+    if (!combo.some((title) => ANCHOR_ITEMS.includes(title))) {
+      assert.deepEqual(detected_categories, [], `sem âncora não deveria detectar categoria: ${combo.join(', ')}`);
+      assert.deepEqual(missing, [], `sem âncora não deveria sugerir nada: ${combo.join(', ')}`);
+    }
+  }
+});
+
+// O comercial só consegue lançar no orçamento o que existe no <select> — não tem mais caixa de texto
+// livre (ver ajuste anterior). Por isso a rotina acima só faz sentido validando exatamente esse
+// catálogo: se o <select> muda e ninguém atualiza ANCHOR_ITEMS/ACCESSORY_ITEMS aqui, esse teste falha
+// e avisa, em vez de deixar a rotina de aleatórios validar (ou deixar de validar) um item fantasma.
+test('rotina: o catálogo do <select> em static/index.html é exatamente o mesmo catálogo coberto por esta rotina de testes', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'static', 'index.html'), 'utf8');
+  const select = html.match(/<select id="budget-item-input"[\s\S]*?<\/select>/);
+  assert.ok(select, 'não encontrou <select id="budget-item-input"> em static/index.html');
+  const optionsInHtml = [...select[0].matchAll(/<option value="([^"]+)"/g)].map((m) => m[1]).filter(Boolean);
+  assert.deepEqual(optionsInHtml.sort(), [...CATALOG].sort());
 });

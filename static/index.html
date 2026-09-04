@@ -36,12 +36,52 @@
     <section class="budget-card">
       <div class="flow-toolbar">
         <form id="budget-add-form" class="budget-add-form">
-          <input
-            type="text"
-            id="budget-item-input"
-            placeholder="Ex: Câmera IP, DVR 16 canais, Switch PoE 8 portas"
-            autocomplete="off"
-          />
+          <select id="budget-item-input" required>
+            <option value="" disabled selected>Selecione um produto…</option>
+            <optgroup label="Câmeras">
+              <option value="Câmera IP PoE">Câmera IP PoE</option>
+              <option value="Câmera IP">Câmera IP (sem PoE)</option>
+              <option value="Câmera Analógica">Câmera Analógica</option>
+              <option value="Câmera IP AcuSense">Câmera IP AcuSense</option>
+            </optgroup>
+            <optgroup label="Gravação">
+              <option value="DVR">DVR</option>
+              <option value="NVR">NVR</option>
+              <option value="HD Interno (armazenamento)">HD Interno (armazenamento)</option>
+              <option value="Cartão de Memória">Cartão de Memória</option>
+            </optgroup>
+            <optgroup label="Rede">
+              <option value="Switch PoE Gigabit">Switch PoE Gigabit</option>
+              <option value="Switch Gigabit">Switch Gigabit</option>
+              <option value="Cabo de Rede CAT6">Cabo de Rede CAT6</option>
+              <option value="Cabo Coaxial CFTV">Cabo Coaxial CFTV</option>
+              <option value="Baluns">Baluns</option>
+              <option value="Conector BNC/P4">Conector BNC/P4</option>
+              <option value="Mikrotik">Mikrotik</option>
+              <option value="Roteador Wi-Fi">Roteador Wi-Fi</option>
+              <option value="Rack">Rack</option>
+            </optgroup>
+            <optgroup label="Energia">
+              <option value="Fonte 12V">Fonte 12V</option>
+              <option value="Nobreak">Nobreak</option>
+            </optgroup>
+            <optgroup label="Controle de acesso e alarme">
+              <option value="Terminal Facial">Terminal Facial</option>
+              <option value="Vídeo Porteiro">Vídeo Porteiro</option>
+              <option value="Fechadura Elétrica">Fechadura Elétrica</option>
+              <option value="Central de Alarme">Central de Alarme</option>
+            </optgroup>
+            <optgroup label="Acabamento">
+              <option value="Caixa Steck">Caixa Steck</option>
+              <option value="Canaleta">Canaleta</option>
+              <option value="Cano Corrugado">Cano Corrugado</option>
+              <option value="Caixa de Passagem">Caixa de Passagem</option>
+              <option value="Cotovelo">Cotovelo</option>
+              <option value="Abraçadeira">Abraçadeira</option>
+              <option value="Eletroduto">Eletroduto</option>
+              <option value="Adaptador">Adaptador</option>
+            </optgroup>
+          </select>
           <input
             type="number"
             id="budget-item-quantity"
@@ -65,20 +105,26 @@
 
       <div class="flow-legend">
         <span class="legend-item"><span class="legend-dot legend-dot--confirmed"></span> No orçamento</span>
+        <span class="legend-item"><span class="legend-dot legend-dot--critical"></span> Sem isso não liga</span>
         <span class="legend-item"><span class="legend-dot legend-dot--essential"></span> Sugestão essencial</span>
+        <span class="legend-item"><span class="legend-dot legend-dot--optional"></span> Alternativa (opcional)</span>
         <span class="legend-item"><span class="legend-dot legend-dot--recommended"></span> Sugestão recomendada</span>
       </div>
+
+      <!-- Faixa única no topo (em vez de painel lateral) — libera a largura toda pro canvas embaixo. -->
+      <aside class="flow-suggestions-panel">
+        <div class="flow-suggestions-header">
+          <h3 class="flow-suggestions-title">Sugestões para o orçamento</h3>
+          <p class="flow-suggestions-hint">Arraste ou clique no + pra adicionar ao quadro.</p>
+        </div>
+        <div id="flow-suggestions-list" class="flow-suggestions-list"></div>
+        <p id="flow-suggestions-empty" class="flow-suggestions-empty hidden">Nenhuma sugestão pendente.</p>
+      </aside>
 
       <div id="budget-empty" class="budget-empty">Nenhum item no fluxo ainda. Adicione o equipamento principal (ex: Câmera IP) para começar.</div>
 
       <div class="flow-workspace">
         <div id="drawflow" class="drawflow-canvas"></div>
-        <aside class="flow-suggestions-panel">
-          <h3 class="flow-suggestions-title">Sugestões para o orçamento</h3>
-          <p class="flow-suggestions-hint">Segure e arraste um item para o quadro, depois puxe a conexão até o equipamento correspondente.</p>
-          <div id="flow-suggestions-list" class="flow-suggestions-list"></div>
-          <p id="flow-suggestions-empty" class="flow-suggestions-empty hidden">Nenhuma sugestão pendente.</p>
-        </aside>
       </div>
 
       <div id="budget-prices-loading" class="loading-container hidden">
