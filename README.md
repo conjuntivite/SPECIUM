@@ -11,20 +11,20 @@ Câmeras (IP e analógica), gravadores de vídeo (DVR/NVR), terminais de reconhe
 ## Como funciona
 
 ```
-Navegador (static/) ──▶ POST /api/recipe/suggestions ──▶ server.js ──▶ RECIPES (regras internas)
-                    │                                          │
-                    │                                          └──▶ detecta categoria de cada item do
-                    │                                               orçamento e devolve o que falta
-                    │
-                    └──▶ POST /api/recipe/prices (sob demanda) ──▶ Intelbras, Amazon, Serper, SerpApi
-                                                                         │
-                                                                         └──▶ preço médio + melhor oferta
-                                                                              por item do orçamento
+Navegador (web/, React) ──▶ POST /api/recipe/suggestions ──▶ server.js ──▶ RECIPES (regras internas)
+                        │                                          │
+                        │                                          └──▶ detecta categoria de cada item do
+                        │                                               orçamento e devolve o que falta
+                        │
+                        └──▶ POST /api/recipe/prices (sob demanda) ──▶ Intelbras, Amazon, Serper, SerpApi
+                                                                             │
+                                                                             └──▶ preço médio + melhor oferta
+                                                                                  por item do orçamento
 ```
 
-- **`server.js`** — servidor HTTP em Node.js puro (sem framework): motor de receita (orçamento → essenciais faltando), busca de ofertas, normalização e comparação de especificações.
-- **`static/`** — front-end estático (HTML/CSS/JS vanilla) servido diretamente pelo mesmo processo Node.
-- **`test/`** — testes unitários e de integração HTTP (`node --test`).
+- **`server.js`** — servidor HTTP em Node.js puro (sem framework): motor de receita (orçamento → essenciais faltando), busca de ofertas, normalização e comparação de especificações. Também serve o build do front-end (`web/dist/`).
+- **`web/`** — front-end em React + Vite + Tailwind CSS + shadcn/ui (componentes sobre Radix UI). O canvas de orçamento usa React Flow (`@xyflow/react`) para o quadro estilo n8n de itens e sugestões.
+- **`test/`** — testes unitários e de integração HTTP (`node --test`) para `server.js`.
 
 ### Orçamento e receita de essenciais
 
@@ -61,13 +61,14 @@ Por padrão a busca combina todos os provedores disponíveis (`provider=all`); �
 
 ## Requisitos
 
-- Node.js **22+** (o projeto usa apenas módulos nativos: `http`, `fetch`, `node:test`)
+- Node.js **22+** (o backend usa apenas módulos nativos: `http`, `fetch`, `node:test`)
 - Chrome/Chromium (instalado automaticamente pelo Puppeteer na primeira `npm install`)
 
 ## Instalação
 
 ```bash
-npm install
+npm install          # dependências do backend (raiz)
+cd web && npm install # dependências do frontend (React/Vite/Tailwind/shadcn)
 ```
 
 ## Configuração (variáveis de ambiente)
@@ -89,14 +90,28 @@ As chaves só são necessárias se você quiser usar Serper/SerpApi como provedo
 
 ## Uso
 
+### Produção (um processo só, servindo o build do React)
+
 ```bash
-npm start          # produção
-npm run dev         # com reload automático (node --watch)
-npm test            # suíte de testes
-node --check server.js   # checagem rápida de sintaxe
+cd web && npm run build   # gera web/dist/
+cd ..
+npm start                 # serve API + web/dist/ em http://localhost:8000
 ```
 
-Depois de iniciado, acesse `http://localhost:8000`.
+### Desenvolvimento (dois processos, com hot reload no front)
+
+```bash
+npm run dev            # backend com --watch, em http://localhost:8000
+cd web && npm run dev   # Vite dev server em http://localhost:5173, com proxy de /api pro backend
+```
+
+Durante o desenvolvimento, acesse `http://localhost:5173` (o Vite recarrega o front na hora; as
+chamadas a `/api/*` são encaminhadas automaticamente pro backend na porta 8000).
+
+```bash
+npm test                    # suíte de testes do backend
+node --check server.js      # checagem rápida de sintaxe
+```
 
 ### Endpoints
 
@@ -111,7 +126,7 @@ Depois de iniciado, acesse `http://localhost:8000`.
 - **Chaves de API nunca ficam no código**: são lidas exclusivamente de `process.env` (via `.env`, ignorado pelo Git). Nenhuma chave real está commitada — `.env.example` só traz os nomes das variáveis, vazios.
 - **Sem armazenamento de credenciais de terceiros**: o servidor não guarda login/senha de nenhuma loja; toda busca é anônima.
 - **Sem scraping de sites com proteção anti-bot ativa**: por decisão de projeto, nenhum mecanismo de contorno de CAPTCHA/bloqueio anti-bot é implementado — inclusive para o Mercado Livre (ver [`SPEC.md`](./SPEC.md)).
-- **Path traversal bloqueado**: o servidor de arquivos estáticos resolve o caminho pedido e rejeita qualquer requisição que escape do diretório `static/`.
+- **Path traversal bloqueado**: o servidor de arquivos estáticos resolve o caminho pedido e rejeita qualquer requisição que escape do diretório `web/dist/`.
 - **Sem preços inventados**: quando um provedor falha, é bloqueado ou não retorna resultados utilizáveis, a API responde com uma lista vazia e uma mensagem explicativa — nunca com dados fabricados.
 - **Sem persistência no servidor**: o orçamento vive só no navegador do comercial (`localStorage`), o servidor não guarda estado entre requisições.
 - **Validação de entrada**: todas as rotas `POST` validam o corpo antes de qualquer chamada externa; entradas inválidas retornam HTTP 400.
@@ -123,7 +138,12 @@ Se você fizer fork deste projeto, gere suas próprias chaves em [serper.dev](ht
 ```
 .
 ├── server.js                       # servidor HTTP + lógica de busca/comparação
-├── static/                         # front-end (HTML/CSS/JS)
+├── web/                            # front-end (React + Vite + Tailwind CSS + shadcn/ui)
+│   ├── src/
+│   │   ├── components/             # search/ (busca avançada), budget/ (canvas React Flow), ui/ (shadcn)
+│   │   ├── hooks/                  # useBudget (orçamento/canvas), useCompareSelection
+│   │   └── data/                   # catalog.json (catálogo do <select> de itens do orçamento)
+│   └── dist/                       # build de produção (gerado, servido por server.js — não versionado)
 ├── test/server.test.js             # testes unitários e de integração
 ├── .env.example                    # modelo de variáveis de ambiente (sem valores reais)
 ├── SPEC.md                         # decisões de escopo e racional técnico

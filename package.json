@@ -12,6 +12,7 @@
     "node": ">=22"
   },
   "dependencies": {
+    "mongodb": "^7.6.0",
     "puppeteer": "^25.10.0"
   }
 }

@@ -1,4 +1,5 @@
 const test = require('node:test');
+const { after } = test;
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const fs = require('node:fs');
@@ -34,7 +35,12 @@ const {
   selectTopDistinctStores,
   setAmazonBrowserLauncher,
   setGoogleShoppingFetcher,
+  closeDb,
 } = require('../server');
+
+// Sem isso, a conexão do driver MongoDB mantém o processo vivo e `node --test` nunca retorna
+// depois de mostrar o resultado.
+after(() => closeDb());
 
 function fakeAmazonBrowser(items) {
   return {
@@ -369,10 +375,13 @@ test('serves the interface and performs a direct search over HTTP', async (t) =>
 
   const page = await fetch(`${baseUrl}/`);
   assert.equal(page.status, 200);
+  const pageHtml = await page.text();
+  const scriptSrc = pageHtml.match(/<script[^>]+src="([^"]+\.js)"/)?.[1];
+  assert.ok(scriptSrc, 'não encontrou o <script> do bundle React em web/dist/index.html');
 
-  const client = await fetch(`${baseUrl}/static/app.js`);
+  const client = await fetch(`${baseUrl}${scriptSrc}`);
   const clientCode = await client.text();
-  assert.match(clientCode, /fetch\('\/api\/search'/);
+  assert.match(clientCode, /\/api\/search/);
 
   const response = await fetch(`${baseUrl}/api/search`, {
     method: 'POST',
@@ -641,14 +650,65 @@ test('POST /api/recipe/prices searches each suggested item and reports its avera
   assert.equal(result.results[0].average_price, 'R$ 899,90');
 });
 
+test('CRUD de /api/products: cadastra, lista por categoria, atualiza e remove um produto', async (t) => {
+  const server = http.createServer(requestHandler);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const category = `__teste__ DVR 16 Canais ${Date.now()}`;
+
+  const invalid = await fetch(`${baseUrl}/api/products`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ category }),
+  });
+  assert.equal(invalid.status, 400);
+
+  const created = await fetch(`${baseUrl}/api/products`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ category, brand: 'Intelbras', model: 'DS-7216K1-HQHIMS' }),
+  });
+  const product = await created.json();
+  assert.equal(created.status, 201);
+  assert.equal(product.brand, 'Intelbras');
+
+  const listed = await fetch(`${baseUrl}/api/products?category=${encodeURIComponent(category)}`);
+  const { products } = await listed.json();
+  assert.equal(products.length, 1);
+  assert.equal(products[0].model, 'DS-7216K1-HQHIMS');
+
+  const updated = await fetch(`${baseUrl}/api/products/${product.id}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ category, brand: 'Hikvision', model: 'DS-7216HQHI-K1' }),
+  });
+  assert.equal(updated.status, 200);
+  assert.equal((await updated.json()).brand, 'Hikvision');
+
+  const missingUpdate = await fetch(`${baseUrl}/api/products/ffffffffffffffffffffffff`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ category, brand: 'X', model: 'Y' }),
+  });
+  assert.equal(missingUpdate.status, 404);
+
+  const deleted = await fetch(`${baseUrl}/api/products/${product.id}`, { method: 'DELETE' });
+  assert.equal(deleted.status, 200);
+  const afterDelete = await fetch(`${baseUrl}/api/products?category=${encodeURIComponent(category)}`);
+  assert.deepEqual((await afterDelete.json()).products, []);
+});
+
 // --- Rotina: itens do orçamento em combinações aleatórias ---
 // Regra pedida pelo usuário: um acessório sozinho (ex.: Fonte 12V) nunca obriga a adicionar mais nada;
 // um item-âncora sozinho (ex.: qualquer câmera, DVR/NVR, switch, facial, porteiro, Mikrotik, roteador)
-// sempre obriga pelo menos uma sugestão. Catálogo abaixo é o mesmo do <select> em static/index.html.
+// sempre obriga pelo menos uma sugestão. Catálogo abaixo é o mesmo de web/src/data/catalog.json.
 // PRNG determinístico (não Math.random) pra rodar sempre igual entre execuções.
+const SWITCH_PORT_COUNTS = ['4', '8', '16', '24'];
+const SWITCH_VARIANTS = ['Switch Fast', 'Switch Giga', 'Switch PoE Fast', 'Switch PoE Giga'];
+const SWITCH_ITEMS = SWITCH_VARIANTS.flatMap((variant) => SWITCH_PORT_COUNTS.map((ports) => `${variant} ${ports} Portas`));
+const DVR_NVR_CHANNEL_COUNTS = ['4', '8', '16', '24', '32', '48', '64'];
+const DVR_ITEMS = DVR_NVR_CHANNEL_COUNTS.map((channels) => `DVR ${channels} Canais`);
+const NVR_ITEMS = DVR_NVR_CHANNEL_COUNTS.map((channels) => `NVR ${channels} Canais`);
 const ANCHOR_ITEMS = [
-  'Câmera IP PoE', 'Câmera IP', 'Câmera Analógica', 'Câmera IP AcuSense',
-  'DVR', 'NVR', 'Switch PoE Gigabit', 'Switch Gigabit', 'Mikrotik', 'Roteador Wi-Fi',
+  'Câmera IP PoE', 'Câmera IP', 'Câmera Analógica',
+  'Câmera AcuSense IP PoE', 'Câmera AcuSense IP', 'Câmera AcuSense Analógica',
+  ...DVR_ITEMS, ...NVR_ITEMS, ...SWITCH_ITEMS, 'Mikrotik', 'Roteador Wi-Fi',
   'Terminal Facial', 'Vídeo Porteiro',
 ];
 const ACCESSORY_ITEMS = [
@@ -726,14 +786,14 @@ test('rotina: 200 orçamentos aleatórios (âncoras + acessórios misturados) nu
   }
 });
 
-// O comercial só consegue lançar no orçamento o que existe no <select> — não tem mais caixa de texto
-// livre (ver ajuste anterior). Por isso a rotina acima só faz sentido validando exatamente esse
-// catálogo: se o <select> muda e ninguém atualiza ANCHOR_ITEMS/ACCESSORY_ITEMS aqui, esse teste falha
-// e avisa, em vez de deixar a rotina de aleatórios validar (ou deixar de validar) um item fantasma.
-test('rotina: o catálogo do <select> em static/index.html é exatamente o mesmo catálogo coberto por esta rotina de testes', () => {
-  const html = fs.readFileSync(path.join(__dirname, '..', 'static', 'index.html'), 'utf8');
-  const select = html.match(/<select id="budget-item-input"[\s\S]*?<\/select>/);
-  assert.ok(select, 'não encontrou <select id="budget-item-input"> em static/index.html');
-  const optionsInHtml = [...select[0].matchAll(/<option value="([^"]+)"/g)].map((m) => m[1]).filter(Boolean);
-  assert.deepEqual(optionsInHtml.sort(), [...CATALOG].sort());
+// O comercial só consegue lançar no orçamento o que existe no catálogo do front (web/src/data/catalog.json)
+// — não tem mais caixa de texto livre (ver ajuste anterior). Por isso a rotina acima só faz sentido
+// validando exatamente esse catálogo: se ele muda e ninguém atualiza ANCHOR_ITEMS/ACCESSORY_ITEMS
+// aqui, esse teste falha e avisa, em vez de deixar a rotina de aleatórios validar (ou deixar de
+// validar) um item fantasma.
+test('rotina: o catálogo em web/src/data/catalog.json é exatamente o mesmo catálogo coberto por esta rotina de testes', () => {
+  const catalogPath = path.join(__dirname, '..', 'web', 'src', 'data', 'catalog.json');
+  const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
+  const valuesInCatalog = catalog.flatMap((group) => group.items.map((item) => item.value));
+  assert.deepEqual(valuesInCatalog.sort(), [...CATALOG].sort());
 });

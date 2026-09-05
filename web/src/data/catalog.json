@@ -1,0 +1,121 @@
+[
+  {
+    "group": "Câmeras",
+    "items": [
+      { "value": "Câmera IP PoE", "label": "Câmera IP PoE" },
+      { "value": "Câmera IP", "label": "Câmera IP (sem PoE)" },
+      { "value": "Câmera Analógica", "label": "Câmera Analógica" },
+      { "value": "Câmera AcuSense IP PoE", "label": "Câmera AcuSense IP PoE" },
+      { "value": "Câmera AcuSense IP", "label": "Câmera AcuSense IP (sem PoE)" },
+      { "value": "Câmera AcuSense Analógica", "label": "Câmera AcuSense Analógica" }
+    ]
+  },
+  {
+    "group": "DVR",
+    "items": [
+      { "value": "DVR 4 Canais", "label": "DVR 4 canais" },
+      { "value": "DVR 8 Canais", "label": "DVR 8 canais" },
+      { "value": "DVR 16 Canais", "label": "DVR 16 canais" },
+      { "value": "DVR 24 Canais", "label": "DVR 24 canais" },
+      { "value": "DVR 32 Canais", "label": "DVR 32 canais" },
+      { "value": "DVR 48 Canais", "label": "DVR 48 canais" },
+      { "value": "DVR 64 Canais", "label": "DVR 64 canais" }
+    ]
+  },
+  {
+    "group": "NVR",
+    "items": [
+      { "value": "NVR 4 Canais", "label": "NVR 4 canais" },
+      { "value": "NVR 8 Canais", "label": "NVR 8 canais" },
+      { "value": "NVR 16 Canais", "label": "NVR 16 canais" },
+      { "value": "NVR 24 Canais", "label": "NVR 24 canais" },
+      { "value": "NVR 32 Canais", "label": "NVR 32 canais" },
+      { "value": "NVR 48 Canais", "label": "NVR 48 canais" },
+      { "value": "NVR 64 Canais", "label": "NVR 64 canais" }
+    ]
+  },
+  {
+    "group": "Gravação",
+    "items": [
+      { "value": "HD Interno (armazenamento)", "label": "HD Interno (armazenamento)" },
+      { "value": "Cartão de Memória", "label": "Cartão de Memória" }
+    ]
+  },
+  {
+    "group": "Switch Fast",
+    "items": [
+      { "value": "Switch Fast 4 Portas", "label": "Switch Fast 4 portas" },
+      { "value": "Switch Fast 8 Portas", "label": "Switch Fast 8 portas" },
+      { "value": "Switch Fast 16 Portas", "label": "Switch Fast 16 portas" },
+      { "value": "Switch Fast 24 Portas", "label": "Switch Fast 24 portas" }
+    ]
+  },
+  {
+    "group": "Switch Giga",
+    "items": [
+      { "value": "Switch Giga 4 Portas", "label": "Switch Giga 4 portas" },
+      { "value": "Switch Giga 8 Portas", "label": "Switch Giga 8 portas" },
+      { "value": "Switch Giga 16 Portas", "label": "Switch Giga 16 portas" },
+      { "value": "Switch Giga 24 Portas", "label": "Switch Giga 24 portas" }
+    ]
+  },
+  {
+    "group": "Switch PoE Fast",
+    "items": [
+      { "value": "Switch PoE Fast 4 Portas", "label": "Switch PoE Fast 4 portas" },
+      { "value": "Switch PoE Fast 8 Portas", "label": "Switch PoE Fast 8 portas" },
+      { "value": "Switch PoE Fast 16 Portas", "label": "Switch PoE Fast 16 portas" },
+      { "value": "Switch PoE Fast 24 Portas", "label": "Switch PoE Fast 24 portas" }
+    ]
+  },
+  {
+    "group": "Switch PoE Giga",
+    "items": [
+      { "value": "Switch PoE Giga 4 Portas", "label": "Switch PoE Giga 4 portas" },
+      { "value": "Switch PoE Giga 8 Portas", "label": "Switch PoE Giga 8 portas" },
+      { "value": "Switch PoE Giga 16 Portas", "label": "Switch PoE Giga 16 portas" },
+      { "value": "Switch PoE Giga 24 Portas", "label": "Switch PoE Giga 24 portas" }
+    ]
+  },
+  {
+    "group": "Rede",
+    "items": [
+      { "value": "Cabo de Rede CAT6", "label": "Cabo de Rede CAT6" },
+      { "value": "Cabo Coaxial CFTV", "label": "Cabo Coaxial CFTV" },
+      { "value": "Baluns", "label": "Baluns" },
+      { "value": "Conector BNC/P4", "label": "Conector BNC/P4" },
+      { "value": "Mikrotik", "label": "Mikrotik" },
+      { "value": "Roteador Wi-Fi", "label": "Roteador Wi-Fi" },
+      { "value": "Rack", "label": "Rack" }
+    ]
+  },
+  {
+    "group": "Energia",
+    "items": [
+      { "value": "Fonte 12V", "label": "Fonte 12V" },
+      { "value": "Nobreak", "label": "Nobreak" }
+    ]
+  },
+  {
+    "group": "Controle de acesso e alarme",
+    "items": [
+      { "value": "Terminal Facial", "label": "Terminal Facial" },
+      { "value": "Vídeo Porteiro", "label": "Vídeo Porteiro" },
+      { "value": "Fechadura Elétrica", "label": "Fechadura Elétrica" },
+      { "value": "Central de Alarme", "label": "Central de Alarme" }
+    ]
+  },
+  {
+    "group": "Acabamento",
+    "items": [
+      { "value": "Caixa Steck", "label": "Caixa Steck" },
+      { "value": "Canaleta", "label": "Canaleta" },
+      { "value": "Cano Corrugado", "label": "Cano Corrugado" },
+      { "value": "Caixa de Passagem", "label": "Caixa de Passagem" },
+      { "value": "Cotovelo", "label": "Cotovelo" },
+      { "value": "Abraçadeira", "label": "Abraçadeira" },
+      { "value": "Eletroduto", "label": "Eletroduto" },
+      { "value": "Adaptador", "label": "Adaptador" }
+    ]
+  }
+]

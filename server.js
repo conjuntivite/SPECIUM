@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { URL, URLSearchParams } = require('node:url');
 const puppeteer = require('puppeteer');
+const { listProducts, createProduct, updateProduct, deleteProduct, closeDb } = require('./db');
 
 function loadLocalEnvironment() {
   const envPath = path.join(__dirname, '.env');
@@ -17,7 +18,7 @@ loadLocalEnvironment();
 
 const PORT = Number(process.env.APP_PORT || 8000);
 const HOST = process.env.APP_HOST || '0.0.0.0';
-const STATIC_DIRECTORY = path.join(__dirname, 'static');
+const STATIC_DIRECTORY = path.join(__dirname, 'web', 'dist');
 const MIME_TYPES = { '.css': 'text/css; charset=utf-8', '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml' };
 
 let shoppingFetcher = (...args) => fetch(...args);
@@ -110,7 +111,7 @@ function extractSwitchSpecs(title) {
   if (portsMatch) specs['Portas'] = portsMatch[1];
   if (/\bpoe\b/.test(t)) specs['PoE'] = 'Sim';
   if (/\bgerenci[aá]vel\b/.test(t)) specs['Gerenciável'] = 'Sim';
-  if (/\bgigabit\b|\b10\/100\/1000\b/.test(t)) specs['Velocidade'] = 'Gigabit';
+  if (/\bgiga(?:bit)?\b|\b10\/100\/1000\b/.test(t)) specs['Velocidade'] = 'Gigabit';
   return Object.keys(specs).length ? specs : null;
 }
 
@@ -703,6 +704,17 @@ function validateRecipePriceItems(request) {
   return parsed;
 }
 
+function validateProductRequest(request) {
+  if (!request || typeof request !== 'object') throw new Error('Corpo JSON inválido.');
+  const category = normalize(request.category);
+  const brand = normalize(request.brand);
+  const model = normalize(request.model);
+  if (!category || category.length > 100) throw new Error('Informe uma categoria válida.');
+  if (!brand || brand.length > 50) throw new Error('Informe a marca (até 50 caracteres).');
+  if (!model || model.length > 100) throw new Error('Informe o modelo (até 100 caracteres).');
+  return { category, brand, model };
+}
+
 function isGoogleHostedLink(url) {
   try { return /(^|\.)google\.[a-z.]{2,}$/i.test(new URL(url).hostname); } catch { return false; }
 }
@@ -886,7 +898,7 @@ async function fetchRecipeItemPrice(item) {
 }
 
 function sendJson(response, statusCode, body) {
-  response.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' });
+  response.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' });
   response.end(JSON.stringify(body));
 }
 
@@ -947,6 +959,26 @@ async function requestHandler(request, response) {
       const results = await Promise.all(items.map(fetchRecipeItemPrice));
       return sendJson(response, 200, { results });
     }
+    if (request.method === 'GET' && url.pathname === '/api/products') {
+      const category = normalize(url.searchParams.get('category'));
+      return sendJson(response, 200, { products: await listProducts(category || undefined) });
+    }
+    if (request.method === 'POST' && url.pathname === '/api/products') {
+      const body = await readJson(request);
+      return sendJson(response, 201, await createProduct(validateProductRequest(body)));
+    }
+    const productIdMatch = url.pathname.match(/^\/api\/products\/([a-f0-9]{24})$/i);
+    if (productIdMatch && request.method === 'PUT') {
+      const id = productIdMatch[1];
+      const data = validateProductRequest(await readJson(request));
+      if (!(await updateProduct(id, data))) return sendJson(response, 404, { detail: 'Produto não encontrado.' });
+      return sendJson(response, 200, { id, ...data });
+    }
+    if (productIdMatch && request.method === 'DELETE') {
+      const id = productIdMatch[1];
+      if (!(await deleteProduct(id))) return sendJson(response, 404, { detail: 'Produto não encontrado.' });
+      return sendJson(response, 200, { deleted: true });
+    }
     if (request.method === 'GET') return serveStatic(url.pathname, response);
     return sendJson(response, 404, { detail: 'Rota não encontrada.' });
   } catch (error) {
@@ -1004,4 +1036,6 @@ module.exports = {
   setAmazonBrowserLauncher,
   setGoogleShoppingFetcher,
   startServer,
+  validateProductRequest,
+  closeDb,
 };
