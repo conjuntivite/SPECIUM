@@ -396,38 +396,42 @@ test('extracts camera specs, only tagging IP/Analógica when the title is explic
   assert.equal(extractCameraSpecs('Câmera de segurança'), null);
 });
 
-test('POST /api/recipe/suggestions exposes the same critical/optional severity over HTTP, agora lendo dependencies cadastradas na categoria', async (t) => {
+test('POST /api/recipe/suggestions expõe severidade critical/optional para o requisito de alimentação (anyOf) da Câmera IP PoE, agora via motor de recursos', async (t) => {
   const server = http.createServer(requestHandler);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => server.close());
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
 
   // "Switch Intelbras 8 Portas" não bate com nenhuma categoria exata (falta Fast/Giga/PoE no
-  // título), então nenhuma variante de Switch PoE fica satisfeita — Fonte 12V e as 8 variantes de
-  // Switch PoE (alternativa mútua cadastrada em "Câmera IP PoE") continuam todas críticas.
+  // título) — nenhuma opção do requisito "Alimentação" (PoE por capacidade OU Fonte 12V por
+  // presença) fica satisfeita, então as duas continuam críticas.
   const response = await fetch(`${baseUrl}/api/recipe/suggestions`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ items: [{ title: 'Switch Intelbras 8 Portas' }, { title: 'Câmera IP PoE Intelbras VIP 1230' }] }),
   });
   const result = await response.json();
   const reqs = result.requirements_by_category['Câmera IP PoE'];
-  const powerAlts = reqs.filter((item) => item.key === 'Fonte 12V' || item.key.startsWith('Switch PoE'));
-  assert.equal(powerAlts.length, 9);
-  assert.ok(powerAlts.every((item) => item.severity === 'critical'));
+  const powerOptions = reqs.filter((item) => item.label === 'Alimentação');
+  assert.equal(powerOptions.length, 2);
+  assert.ok(powerOptions.every((item) => item.severity === 'critical'));
 
-  // Com um Switch PoE de verdade no orçamento, essa variante é satisfeita e a Fonte 12V (alternativa
-  // mútua) vira só opcional.
+  // Switch PoE Fast 8 Portas fornece 8 portas PoE — cobre a demanda de alimentação de 1 câmera
+  // (capacidade), então a opção de PoE fica satisfeita e a Fonte 12V (a outra opção do anyOf) vira
+  // opcional. A conectividade Gigabit continua crítica à parte: switch Fast não fornece esse recurso.
   const withSwitchPoe = await fetch(`${baseUrl}/api/recipe/suggestions`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ items: [{ title: 'Switch PoE Fast 8 Portas Intelbras' }, { title: 'Câmera IP PoE Intelbras VIP 1230' }] }),
   });
   const result2 = await withSwitchPoe.json();
   const reqs2 = result2.requirements_by_category['Câmera IP PoE'];
-  const fonte = reqs2.find((item) => item.key === 'Fonte 12V');
-  const switchFast8 = reqs2.find((item) => item.key === 'Switch PoE Fast 8 Portas');
-  assert.equal(switchFast8.severity, null);
-  assert.equal(switchFast8.satisfied_by, 'Switch PoE Fast 8 Portas Intelbras');
-  assert.equal(fonte.severity, 'optional');
+  const powerOptions2 = reqs2.filter((item) => item.label === 'Alimentação');
+  const poeOption = powerOptions2.find((item) => item.key === 'resource:power.poe_port');
+  const fonteOption = powerOptions2.find((item) => item.key === 'presence:Fonte 12V');
+  assert.equal(poeOption.severity, null);
+  assert.equal(poeOption.satisfied_by, 'ok');
+  assert.equal(fonteOption.severity, 'optional');
+  const network = reqs2.find((item) => item.key === 'resource:network.gigabit_port');
+  assert.equal(network.severity, 'critical');
 });
 
 test('POST /api/recipe/suggestions validates the payload and returns missing essentials over HTTP', async (t) => {
@@ -448,9 +452,9 @@ test('POST /api/recipe/suggestions validates the payload and returns missing ess
   const result = await response.json();
   assert.equal(response.status, 200);
   assert.deepEqual(result.detected_categories, ['Câmera IP']);
-  assert.ok(result.missing.some((item) => item.key === 'Switch Giga 8 Portas'));
-  assert.ok(result.missing.some((item) => item.key === 'Fonte 12V'));
-  assert.equal(result.missing.find((item) => item.key === 'Fonte 12V').essential, true);
+  assert.ok(result.missing.some((item) => item.key === 'resource:network.gigabit_port'));
+  assert.ok(result.missing.some((item) => item.key === 'presence:Fonte 12V'));
+  assert.equal(result.missing.find((item) => item.key === 'presence:Fonte 12V').essential, true);
   // "items" preserva a ordem de entrada com a categoria exata detectada de cada um — o canvas usa
   // isso pra saber de qual nó puxar a aresta.
   assert.deepEqual(result.items, [{ title: 'Câmera IP Intelbras VIP 1230', category: 'Câmera IP' }]);
@@ -542,6 +546,110 @@ test('computeCategoryMissingEssentials: um valor referenciado por duas listas de
   const keys = result.requirements_by_category['Câmera IP PoE'].map((r) => r.key);
   assert.deepEqual(keys.sort(), ['Fonte 12V', 'Switch PoE 8 Portas', 'Switch Giga 8 Portas', 'Switch Fast 8 Portas'].sort());
   assert.deepEqual(keys, [...new Set(keys)]); // "Switch PoE 8 Portas" some no grupo de energia E é citado nas alternatives do grupo de conectividade — só 1 linha
+});
+
+// --- Motor de recursos/capacidade (requirements[]/provides[]) ---
+// Fixtures isoladas (não dependem do Mongo), cobrindo os cenários do documento de arquitetura
+// (arquitetura_motor_regras_capacidade_comprador_inviolavel.txt): ledger global por recurso, soma de
+// capacidade entre vários equipamentos, e o caso canônico "16 câmeras cabem, a 17ª não".
+
+function fixtureResourceCategory(value, { provides = [], requirements = [] } = {}) {
+  return { id: value, group: 'Teste', value, label: value, dependencies: [], provides, requirements };
+}
+
+const cameraIpPoeFixture = fixtureResourceCategory('Câmera IP PoE', {
+  requirements: [
+    { id: 'network', label: 'Conectividade Gigabit', type: 'capacity', resource: 'network.gigabit_port', unitsPerItem: 1, critical: true },
+    { id: 'power', label: 'Alimentação', type: 'anyOf', critical: true, options: [
+      { type: 'capacity', resource: 'power.poe_port', unitsPerItem: 1 },
+      { type: 'presence', candidates: ['Fonte 12V'] },
+    ] },
+    { id: 'recording', label: 'Gravação (NVR)', type: 'capacity', resource: 'recording.ip_channel', unitsPerItem: 1, critical: true },
+  ],
+});
+
+function switchPoeGigaFixture(ports) {
+  return fixtureResourceCategory(`Switch PoE Giga ${ports} Portas`, {
+    provides: [{ resource: 'network.gigabit_port', amount: ports }, { resource: 'power.poe_port', amount: ports }],
+  });
+}
+
+function nvrFixture(channels) {
+  return fixtureResourceCategory(`NVR ${channels} Canais`, { provides: [{ resource: 'recording.ip_channel', amount: channels }] });
+}
+
+test('computeCategoryMissingEssentials (motor de recursos): 16 câmeras IP PoE + switch PoE Giga 16 portas + NVR 16 canais fecha sem déficit', () => {
+  const categories = [cameraIpPoeFixture, switchPoeGigaFixture(16), nvrFixture(16)];
+  const result = computeCategoryMissingEssentials([
+    { title: 'Câmera IP PoE Intelbras VIP 3230', quantity: 16 },
+    { title: 'Switch PoE Giga 16 Portas Intelbras', quantity: 1 },
+    { title: 'NVR 16 Canais Intelbras', quantity: 1 },
+  ], categories);
+
+  const reqs = result.requirements_by_category['Câmera IP PoE'];
+  assert.equal(reqs.find((r) => r.key === 'resource:network.gigabit_port').deficit, 0);
+  assert.equal(reqs.find((r) => r.key === 'resource:recording.ip_channel').deficit, 0);
+  const power = reqs.filter((r) => r.label === 'Alimentação');
+  assert.ok(power.some((r) => r.key === 'resource:power.poe_port' && r.severity === null));
+  // A opção de alimentação não usada (Fonte 12V) segue aparecendo em `missing` como alternativa
+  // opcional — mesmo comportamento do motor antigo pra um par satisfeito por só um dos lados (ver
+  // teste "alternativa mútua fica crítica nos dois lados..." acima); nenhum item crítico sobra.
+  assert.deepEqual(result.missing.map((item) => item.key), ['presence:Fonte 12V']);
+});
+
+test('computeCategoryMissingEssentials (motor de recursos): a 17ª câmera estoura a capacidade do switch de 16 portas e sugere os candidatos maiores', () => {
+  const categories = [cameraIpPoeFixture, switchPoeGigaFixture(16), switchPoeGigaFixture(24), nvrFixture(16)];
+  const result = computeCategoryMissingEssentials([
+    { title: 'Câmera IP PoE Intelbras VIP 3230', quantity: 17 },
+    { title: 'Switch PoE Giga 16 Portas Intelbras', quantity: 1 },
+    { title: 'NVR 16 Canais Intelbras', quantity: 1 },
+  ], categories);
+
+  const network = result.requirements_by_category['Câmera IP PoE'].find((r) => r.key === 'resource:network.gigabit_port');
+  assert.equal(network.need, 17);
+  assert.equal(network.have, 16);
+  assert.equal(network.deficit, 1);
+  assert.equal(network.severity, 'critical');
+  // Candidatas ordenadas da menor pra maior capacidade que resolveria o déficit — nunca obriga a
+  // escolher a menor, só ordena (ver seção 16 do documento de arquitetura).
+  assert.deepEqual(network.categories, ['Switch PoE Giga 16 Portas', 'Switch PoE Giga 24 Portas']);
+
+  // A alimentação também estoura (mesmo switch fornece as duas portas) e a gravação também, já que
+  // o NVR também ficou pra trás — a mesma câmera extra afeta os três recursos que ela consome.
+  const recording = result.requirements_by_category['Câmera IP PoE'].find((r) => r.key === 'resource:recording.ip_channel');
+  assert.equal(recording.deficit, 1);
+  const power = result.requirements_by_category['Câmera IP PoE'].filter((r) => r.label === 'Alimentação');
+  assert.ok(power.every((r) => r.severity === 'critical'));
+});
+
+test('computeCategoryMissingEssentials (motor de recursos): capacidade soma entre vários equipamentos do mesmo recurso (dois NVRs)', () => {
+  const categories = [cameraIpPoeFixture, switchPoeGigaFixture(24), nvrFixture(16), nvrFixture(8)];
+  const result = computeCategoryMissingEssentials([
+    { title: 'Câmera IP PoE Intelbras VIP 3230', quantity: 22 },
+    { title: 'Switch PoE Giga 24 Portas Intelbras', quantity: 1 },
+    { title: 'NVR 16 Canais Intelbras', quantity: 1 },
+    { title: 'NVR 8 Canais Intelbras', quantity: 1 },
+  ], categories);
+
+  const recording = result.requirements_by_category['Câmera IP PoE'].find((r) => r.key === 'resource:recording.ip_channel');
+  assert.equal(recording.have, 24); // 16 + 8, um NVR só não bastaria
+  assert.equal(recording.deficit, 0);
+});
+
+test('computeCategoryMissingEssentials: motor antigo (dependencies) e motor novo (requirements) convivem na mesma chamada', () => {
+  const categories = [
+    fixtureCategory('Vídeo Porteiro', [{ categoryValue: 'Fonte 12V', critical: true, alternatives: [] }]),
+    fixtureCategory('Fonte 12V'),
+    cameraIpPoeFixture, switchPoeGigaFixture(16), nvrFixture(16),
+  ];
+  const result = computeCategoryMissingEssentials([
+    { title: 'Vídeo Porteiro Intelbras', quantity: 1 },
+    { title: 'Câmera IP PoE Intelbras VIP 3230', quantity: 1 },
+  ], categories);
+
+  assert.deepEqual(result.detected_categories.sort(), ['Câmera IP PoE', 'Vídeo Porteiro'].sort());
+  assert.equal(result.requirements_by_category['Vídeo Porteiro'][0].severity, 'critical');
+  assert.ok(result.requirements_by_category['Câmera IP PoE'].some((r) => r.key === 'resource:network.gigabit_port' && r.severity === 'critical'));
 });
 
 test('POST /api/recipe/prices searches each suggested item and reports its average price', async (t) => {
@@ -798,6 +906,59 @@ test('CRUD de /api/groups: lista, cadastra, recusa nome duplicado e bloqueia exc
   await fetch(`${baseUrl}/api/categories/${category.id}`, { method: 'DELETE' });
 
   const allowed = await fetch(`${baseUrl}/api/groups/${group.id}`, { method: 'DELETE' });
+  assert.equal(allowed.status, 200);
+});
+
+test('CRUD de /api/resources: lista os 4 recursos semeados, cadastra, recusa chave duplicada/inválida, edita o nome e bloqueia exclusão enquanto uma categoria usar o recurso', async (t) => {
+  const server = http.createServer(requestHandler);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const suffix = Date.now();
+  const key = `teste.recurso_${suffix}`;
+
+  const listedBefore = await fetch(`${baseUrl}/api/resources`);
+  assert.equal(listedBefore.status, 200);
+  assert.ok((await listedBefore.json()).resources.some((r) => r.key === 'network.gigabit_port'));
+
+  const invalidKey = await fetch(`${baseUrl}/api/resources`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'Chave Inválida!!', label: 'x' }),
+  });
+  assert.equal(invalidKey.status, 400);
+
+  const created = await fetch(`${baseUrl}/api/resources`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, label: 'Recurso de teste' }),
+  });
+  const resource = await created.json();
+  assert.equal(created.status, 201);
+  assert.equal(resource.key, key);
+
+  const duplicate = await fetch(`${baseUrl}/api/resources`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, label: 'outro' }),
+  });
+  assert.equal(duplicate.status, 400);
+
+  const updated = await fetch(`${baseUrl}/api/resources/${resource.id}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label: 'Recurso de teste (editado)' }),
+  });
+  assert.equal(updated.status, 200);
+  assert.equal((await updated.json()).label, 'Recurso de teste (editado)');
+
+  const category = await (await fetch(`${baseUrl}/api/categories`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      group: '__teste__ Grupo', label: `__teste__ Categoria com recurso ${suffix}`,
+      provides: [{ resource: key, amount: 1 }],
+    }),
+  })).json();
+
+  const blocked = await fetch(`${baseUrl}/api/resources/${resource.id}`, { method: 'DELETE' });
+  assert.equal(blocked.status, 400);
+  assert.match((await blocked.json()).detail, /categoria/i);
+
+  await fetch(`${baseUrl}/api/categories/${category.id}`, { method: 'DELETE' });
+
+  const allowed = await fetch(`${baseUrl}/api/resources/${resource.id}`, { method: 'DELETE' });
   assert.equal(allowed.status, 200);
 });
 

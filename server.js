@@ -7,6 +7,7 @@ const {
   listProducts, createProduct, updateProduct, deleteProduct,
   listCategories, createCategory, updateCategory, deleteCategory,
   listGroups, createGroup, deleteGroup,
+  listResources, createResource, updateResource, deleteResource,
   closeDb,
 } = require('./db');
 
@@ -241,10 +242,162 @@ function buildDependencyReason(anchorLabel, depLabel, critical, hasAlternatives)
   return `Recomendado para ${anchorLabel}.`;
 }
 
-// Motor de sugestões cadastrável: lê `dependencies` de cada categoria (aba Categorias) em vez de
-// regras fixas em código. Mesmo contrato de saída do antigo computeMissingEssentials.
-// `cartItems`: [{title, quantity}] ou (para chamadas antigas/testes) [string], quantidade 1 no default.
-// `categories` entra por parâmetro pra manter a função pura/testável sem depender de conexão com o Mongo.
+// --- Motor de recursos/capacidade -----------------------------------------------------------
+// Convive com o motor antigo de dependencies[] acima: uma categoria com `requirements[]` cadastrado
+// usa este motor; uma categoria só com `dependencies[]` continua no motor antigo (ver
+// computeCategoryMissingEssentials, que roda os dois e junta o resultado). Ver SPEC.md ("Motor de
+// recursos e capacidade") e arquitetura_motor_regras_capacidade_comprador_inviolavel.txt (enviado
+// pelo usuário) para o racional completo.
+//
+// A demanda de um recurso (ex.: `network.gigabit_port`) é somada uma vez só, GLOBALMENTE, entre
+// todas as categorias-âncora presentes no orçamento que o exigem — não por âncora — porque duas
+// categorias diferentes (ex.: Câmera IP e Câmera IP PoE) podem consumir o mesmo recurso ao mesmo
+// tempo, e um mesmo equipamento (Switch PoE) pode fornecer mais de um recurso simultaneamente
+// (portas Gigabit + portas PoE). Sem esse ledger global, a mesma capacidade seria contada errado.
+
+// Soma a quantidade de itens do carrinho por categoria exata (não por título) — dois itens
+// diferentes da mesma categoria (raro, mas possível) somam a mesma demanda/oferta.
+function sumCategoryQuantities(detectedByItem) {
+  const totals = new Map();
+  for (const { category, quantity } of detectedByItem) {
+    if (!category) continue;
+    totals.set(category.value, (totals.get(category.value) || 0) + quantity);
+  }
+  return totals;
+}
+
+function buildSupplyLedger(categoryTotals, byValue) {
+  const supply = new Map();
+  for (const [value, quantity] of categoryTotals) {
+    for (const p of byValue.get(value)?.provides || []) {
+      supply.set(p.resource, (supply.get(p.resource) || 0) + p.amount * quantity);
+    }
+  }
+  return supply;
+}
+
+// Demanda também é global por recurso: soma unitsPerItem * quantidade de TODA categoria-âncora
+// presente que exija aquele recurso (via requisito de capacidade OU opção de capacidade dentro de
+// um anyOf), não só da âncora que estiver sendo avaliada no momento.
+function buildDemandLedger(categoryTotals, byValue) {
+  const demand = new Map();
+  const add = (resource, amount) => demand.set(resource, (demand.get(resource) || 0) + amount);
+  for (const [value, quantity] of categoryTotals) {
+    for (const req of byValue.get(value)?.requirements || []) {
+      if (req.type === 'capacity') add(req.resource, req.unitsPerItem * quantity);
+      else if (req.type === 'anyOf') {
+        for (const option of req.options) {
+          if (option.type === 'capacity') add(option.resource, option.unitsPerItem * quantity);
+        }
+      }
+    }
+  }
+  return demand;
+}
+
+// Categorias candidatas pra resolver um déficit de um recurso — usadas tanto no `missing` quanto no
+// ProductPickerDialog do front (prompt.categories), que já sabe mostrar produto por categoria quando
+// há mais de uma opção. Ordenadas da menor pra maior capacidade (sugestão "mais enxuta" primeiro,
+// sem obrigar o comercial a escolher ela — ver seção 16 do documento de arquitetura).
+function candidateCategoriesForResource(resource, categories) {
+  return categories
+    .filter((c) => (c.provides || []).some((p) => p.resource === resource))
+    .sort((a, b) => a.provides.find((p) => p.resource === resource).amount - b.provides.find((p) => p.resource === resource).amount)
+    .map((c) => c.value);
+}
+
+function isPresenceSatisfied(candidates, categoryTotals) {
+  return candidates.some((value) => categoryTotals.has(value));
+}
+
+function satisfyingCategory(candidates, categoryTotals) {
+  return candidates.find((value) => categoryTotals.has(value)) || null;
+}
+
+// Avalia `requirements[]` das categorias-âncora presentes no orçamento contra o ledger global de
+// oferta/demanda. Retorna o mesmo formato de `requirements_by_category`/`missing` do motor antigo
+// (key/label/reason/search_term/essential/severity/satisfied_by), com dois campos a mais:
+// `categories` (candidatas pro ProductPickerDialog) e, em requisitos de capacidade, `need`/`have`/
+// `deficit` (números, pra reason explicar o déficit em vez de só dizer "falta").
+function computeResourceRequirements(categoryTotals, categories, byValue) {
+  const supply = buildSupplyLedger(categoryTotals, byValue);
+  const demand = buildDemandLedger(categoryTotals, byValue);
+
+  const requirementsByAnchor = {};
+  const missingByKey = new Map();
+
+  for (const anchorValue of categoryTotals.keys()) {
+    const anchor = byValue.get(anchorValue);
+    if (!anchor?.requirements?.length) continue;
+    const evaluated = [];
+
+    for (const req of anchor.requirements) {
+      if (req.type === 'presence') {
+        const satisfied_by = satisfyingCategory(req.candidates, categoryTotals);
+        evaluated.push({
+          key: `presence:${req.candidates.slice().sort().join('|')}`, label: req.label,
+          reason: buildDependencyReason(anchor.label, req.label, req.critical, false),
+          search_term: req.label, essential: true,
+          severity: req.critical && !satisfied_by ? 'critical' : undefined,
+          satisfied_by, categories: req.candidates,
+        });
+      } else if (req.type === 'capacity') {
+        const need = demand.get(req.resource) || 0;
+        const have = supply.get(req.resource) || 0;
+        const deficit = Math.max(0, need - have);
+        evaluated.push({
+          key: `resource:${req.resource}`, label: req.label,
+          reason: deficit
+            ? `${req.label}: faltam ${deficit} (${need} necessário${need === 1 ? '' : 's'}, ${have} disponíve${have === 1 ? 'l' : 'is'}).`
+            : buildDependencyReason(anchor.label, req.label, req.critical, false),
+          search_term: req.label, essential: true,
+          severity: req.critical && deficit ? 'critical' : undefined,
+          satisfied_by: deficit ? null : 'ok',
+          categories: candidateCategoriesForResource(req.resource, categories),
+          need, have, deficit,
+        });
+      } else if (req.type === 'anyOf') {
+        const optionStates = req.options.map((option) => {
+          if (option.type === 'presence') {
+            return { option, satisfied: isPresenceSatisfied(option.candidates, categoryTotals), key: `presence:${option.candidates.slice().sort().join('|')}`, categories: option.candidates };
+          }
+          const need = demand.get(option.resource) || 0;
+          const have = supply.get(option.resource) || 0;
+          return { option, satisfied: need > 0 && have >= need, key: `resource:${option.resource}`, categories: candidateCategoriesForResource(option.resource, categories), need, have };
+        });
+        const satisfiedBySome = optionStates.some((s) => s.satisfied);
+        for (const state of optionStates) {
+          const satisfied_by = state.satisfied
+            ? (state.option.type === 'presence' ? satisfyingCategory(state.categories, categoryTotals) : 'ok')
+            : null;
+          evaluated.push({
+            key: state.key, label: req.label,
+            reason: satisfiedBySome && !state.satisfied
+              ? `Alternativa para ${req.label} (${anchor.label}).`
+              : buildDependencyReason(anchor.label, req.label, req.critical, true),
+            search_term: req.label, essential: true,
+            severity: state.satisfied ? null : (satisfiedBySome ? 'optional' : 'critical'),
+            satisfied_by, categories: state.categories,
+            ...(state.option.type === 'capacity' ? { need: state.need, have: state.have } : {}),
+          });
+        }
+      }
+    }
+
+    requirementsByAnchor[anchorValue] = evaluated;
+    for (const item of evaluated) {
+      const existing = missingByKey.get(item.key);
+      if (!existing || (item.severity === 'critical' && existing.severity !== 'critical')) missingByKey.set(item.key, item);
+    }
+  }
+
+  return { requirementsByAnchor, missingByKey };
+}
+
+// Motor de sugestões cadastrável: lê `dependencies`/`requirements` de cada categoria (aba
+// Categorias) em vez de regras fixas em código. `cartItems`: [{title, quantity}] ou (chamadas
+// antigas/testes) [string], quantidade 1 no default. `categories` entra por parâmetro pra manter a
+// função pura/testável sem depender de conexão com o Mongo.
 function computeCategoryMissingEssentials(cartItems, categories) {
   const items = (Array.isArray(cartItems) ? cartItems : []).map((item) => {
     const title = normalize(typeof item === 'string' ? item : item?.title);
@@ -254,6 +407,7 @@ function computeCategoryMissingEssentials(cartItems, categories) {
 
   const byValue = new Map(categories.map((c) => [c.value, c]));
   const detectedByItem = items.map((item) => ({ ...item, category: detectExactCategory(item.title, categories) }));
+  const categoryTotals = sumCategoryQuantities(detectedByItem);
 
   const satisfyingTitleByValue = new Map();
   for (const { title, category } of detectedByItem) {
@@ -262,13 +416,16 @@ function computeCategoryMissingEssentials(cartItems, categories) {
   }
 
   const detected_categories = [...new Set(detectedByItem.map((d) => d.category?.value).filter(Boolean))]
-    .filter((value) => byValue.get(value)?.dependencies?.length);
+    .filter((value) => byValue.get(value)?.dependencies?.length || byValue.get(value)?.requirements?.length);
 
   const missingMap = new Map();
   const requirements_by_category = {};
 
+  // Motor antigo: só roda pra âncoras que ainda usam dependencies[] (categorias já migradas pro
+  // motor de recursos têm requirements[] e são puladas aqui — ver computeResourceRequirements).
   for (const anchorValue of detected_categories) {
     const anchor = byValue.get(anchorValue);
+    if (!anchor.dependencies?.length) continue;
     const handled = new Set();
     const evaluated = [];
 
@@ -292,7 +449,7 @@ function computeCategoryMissingEssentials(cartItems, categories) {
             key: value, label, reason: buildDependencyReason(anchor.label, label, true, true),
             search_term: label, essential: true,
             severity: satisfied_by ? null : (satisfiedBySome ? 'optional' : 'critical'),
-            satisfied_by,
+            satisfied_by, categories: [value],
           });
         }
       } else {
@@ -302,7 +459,7 @@ function computeCategoryMissingEssentials(cartItems, categories) {
           key: dep.categoryValue, label: depLabel, reason: buildDependencyReason(anchor.label, depLabel, dep.critical, false),
           search_term: depLabel, essential: true,
           severity: dep.critical && !satisfied_by ? 'critical' : undefined,
-          satisfied_by,
+          satisfied_by, categories: [dep.categoryValue],
         });
       }
     }
@@ -313,9 +470,18 @@ function computeCategoryMissingEssentials(cartItems, categories) {
     }
   }
 
+  // Motor novo: ledger de recursos, só pras âncoras com requirements[] cadastrado.
+  const { requirementsByAnchor, missingByKey } = computeResourceRequirements(categoryTotals, categories, byValue);
+  for (const [anchorValue, evaluated] of Object.entries(requirementsByAnchor)) {
+    requirements_by_category[anchorValue] = evaluated;
+  }
+  for (const [key, item] of missingByKey) {
+    if (!missingMap.has(key)) missingMap.set(key, item);
+  }
+
   const missing = [...missingMap.values()]
     .filter((item) => !item.satisfied_by)
-    .map(({ key, label, reason, search_term, essential }) => ({ key, label, reason, search_term, essential }));
+    .map(({ key, label, reason, search_term, essential, categories }) => ({ key, label, reason, search_term, essential, categories }));
   return { detected_categories, missing, requirements_by_category };
 }
 
@@ -578,8 +744,57 @@ function validateDependenciesShape(raw) {
   });
 }
 
+// provides: [{ resource, amount }] — quanto desse recurso uma unidade desta categoria fornece (ex.:
+// Switch PoE Giga 16 Portas fornece 16 de `network.gigabit_port` e 16 de `power.poe_port`).
+// requirements: [{ id, label, critical, type: 'presence'|'capacity', ... } | { type: 'anyOf', options: [...] }]
+// — o que uma unidade desta categoria exige. Validação aqui é só de forma (shape); sanitização fina
+// (dedupe, limites) fica em db.js, igual ao padrão já usado por dependencies. Ver categoryResourceSeed.js
+// e SPEC.md ("Motor de recursos e capacidade") pro racional — o cadastro (CategoryFormDialog) ainda
+// não edita esses dois campos, só a API/seed; por isso ambos são opcionais aqui.
+function validateProvidesShape(raw) {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) throw new Error('Recursos fornecidos inválidos.');
+  if (raw.length > 20) throw new Error('Limite de 20 recursos fornecidos por categoria.');
+  return raw.map((entry) => {
+    const resource = normalize(entry?.resource);
+    if (!resource) throw new Error('Cada recurso fornecido precisa de um identificador.');
+    return { resource, amount: entry?.amount };
+  });
+}
+
+function validateRequirementOptionShape(raw) {
+  if (raw?.type === 'capacity') {
+    const resource = normalize(raw?.resource);
+    if (!resource) throw new Error('Requisito de capacidade precisa de um recurso.');
+    return { type: 'capacity', resource, unitsPerItem: raw?.unitsPerItem };
+  }
+  const candidates = Array.isArray(raw?.candidates) ? raw.candidates.map((v) => normalize(v)).filter(Boolean) : [];
+  if (!candidates.length) throw new Error('Requisito de presença precisa de ao menos uma categoria candidata.');
+  return { type: 'presence', candidates };
+}
+
+function validateRequirementsShape(raw) {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) throw new Error('Requisitos inválidos.');
+  if (raw.length > 30) throw new Error('Limite de 30 requisitos por categoria.');
+  return raw.map((req) => {
+    const id = normalize(req?.id);
+    const label = normalize(req?.label);
+    if (!id || !label) throw new Error('Cada requisito precisa de id e rótulo.');
+    const critical = !!req?.critical;
+    if (req?.type === 'anyOf') {
+      const options = Array.isArray(req.options) ? req.options.map(validateRequirementOptionShape) : [];
+      if (options.length < 2) throw new Error('Requisito "qualquer um" precisa de ao menos 2 opções.');
+      return { id, label, type: 'anyOf', critical, options };
+    }
+    return { id, label, critical, ...validateRequirementOptionShape(req) };
+  });
+}
+
 // capacity: opcional — quantas unidades de outra coisa uma unidade DESTA categoria comporta (portas
-// de switch, canais de DVR/NVR). Ausente/0 = categoria sem noção de capacidade.
+// de switch, canais de DVR/NVR). Ausente/0 = categoria sem noção de capacidade. Campo legado,
+// mantido pelo cadastro atual; não confundir com `provides`, que é o mesmo conceito só que por
+// recurso nomeado (ver acima).
 function validateCategoryRequest(request) {
   if (!request || typeof request !== 'object') throw new Error('Corpo JSON inválido.');
   const group = normalize(request.group);
@@ -589,7 +804,23 @@ function validateCategoryRequest(request) {
   const rawCapacity = Number(request.capacity);
   const capacity = Number.isFinite(rawCapacity) && rawCapacity > 0 ? Math.trunc(rawCapacity) : null;
   const dependencies = validateDependenciesShape(request.dependencies);
-  return { group, label, capacity, dependencies };
+  const provides = validateProvidesShape(request.provides);
+  const requirements = validateRequirementsShape(request.requirements);
+  return { group, label, capacity, dependencies, provides, requirements };
+}
+
+// key: identificador técnico gravado em provides[].resource/requirements[].resource (ex.:
+// "network.gigabit_port") — letras/números/ponto/underscore, mesmo formato usado por
+// categoryResourceSeed.js. label: nome amigável mostrado nos seletores de recurso.
+function validateResourceRequest(request) {
+  if (!request || typeof request !== 'object') throw new Error('Corpo JSON inválido.');
+  const key = normalize(request.key).toLowerCase();
+  const label = normalize(request.label);
+  if (!key || key.length > 100 || !/^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/.test(key)) {
+    throw new Error('Informe uma chave válida (ex: network.gigabit_port — letras, números, ponto e underscore, começando com letra).');
+  }
+  if (!label || label.length > 100) throw new Error('Informe um nome para o recurso (até 100 caracteres).');
+  return { key, label };
 }
 
 function isGoogleHostedLink(url) {
@@ -887,6 +1118,26 @@ async function requestHandler(request, response) {
     if (groupIdMatch && request.method === 'DELETE') {
       const id = groupIdMatch[1];
       if (!(await deleteGroup(id))) return sendJson(response, 404, { detail: 'Grupo não encontrado.' });
+      return sendJson(response, 200, { deleted: true });
+    }
+    if (request.method === 'GET' && url.pathname === '/api/resources') {
+      return sendJson(response, 200, { resources: await listResources() });
+    }
+    if (request.method === 'POST' && url.pathname === '/api/resources') {
+      const body = await readJson(request);
+      return sendJson(response, 201, await createResource(validateResourceRequest(body)));
+    }
+    const resourceIdMatch = url.pathname.match(/^\/api\/resources\/([a-f0-9]{24})$/i);
+    if (resourceIdMatch && request.method === 'PUT') {
+      const id = resourceIdMatch[1];
+      const label = normalize((await readJson(request)).label);
+      if (!label || label.length > 100) throw new Error('Informe um nome para o recurso (até 100 caracteres).');
+      if (!(await updateResource(id, { label }))) return sendJson(response, 404, { detail: 'Recurso não encontrado.' });
+      return sendJson(response, 200, { id, label });
+    }
+    if (resourceIdMatch && request.method === 'DELETE') {
+      const id = resourceIdMatch[1];
+      if (!(await deleteResource(id))) return sendJson(response, 404, { detail: 'Recurso não encontrado.' });
       return sendJson(response, 200, { deleted: true });
     }
     if (request.method === 'GET') return serveStatic(url.pathname, response);

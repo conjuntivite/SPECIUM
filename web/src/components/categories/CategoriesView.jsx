@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+import { normalizeSearch } from '@/lib/utils'
 import {
   createCategory, deleteCategory, getCategories, updateCategory,
   createGroup, deleteGroup, getGroups,
@@ -14,6 +17,15 @@ export function CategoriesView() {
   const [error, setError] = useState('')
   const [formOpen, setFormOpen] = useState(false)
   const [editingCategory, setEditingCategory] = useState(null)
+  const [search, setSearch] = useState('')
+
+  // Filtra só o que aparece na tabela — o form de edição continua recebendo a lista completa
+  // (precisa de todas as categorias pra montar os seletores de dependência/requisito).
+  const filteredCategories = useMemo(() => {
+    const q = normalizeSearch(search.trim())
+    if (!q) return categories
+    return categories.filter((c) => normalizeSearch(c.group).includes(q) || normalizeSearch(c.label).includes(q))
+  }, [categories, search])
 
   const reload = useCallback(() => {
     setLoading(true)
@@ -71,7 +83,7 @@ export function CategoriesView() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-4xl">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">Categorias cadastradas</h2>
         <Button type="button" onClick={openCreate}>+ Nova categoria</Button>
@@ -81,22 +93,38 @@ export function CategoriesView() {
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       {categories.length ? (
+        <div className="relative mb-3">
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por grupo ou categoria..."
+            className="pl-8"
+          />
+        </div>
+      ) : null}
+
+      {filteredCategories.length ? (
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Grupo</TableHead>
               <TableHead>Categoria</TableHead>
               <TableHead>Capacidade</TableHead>
+              <TableHead>Recursos</TableHead>
               <TableHead>Dependências</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {categories.map((category) => (
+            {filteredCategories.map((category) => (
               <TableRow key={category.id}>
                 <TableCell>{category.group}</TableCell>
                 <TableCell>{category.label}</TableCell>
                 <TableCell className="text-muted-foreground">{category.capacity ?? '—'}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {category.requirements?.length ? `${category.requirements.length} requisito${category.requirements.length === 1 ? '' : 's'}` : '—'}
+                </TableCell>
                 <TableCell className="text-muted-foreground">
                   {category.dependencies?.length
                     ? `${category.dependencies.length} (${category.dependencies.filter((d) => d.critical).length} crítica${category.dependencies.filter((d) => d.critical).length === 1 ? '' : 's'})`
@@ -110,6 +138,10 @@ export function CategoriesView() {
             ))}
           </TableBody>
         </Table>
+      ) : null}
+
+      {categories.length && !filteredCategories.length ? (
+        <p className="text-sm text-muted-foreground">Nenhuma categoria encontrada para "{search}".</p>
       ) : null}
 
       <CategoryFormDialog

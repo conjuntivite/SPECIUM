@@ -22,19 +22,19 @@ function SuggestionCard({ req, onAdd }) {
       draggable
       title={`${req.label} — ${req.reason || ''}`}
       onDragStart={(e) => {
-        e.dataTransfer.setData('application/json', JSON.stringify({ key: req.key, label: req.label }))
+        e.dataTransfer.setData('application/json', JSON.stringify({ key: req.key, label: req.label, categories: req.categories }))
         e.dataTransfer.effectAllowed = 'copy'
         setDragging(true)
       }}
       onDragEnd={() => setDragging(false)}
-      className={`relative w-[110px] shrink-0 cursor-grab select-none rounded-md border-l-2 px-1.5 py-1 active:cursor-grabbing ${style.border} ${style.bg || 'bg-white/4'} ${dragging ? 'opacity-40' : ''}`}
+      className={`relative w-[110px] shrink-0 cursor-grab select-none rounded-md border-l-2 px-1.5 py-1 transition-opacity active:cursor-grabbing ${style.border} ${style.bg || 'bg-white/4'} ${dragging ? 'opacity-40' : ''}`}
     >
       <button
         type="button"
         title="Adicionar ao quadro"
         onMouseDown={(e) => e.stopPropagation()}
         onClick={() => onAdd(req)}
-        className="absolute right-1 top-1 flex size-3.5 items-center justify-center rounded-full bg-white/10 text-muted-foreground hover:bg-flow-green hover:text-flow-green-text"
+        className="absolute right-1 top-1 flex size-3.5 items-center justify-center rounded-full bg-white/10 text-muted-foreground transition-colors hover:bg-flow-green hover:text-flow-green-text"
       >
         <Plus className="size-2.5" />
       </button>

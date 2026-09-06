@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { ReactFlow, Background, BackgroundVariant, applyNodeChanges, useReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { CircleDollarSign, Maximize2, Plus, Trash2, ZoomIn, ZoomOut } from 'lucide-react'
@@ -34,6 +34,13 @@ const defaultEdgeOptions = {
 
 export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToProducts }, ref) {
   const catalog = useCategories()
+  // Uma sugestão de capacidade (ex.: "Conectividade Gigabit") pode ter mais de uma categoria
+  // candidata — o rótulo do requisito não é um value de categoria real, então "Adicionar sem
+  // produto cadastrado" precisa do rótulo da categoria (a primeira candidata), não do requisito.
+  const categoryLabelByValue = useMemo(
+    () => Object.fromEntries(catalog.flatMap((group) => group.items.map((item) => [item.value, item.label]))),
+    [catalog]
+  )
   const { screenToFlowPosition, zoomIn, zoomOut, fitView } = useReactFlow()
   // Posição do último clique com botão direito — usada como ponto de spawn ao adicionar item
   // pelo menu (equivalente ao ponto de solto do drag-and-drop da suggestions strip).
@@ -84,10 +91,11 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
     e.preventDefault()
     const payload = e.dataTransfer.getData('application/json')
     if (!payload) return
-    const { key, label } = JSON.parse(payload)
+    const { key, label, categories } = JSON.parse(payload)
+    const resolvedCategories = categories?.length ? categories : [key]
     const position = screenToFlowPosition({ x: e.clientX, y: e.clientY })
-    setProductPrompt({ label, categories: [key], fallbackTitle: label, position })
-  }, [screenToFlowPosition])
+    setProductPrompt({ label, categories: resolvedCategories, fallbackTitle: categoryLabelByValue[resolvedCategories[0]] || label, position })
+  }, [screenToFlowPosition, categoryLabelByValue])
 
   function handleCatalogItemSelect(_group, item) {
     const position = screenToFlowPosition(lastContextPosRef.current)
@@ -109,7 +117,8 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
   // position fica indefinida e useBudget decide o layout automático, igual ao clique de antes.
   useImperativeHandle(ref, () => ({
     addSuggestion(req) {
-      setProductPrompt({ label: req.label, categories: [req.key], fallbackTitle: req.label, position: undefined })
+      const resolvedCategories = req.categories?.length ? req.categories : [req.key]
+      setProductPrompt({ label: req.label, categories: resolvedCategories, fallbackTitle: categoryLabelByValue[resolvedCategories[0]] || req.label, position: undefined })
     },
   }))
 
@@ -121,7 +130,7 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
           onContextMenu={(e) => { lastContextPosRef.current = { x: e.clientX, y: e.clientY } }}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
-          className="size-full bg-[#0a0d14]"
+          className="size-full bg-flow-canvas"
         >
           <ReactFlow
             nodes={nodes}
@@ -133,7 +142,7 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
             onNodesDelete={handleNodesDelete}
             deleteKeyCode={['Delete', 'Backspace']}
           >
-            <Background variant={BackgroundVariant.Lines} gap={90} color="rgba(255,255,255,0.05)" />
+            <Background variant={BackgroundVariant.Lines} gap={90} color="var(--color-flow-grid)" />
           </ReactFlow>
         </div>
       </ContextMenuTrigger>

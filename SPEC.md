@@ -158,6 +158,138 @@ Por **regex solto contra qualquer título do carrinho** (`REQUIREMENT_PATTERNS`)
 
 O motor novo (`computeCategoryMissingEssentials`) casa por **categoria exata presente no orçamento** (via `detectExactCategory`), não mais por palavra solta — mais preciso, mas também mais estrito: um item precisa carregar o `value` exato da categoria no título pra contar como presente (sempre verdade hoje, pela forma como o item entra no orçamento).
 
+## Motor de recursos e capacidade (2026-09-06)
+
+Fonte: `arquitetura_motor_regras_capacidade_comprador_inviolavel.txt` (fora do repo, enviado pelo
+usuário) — diagnóstico e desenho completo estão lá; aqui fica só o registro do que foi de fato
+implementado e por quê. Ponto de referência do estado anterior: tag git `pre-motor-capacidade`.
+
+**Problema que motivou a mudança**: o motor de `dependencies[]` (seção acima) só sabe responder
+"existe no orçamento uma categoria que satisfaça essa dependência" — presença/ausência, nunca
+quantidade. Pra simular "capacidade" ele enumerava cada variante de switch/NVR como uma alternativa
+mútua da câmera (`mutualCritical(SWITCH_ALL)`) — o que multiplicava a demanda por variante em vez de
+somar por recurso: 17 câmeras IP PoE nunca acusavam déficit de porta num switch de 16, porque o motor
+nunca somava capacidade nenhuma, só via se "algum switch" estava no orçamento.
+
+**Modelo novo**: categorias ganham dois campos novos, além de `dependencies[]` (mantido, ver abaixo):
+
+- `provides: [{ resource, amount }]` — quanto de um recurso nomeado uma unidade desta categoria
+  fornece (ex.: Switch PoE Giga 16 Portas fornece 16 de `network.gigabit_port` e 16 de
+  `power.poe_port`; NVR 16 Canais fornece 16 de `recording.ip_channel`).
+- `requirements: [...]` — o que uma unidade desta categoria exige, em três formatos: `presence`
+  (precisa de alguma categoria da lista `candidates` no orçamento, mesmo critério do `dependencies[]`
+  antigo), `capacity` (consome `unitsPerItem` de um `resource` por unidade), ou `anyOf` (qualquer uma
+  de duas ou mais `options` — presença ou capacidade — resolve; é assim que "Switch PoE ou Fonte 12V"
+  é modelado agora, sem precisar de uma chave de requisito duplicada por âncora como antes).
+
+A demanda e a oferta de cada recurso são somadas **globalmente** (`buildSupplyLedger`/
+`buildDemandLedger` em `server.js`), não por categoria-âncora: 10 Câmera IP + 7 Câmera IP PoE somam
+17 de demanda em `network.gigabit_port`, e um Switch PoE Giga 16 soma 16 nesse mesmo recurso E 16 em
+`power.poe_port` ao mesmo tempo — um equipamento pode fornecer mais de um recurso, e duas categorias
+diferentes podem consumir o mesmo recurso, sem duplicar ou multiplicar a conta.
+
+**Convivência sem "big bang"** (`computeCategoryMissingEssentials`): uma categoria com
+`requirements[]` cadastrado usa o motor novo; uma categoria só com `dependencies[]` continua no motor
+antigo — os dois rodam na mesma chamada e o resultado é mesclado. Migradas nesta rodada: Switch
+(todas as 16 variantes — Fast/Giga × normal/PoE × 4/8/16/24 portas), DVR e NVR (todos os canais),
+Câmera IP, Câmera IP PoE e Câmera Analógica (`categoryResourceSeed.js`). Ficaram no motor antigo por
+enquanto: as variantes AcuSense, Terminal Facial, Vídeo Porteiro, Mikrotik e Roteador Wi-Fi — migração
+categoria por categoria, como o documento de arquitetura recomenda.
+
+**Diferença deliberada em relação ao motor antigo**: switch Fast (10/100) não é mais candidato da
+conectividade de rede da câmera IP — só switch Giga fornece `network.gigabit_port`. O motor antigo
+tratava "qualquer switch" como alternativa da câmera IP, o que é a mesma imprecisão que motivou a
+migração; switch PoE Fast continua fornecendo `power.poe_port` (alimenta PoE mesmo sem ser gigabit),
+então ainda participa da opção de alimentação do `anyOf`, só não da conectividade.
+
+**Backfill em banco já semeado**: como `ensureCategoriesSeeded` só roda na coleção vazia,
+`ensureCategoryResourceSeeded` (`db.js`) faz um backfill idempotente a cada `listCategories()` —
+grava `provides`/`requirements` só nos documentos que ainda não têm o campo, sem nunca sobrescrever
+edição feita pelo cadastro.
+
+**Cadastro (CategoryFormDialog) ainda não edita `provides`/`requirements`** — só grupo, nome,
+capacidade e `dependencies[]`, como antes. Por isso `updateCategory` (`db.js`) só inclui esses dois
+campos no `$set` quando o chamador realmente os envia; do contrário uma edição comum (renomear,
+trocar grupo) apagaria o que o seed/backfill gravou. Editar recursos e requisitos por enquanto é só
+via API direta (`POST`/`PUT /api/categories`) — a tela de formulário (fase 8 do documento de
+arquitetura: blocos "o que este item fornece"/"o que este item exige") fica pra próxima rodada.
+
+**Front-end**: `req.categories` (lista de categorias candidatas, não só uma) viaja da sugestão até o
+`ProductPickerDialog` — arrastar ou clicar em "Conectividade Gigabit" com déficit abre o seletor já
+filtrado pelas categorias de switch Giga que resolveriam, ordenadas da menor pra maior capacidade
+(nunca a escolha automática, só a ordem sugerida). O canvas e o `useBudget` não mudaram.
+
+## Recursos viram cadastro próprio, não mais fixos em código (2026-09-06)
+
+Pedido do usuário: um sistema pensado pra ser implantado em outras empresas (outros ramos, não só
+segurança eletrônica) não pode ter os recursos do motor de capacidade (`network.gigabit_port`,
+`power.poe_port`, `recording.ip_channel`, `recording.analog_channel`) fixos em
+`web/src/data/resources.js`. Vira coleção `resources` no Mongo (`db.js`: `listResources`,
+`createResource`, `updateResource`, `deleteResource`), semeada uma vez com os mesmos 4 recursos que
+já existiam, com CRUD em `/api/resources` e aba própria no front (**Recursos**, `ResourcesView.jsx`).
+`key` (o identificador técnico, ex. `power.va`) não é editável depois de criado — é o que fica
+gravado em `provides[].resource`/`requirements[].resource` das categorias; só o `label` (nome
+amigável) pode mudar. Exclusão é bloqueada enquanto alguma categoria fornecer ou exigir o recurso
+(mesma proteção de `deleteGroup`/`deleteCategory`).
+
+O seletor de recurso na tela de categoria (`ResourcePicker`, dentro de `RequirementsEditor.jsx`) lê
+do cadastro via `useResources()` em vez do array fixo — continua com a opção "Personalizado..." pra
+digitar uma chave nova ali mesmo, sem precisar ir na aba Recursos primeiro (ela só formaliza/reaproveita
+depois).
+
+**Achado ao testar**: a aba Recursos é inalcançável a partir da tela de Orçamento por um motivo já
+existente no app — `BudgetView` é `fixed inset-0 z-40` (canvas de tela cheia), o que cobre e
+intercepta cliques na barra de abas de verdade (`ViewTabs`) por baixo dele. Por isso o Orçamento já
+duplicava botões próprios de navegação (Busca avançada, Produtos, Categorias) flutuando por cima do
+canvas — Recursos precisou do mesmo tratamento (`BudgetView.jsx`), senão ficava inacessível a partir
+da tela inicial (todo carregamento começa no Orçamento).
+
+## Alternativas (anyOf) vs. presença com várias candidatas — quando usar cada uma (2026-09-06)
+
+Dúvida do usuário ao ver `Câmera IP DOMME` cadastrada com um requisito de presença único listando os
+10 itens de acabamento como candidatas: por que a tela permite isso, se a Câmera IP PoE tem 10
+requisitos separados pro mesmo kit?
+
+Não é falta de validação — são dois modelos válidos pro mesmo botão "+ Categoria candidata", que o
+cadastro não distingue automaticamente porque a intenção de quem cadastra é que decide:
+
+- **1 requisito, N candidatas**: "qualquer uma resolve" (`isPresenceSatisfied` usa `.some()`) — pra
+  alternativas de verdade, itens interpermutáveis (ex.: qualquer NVR resolve a gravação).
+- **N requisitos, 1 candidata cada**: cada item rastreado e sugerido independentemente — pra
+  checklist de itens recomendados que não se substituem (kit de acabamento).
+
+`anyOf` é o mesmo mecanismo generalizado pra quando as opções são de **tipos diferentes** (capacidade
++ presença, ex. porta PoE OU Fonte 12V) — presença-com-N-candidatas é o caso particular "todas as
+opções já são presença", mais rápido de cadastrar pro caso comum.
+
+## Tema escuro/claro/personalizado (2026-09-06)
+
+Pedido do usuário: um botão pra trocar entre tema escuro (o único que existia), claro, e um
+"personalizado" cuja customização é só estética e só sobre a cor do sistema (não um editor de
+paleta completo). `useTheme.js` guarda `{ mode, customColor }` no `localStorage`
+(`comprador-inviolavel:theme`) e aplica via `data-theme` no `<html>`:
+
+- **Escuro/Claro**: blocos CSS puros em `index.css` (`:root` e `:root[data-theme="light"]`) — todos
+  os tokens semânticos do shadcn (background, card, border, muted...) têm par claro/escuro.
+- **Personalizado**: reaproveita a paleta escura como base (sem bloco CSS próprio) e só sobrescreve
+  `--primary`/`--primary-foreground`/`--ring` inline via JS, calculados a partir da cor escolhida num
+  `<input type="color">` — `--primary-foreground` usa a fórmula de luminância relativa do WCAG pra
+  decidir texto claro ou escuro em cima da cor, continua legível não importa a cor escolhida.
+
+**Canvas do orçamento**: na primeira versão ficou de fora (sempre escuro) — o usuário pediu pra
+incluir. `--color-flow-canvas`/`--color-flow-grid` (`index.css`, dentro do `@theme`) viraram tokens
+próprios, com override no bloco `[data-theme="light"]`: um cinza suave (`#eceef2`), não branco puro
+— pra não cansar a vista em quem fica olhando o quadro por muito tempo. `BudgetCanvas.jsx` usa
+`bg-flow-canvas` e `color="var(--color-flow-grid)"` na grade de pontos, em vez dos literais fixos
+que tinha antes. Os cards dos itens (`FlowNode`, fundo `bg-flow-body`) continuam escuros nos dois
+temas — não foi pedido, e como "cartão escuro sobre fundo claro" já é legível/comum (post-it), não
+mudei sem necessidade.
+
+**Mesmo problema de novo**: o botão de tema (`ThemeSwitcher.jsx`) é `fixed z-50` na viewport (não
+dentro do container centralizado do App) — precisa disso pra ficar acima do canvas de orçamento
+(`BudgetView` é `fixed z-40` e cobre a tela inteira nessa aba). Sem isso ficaria inacessível a partir
+da tela inicial, o mesmo problema que a aba Recursos teve (ver seção acima).
+
 ## Próximos passos (fora de escopo por enquanto)
 
 - **Importar orçamento existente**: ler um arquivo com um orçamento já montado, apontar o que está errado/faltando e sugerir os equipamentos corretos — reaproveitando a mesma engine de `RECIPES`, só trocando a origem dos itens (arquivo em vez de texto livre no formulário). Pedido explicitamente adiado pelo usuário ("mais para frente") — não implementar sem confirmação.

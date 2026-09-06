@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { GroupCombobox } from './GroupCombobox'
+import { ProvidesEditor, RequirementsEditor } from './RequirementsEditor'
+import { useResources } from '@/hooks/useResources'
 import {
   Dialog,
   DialogContent,
@@ -30,11 +32,54 @@ function inferCapacityFromLabel(label) {
   return match ? match[1] : ''
 }
 
+function slugifyRequirementId(label, used) {
+  const base = label.toString().trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/(^-+|-+$)/g, '') || 'req'
+  let id = base
+  let n = 2
+  while (used.has(id)) { id = `${base}-${n}`; n += 1 }
+  used.add(id)
+  return id
+}
+
+function cleanOption(option) {
+  if (option.type === 'capacity') {
+    return { type: 'capacity', resource: (option.resource || '').trim(), unitsPerItem: Math.max(1, Math.trunc(Number(option.unitsPerItem)) || 1) }
+  }
+  return { type: 'presence', candidates: option.candidates || [] }
+}
+
+// Só descarta linhas visivelmente abandonadas (sem recurso/rótulo preenchido) — o resto (ex.:
+// presença sem nenhuma categoria candidata escolhida) segue pro backend, que recusa com uma
+// mensagem clara em vez de salvar silenciosamente algo incompleto.
+function cleanProvides(provides) {
+  return provides
+    .filter((p) => (p.resource || '').trim())
+    .map((p) => ({ resource: p.resource.trim(), amount: Math.max(1, Math.trunc(Number(p.amount)) || 1) }))
+}
+
+function cleanRequirements(requirements) {
+  const usedIds = new Set()
+  return requirements
+    .filter((r) => r.label.trim())
+    .map((r) => {
+      const base = { id: slugifyRequirementId(r.label, usedIds), label: r.label.trim(), critical: !!r.critical }
+      if (r.type === 'anyOf') return { ...base, type: 'anyOf', options: r.options.map(cleanOption) }
+      return { ...base, ...cleanOption(r) }
+    })
+}
+
 export function CategoryFormDialog({ open, category, groups, categories, onOpenChange, onSubmit, onCreateGroup, onDeleteGroup }) {
+  const resources = useResources()
   const [form, setForm] = useState(emptyForm)
   // [{ categoryValue, critical, alternatives: [categoryValue, ...] }] — alternatives referencia
   // outras entradas desta MESMA lista: o vínculo "resolve o conflito" entre críticas (ver abaixo).
   const [dependencies, setDependencies] = useState([])
+  // Motor de recursos/capacidade (ver categoryResourceSeed.js/SPEC.md "Motor de recursos e
+  // capacidade") — provides: [{resource, amount}], requirements: [{type, label, critical, ...}].
+  const [provides, setProvides] = useState([])
+  const [requirements, setRequirements] = useState([])
   const [copyFromValue, setCopyFromValue] = useState('')
   // Pendente até o usuário responder: { targetValue, targetLabel, existingCriticals: [{categoryValue,label}], answers }
   const [conflict, setConflict] = useState(null)
@@ -65,6 +110,8 @@ export function CategoryFormDialog({ open, category, groups, categories, onOpenC
           : emptyForm
       )
       setDependencies((category?.dependencies || []).map((d) => ({ ...d, alternatives: [...d.alternatives] })))
+      setProvides((category?.provides || []).map((p) => ({ ...p })))
+      setRequirements((category?.requirements || []).map((r) => (r.type === 'anyOf' ? { ...r, options: r.options.map((o) => ({ ...o })) } : { ...r })))
       setCopyFromValue('')
       setConflict(null)
       setError('')
@@ -160,7 +207,10 @@ export function CategoryFormDialog({ open, category, groups, categories, onOpenC
     setError('')
     try {
       const capacity = form.capacity === '' ? null : Math.max(1, Math.trunc(Number(form.capacity)) || 1)
-      await onSubmit({ group: form.group, label: form.label, capacity, dependencies })
+      await onSubmit({
+        group: form.group, label: form.label, capacity, dependencies,
+        provides: cleanProvides(provides), requirements: cleanRequirements(requirements),
+      })
     } catch (err) {
       setError(err.message || 'Erro ao salvar categoria.')
     } finally {
@@ -255,9 +305,25 @@ export function CategoryFormDialog({ open, category, groups, categories, onOpenC
                 </p>
               </div>
 
+              <ProvidesEditor provides={provides} onChange={setProvides} resources={resources} />
+              <RequirementsEditor
+                requirements={requirements}
+                otherCategories={otherCategories}
+                labelByValue={labelByValue}
+                resources={resources}
+                onChange={setRequirements}
+              />
+
+              {requirements.length ? (
+                <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-200">
+                  Com requisitos cadastrados acima, as dependências antigas abaixo deixam de valer pra
+                  esta categoria — o motor de sugestões usa "o que exige" no lugar delas.
+                </p>
+              ) : null}
+
               <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium">Dependências</span>
+                  <span className="text-sm font-medium">Dependências (motor antigo)</span>
                   {copyableFrom.length ? (
                     <Select value={copyFromValue} onValueChange={copyFrom}>
                       <SelectTrigger className="h-7 w-44 text-xs"><SelectValue placeholder="Copiar de..." /></SelectTrigger>
@@ -309,7 +375,7 @@ export function CategoryFormDialog({ open, category, groups, categories, onOpenC
                               <input type="checkbox" checked={dep.critical} onChange={(e) => setCritical(dep.categoryValue, e.target.checked)} />
                               Crítica
                             </label>
-                            <button type="button" onClick={() => removeDependency(dep.categoryValue)} className="text-xs text-destructive hover:underline">
+                            <button type="button" onClick={() => removeDependency(dep.categoryValue)} className="text-xs text-destructive transition-colors hover:underline">
                               remover
                             </button>
                           </div>

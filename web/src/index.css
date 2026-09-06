@@ -29,6 +29,35 @@
   --radius: 0.75rem;
 }
 
+/* Tema claro — mesmos tokens semânticos, valores alternativos. Ativado via [data-theme="light"] no
+   <html> (ver useTheme.js). O tema "personalizado" usa esta mesma base escura e só sobrescreve
+   --primary/--primary-foreground/--ring inline (ver applyTheme em useTheme.js) — por isso não tem
+   bloco próprio aqui, herda o :root de cima. --color-flow-canvas/--color-flow-grid (definidos no
+   @theme abaixo) também são sobrescritos aqui: o canvas do orçamento muda de cor junto, só não um
+   branco puro — um cinza suave, mais confortável pra quem fica olhando o quadro por muito tempo. */
+:root[data-theme="light"] {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #0e7490;
+  --primary-foreground: #f8fafc;
+  --secondary: #e2e8f0;
+  --secondary-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #7c3aed;
+  --accent-foreground: #f8fafc;
+  --destructive: #dc2626;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: rgba(14, 116, 144, 0.5);
+  --color-flow-canvas: #eceef2;
+  --color-flow-grid: rgba(15, 23, 42, 0.07);
+}
+
 /* Tokens sem equivalente semântico no shadcn: cores de severidade do canvas de orçamento, fonte
    monoespaçada pra preços/scores, gradiente de destaque e sombra elevada dos cards. */
 @theme {
@@ -47,6 +76,8 @@
   --color-flow-red: #e5484d;
   --color-flow-orange: #f5793f;
   --color-flow-body: #161b26;
+  --color-flow-canvas: #0a0d14;
+  --color-flow-grid: rgba(255, 255, 255, 0.05);
 
   --shadow-elevated: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
 }

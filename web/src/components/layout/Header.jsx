@@ -7,7 +7,7 @@ export function Header() {
         <Lock className="size-4" />
         Receita de Instalação para o Comercial
       </div>
-      <h1 className="mb-4 bg-gradient-to-b from-white to-slate-300 bg-clip-text text-4xl font-bold tracking-tight text-transparent sm:text-5xl">
+      <h1 className="mb-4 bg-gradient-to-b from-[var(--foreground)] to-[var(--muted-foreground)] bg-clip-text text-4xl font-bold tracking-tight text-transparent sm:text-5xl">
         Monte o orçamento do cliente
       </h1>
       <p className="mx-auto max-w-[650px] text-lg leading-relaxed text-muted-foreground">

@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+import { normalizeSearch } from '@/lib/utils'
 import { createProduct, deleteProduct, getProducts, updateProduct } from '@/lib/api'
 import { useCategories } from '@/hooks/useCategories'
 import { ProductFormDialog } from './ProductFormDialog'
@@ -16,6 +19,17 @@ export function ProductsView() {
   const [error, setError] = useState('')
   const [formOpen, setFormOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState(null)
+  const [search, setSearch] = useState('')
+
+  const filteredProducts = useMemo(() => {
+    const q = normalizeSearch(search.trim())
+    if (!q) return products
+    return products.filter((p) =>
+      normalizeSearch(categoryLabels[p.category] || p.category).includes(q) ||
+      normalizeSearch(p.brand).includes(q) ||
+      normalizeSearch(p.model).includes(q)
+    )
+  }, [products, categoryLabels, search])
 
   const reload = useCallback(() => {
     setLoading(true)
@@ -68,6 +82,18 @@ export function ProductsView() {
       ) : null}
 
       {products.length ? (
+        <div className="relative mb-3">
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por categoria, marca ou modelo..."
+            className="pl-8"
+          />
+        </div>
+      ) : null}
+
+      {filteredProducts.length ? (
         <Table>
           <TableHeader>
             <TableRow>
@@ -78,7 +104,7 @@ export function ProductsView() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {products.map((product) => (
+            {filteredProducts.map((product) => (
               <TableRow key={product.id}>
                 <TableCell>{categoryLabels[product.category] || product.category}</TableCell>
                 <TableCell>{product.brand}</TableCell>
@@ -91,6 +117,10 @@ export function ProductsView() {
             ))}
           </TableBody>
         </Table>
+      ) : null}
+
+      {products.length && !filteredProducts.length ? (
+        <p className="text-sm text-muted-foreground">Nenhum produto encontrado para "{search}".</p>
       ) : null}
 
       <ProductFormDialog

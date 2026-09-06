@@ -125,7 +125,7 @@ export function GroupCombobox({ value, onChange, groups, onCreateGroup, onDelete
                     </button>
                     <button
                       type="button"
-                      className="text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive"
+                      className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive"
                       title="Excluir grupo"
                       onClick={(e) => handleDeleteRow(e, g)}
                     >
