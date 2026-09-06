@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { Package, Search, Tag, TriangleAlert } from 'lucide-react'
 import { ReactFlowProvider } from '@xyflow/react'
 import { useBudget } from '@/hooks/useBudget'
 import { formatBRL } from '@/lib/money'
@@ -10,7 +11,7 @@ import { BudgetCanvas } from './BudgetCanvas'
 // fluxo saíram da tela e viraram opções do menu de botão direito em cima do canvas (ver
 // BudgetCanvas). O que continua visível fica flutuando por cima do canvas: legenda + total,
 // listinha de sugestões e o botão pra voltar pra busca avançada.
-export function BudgetView({ onSwitchToSearch, onGoToProducts }) {
+export function BudgetView({ onSwitchToSearch, onGoToProducts, onGoToCategories }) {
   const budget = useBudget()
   // SuggestionsStrip é irmã de BudgetCanvas aqui embaixo — o ref é o jeito de mandar o clique no
   // "+" passar pelo mesmo seletor de produto cadastrado que o menu de botão direito usa.
@@ -27,16 +28,23 @@ export function BudgetView({ onSwitchToSearch, onGoToProducts }) {
               <button
                 type="button"
                 onClick={onSwitchToSearch}
-                className="rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur hover:bg-secondary"
+                className="flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur hover:bg-secondary"
               >
-                🔍 Busca avançada por item
+                <Search className="size-4" /> Busca avançada por item
               </button>
               <button
                 type="button"
                 onClick={onGoToProducts}
-                className="rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur hover:bg-secondary"
+                className="flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur hover:bg-secondary"
               >
-                📦 Produtos
+                <Package className="size-4" /> Produtos
+              </button>
+              <button
+                type="button"
+                onClick={onGoToCategories}
+                className="flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur hover:bg-secondary"
+              >
+                <Tag className="size-4" /> Categorias
               </button>
             </div>
 
@@ -64,8 +72,8 @@ export function BudgetView({ onSwitchToSearch, onGoToProducts }) {
 
         {budget.priceError ? (
           <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center">
-            <p className="pointer-events-auto rounded-full border border-destructive/40 bg-card/90 px-4 py-1.5 text-sm text-destructive backdrop-blur">
-              ⚠️ {budget.priceError}
+            <p className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-destructive/40 bg-card/90 px-4 py-1.5 text-sm text-destructive backdrop-blur">
+              <TriangleAlert className="size-4" /> {budget.priceError}
             </p>
           </div>
         ) : null}

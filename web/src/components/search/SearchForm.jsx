@@ -1,3 +1,4 @@
+import { Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -119,7 +120,7 @@ export function SearchForm({
       <QuickTags onSelect={onQuickTag} />
 
       <Button type="submit" disabled={isLoading} className="self-start">
-        Buscar Melhores Ofertas 🔍
+        <Search className="size-4" /> Buscar Melhores Ofertas
       </Button>
     </form>
   )

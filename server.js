@@ -3,7 +3,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { URL, URLSearchParams } = require('node:url');
 const puppeteer = require('puppeteer');
-const { listProducts, createProduct, updateProduct, deleteProduct, closeDb } = require('./db');
+const {
+  listProducts, createProduct, updateProduct, deleteProduct,
+  listCategories, createCategory, updateCategory, deleteCategory,
+  listGroups, createGroup, deleteGroup,
+  closeDb,
+} = require('./db');
 
 function loadLocalEnvironment() {
   const envPath = path.join(__dirname, '.env');
@@ -214,266 +219,102 @@ function isStandaloneProductOffer(query, title) {
   return !(accessoryPattern && accessoryPattern.test(normalizedTitle));
 }
 
-// "Receita de bolo": para cada categoria-âncora que o comercial já colocou no orçamento, lista os
-// complementos essenciais para o equipamento funcionar. Cada requisito é satisfeito se QUALQUER item
-// já presente no orçamento (de qualquer categoria) bater no padrão — não depende de rastrear categoria
-// exata, então um item digitado livremente ("cabo cat6") já resolve o requisito "cabo de rede".
-const REQUIREMENT_PATTERNS = {
-  cabo_rede: /\bcabo\b|\bcat\s?5e?\b|\bcat\s?6\b|\butp\b|\bpar\s+tran[cç]ado\b/i,
-  cabo_coaxial: /\bcoaxial\b/i,
-  conectores_bnc_p4: /\bconector(?:es)?\b|\bbnc\b|\bp4\b/i,
-  baluns: /\bbaluns?\b/i,
-  switch_poe: /(?=.*\bswitch\b)(?=.*\bpoe\b)/i,
-  switch_giga: /(?=.*\bswitch\b)(?=.*\b(?:giga(?:bit)?|10\/100\/1000)\b)/i,
-  caixa_steck: /\bcaixa\s+steck\b/i,
-  // Kit de acabamento: cada item vira sua própria sugestão/caixa na lateral, não uma só combinada.
-  canaleta: /\bcanaletas?\b/i,
-  corrugado: /\bcorrugados?\b/i,
-  caixa_passagem: /\bcaixa\s+de\s+passagem\b/i,
-  cotovelo: /\bcotovelos?\b/i,
-  abracadeira: /\babra[çc]adeiras?\b/i,
-  eletroduto: /\beletroduto\b/i,
-  adaptador: /\badaptador(?:es)?\b/i,
-  nvr: /\b(dvr|nvr|gravador)\b/i,
-  // Cartão de memória só entra como opção de gravação pra câmera AcuSense (ver camera_acusense) — a
-  // regra original não estende essa alternativa pra câmera IP/analógica comum.
-  cartao_memoria: /\bcart[aã]o\s+de\s+mem[oó]ria\b|\bmicro\s?sd\b/i,
-  dvr: /\b(dvr|gravador)\b/i,
-  // "HD" sozinho é ambíguo demais pra casar: em título de câmera/DVR quase sempre é resolução
-  // ("Multi HD", "Full HD"), não armazenamento — achado testando a rotina de combinações aleatórias
-  // (uma câmera "Multi HD" no orçamento satisfazia o HD de armazenamento do DVR por engano). Só conta
-  // como storage quando vem com contexto inequívoco: HDD/SSD/disco rígido, "HD interno", "HD para
-  // DVR/NVR", ou uma capacidade em TB/GB (câmera nunca é anunciada em TB/GB).
-  hd_interno: /\bhdd\b|\bssd\b|\bdisco\s*r[ií]gido\b|\bhd\s+interno\b|\bhd\s+para\s+(dvr|nvr)\b|\b\d+\s?(tb|gb)\b/i,
-  cameras: /\bc[aâ]mera(s)?\b/i,
-  fonte_12v: /\bfonte\b/i,
-  // Mesmo padrão de fonte_12v, chave própria: opção alternativa dentro de alternativeRequirement,
-  // não pode compartilhar chave com o fonte_12v "obrigatório" usado por outras categorias.
-  fonte_poe_alt: /\bfonte\b/i,
-  fechadura: /\bfechadura\b|\beletro[ií]m[aã]\b/i,
-  nobreak: /\bnobreak\b/i,
-  rack: /\brack\b/i,
-  central_alarme: /\bcentral\s+de\s+alarme\b/i,
-};
-
-// critical: mesmo vermelho "⛔ Sem isso não liga" usado pelas opções de alternativeRequirement, mas
-// pra um requisito único (não alternativo) onde não ter o item impede o equipamento de funcionar —
-// ex.: câmera IP sem PoE não liga sem fonte 12V própria, não é só "recomendado".
-function requirement(key, label, reason, search_term, essential = true, { critical = false } = {}) {
-  return { key, label, reason, search_term, essential, critical, pattern: REQUIREMENT_PATTERNS[key] };
-}
-
-// Compartilhado pelas 3 recipes de câmera (IP, IP PoE, analógica): sete caixas separadas na lateral,
-// uma por item do kit de acabamento — recomendadas (não essenciais), não uma sugestão combinada.
-const FINISHING_KIT_REQUIREMENTS = [
-  requirement('canaleta', 'Canaleta', 'Acabamento e proteção do cabeamento aparente.', 'canaleta', false),
-  requirement('corrugado', 'Cano corrugado', 'Proteção extra para cabeamento embutido em parede/laje.', 'cano corrugado', false),
-  requirement('caixa_passagem', 'Caixa de passagem', 'Facilita emendas e mudanças de direção do cabeamento embutido.', 'caixa de passagem', false),
-  requirement('cotovelo', 'Cotovelo', 'Faz a curva do eletroduto/canaleta sem forçar o cabo.', 'cotovelo eletroduto', false),
-  requirement('abracadeira', 'Abraçadeira', 'Organiza e fixa o cabeamento aparente.', 'abraçadeira nylon', false),
-  requirement('eletroduto', 'Eletroduto', 'Proteção rígida para cabeamento embutido.', 'eletroduto', false),
-  requirement('adaptador', 'Adaptador', 'Conecta trechos de tamanhos/tipos diferentes de eletroduto ou canaleta.', 'adaptador eletroduto', false),
-];
-
-// Requisito satisfeito por QUALQUER UMA de duas ou mais opções (ex.: câmera IP PoE liga com switch
-// PoE OU fonte 12V — não precisa das duas). Ao contrário de requirement(), cada opção vira sua própria
-// sugestão no canvas (ver computeMissingEssentials): as duas em vermelho enquanto nenhuma foi
-// escolhida, e a que sobra em laranja assim que a outra é adicionada ao orçamento.
-function alternativeRequirement(key, reason, options) {
-  return { key, reason, alternatives: options.map(({ key: altKey, label, search_term }) => ({ key: altKey, label, search_term, pattern: REQUIREMENT_PATTERNS[altKey] })) };
-}
-
-const RECIPES = {
-  // Câmera IP sem "PoE" explícito no título: tratada como não-PoE (mesmo critério de default já usado
-  // para IP x Analógica) — sem PoE ela não liga só com o cabo de rede, precisa de fonte 12V própria.
-  camera_ip: {
-    requires: [
-      requirement('cabo_rede', 'Cabo de rede (CAT5e/CAT6)', 'Liga a câmera IP ao switch/rede.', 'cabo de rede cat5e'),
-      requirement('fonte_12v', 'Fonte 12V', 'Câmera IP sem PoE não liga só com o cabo de rede — precisa de fonte própria. Câmera IP normal não liga num switch PoE, o switch PoE não é opção aqui.', 'fonte 12v 1a', true, { critical: true }),
-      requirement('switch_giga', 'Switch Gigabit', 'Toda câmera IP deve ir com switch Giga, para priorizar qualidade e evitar travamento.', 'switch giga'),
-      requirement('nvr', 'NVR', 'Sem gravação a câmera só transmite ao vivo, sem histórico.', 'nvr'),
-      requirement('caixa_steck', 'Caixa Steck', 'Protege emendas e conexões do cabeamento.', 'caixa steck'),
-      ...FINISHING_KIT_REQUIREMENTS,
-    ],
-  },
-  camera_ip_poe: {
-    requires: [
-      requirement('cabo_rede', 'Cabo de rede (CAT5e/CAT6)', 'Liga a câmera IP ao switch/rede.', 'cabo de rede cat5e'),
-      alternativeRequirement('alimentacao_poe_ou_fonte', 'Câmera IP PoE recebe energia pelo próprio cabo de rede através de um switch PoE — sem switch PoE, precisa de fonte 12V dedicada. Sem nenhum dos dois a câmera não liga.', [
-        { key: 'switch_poe', label: 'Switch PoE', search_term: 'switch poe' },
-        { key: 'fonte_poe_alt', label: 'Fonte 12V', search_term: 'fonte 12v 1a' },
-      ]),
-      requirement('switch_giga', 'Switch Gigabit', 'Toda câmera IP deve ir com switch Giga, para priorizar qualidade e evitar travamento.', 'switch giga'),
-      requirement('nvr', 'NVR', 'Sem gravação a câmera só transmite ao vivo, sem histórico.', 'nvr'),
-      requirement('caixa_steck', 'Caixa Steck', 'Protege emendas e conexões do cabeamento.', 'caixa steck'),
-      ...FINISHING_KIT_REQUIREMENTS,
-    ],
-  },
-  camera_analogica: {
-    requires: [
-      requirement('cabo_coaxial', 'Cabo coaxial (CFTV)', 'Leva vídeo e energia da câmera analógica até o DVR.', 'cabo coaxial cftv'),
-      requirement('baluns', 'Baluns (transformador de vídeo)', 'Sem baluns a câmera analógica não transmite em instalação por par trançado/rede.', 'balun cftv'),
-      requirement('conectores_bnc_p4', 'Conectores BNC/P4', 'Fecha as pontas do cabo coaxial na câmera e no DVR.', 'conector bnc p4'),
-      requirement('fonte_12v', 'Fonte 12V', 'Câmera analógica não recebe energia pelo cabo de vídeo — precisa de fonte própria.', 'fonte 12v 1a'),
-      requirement('dvr', 'DVR', 'Câmera analógica não grava sozinha — sem DVR não há gravação nem visualização centralizada.', 'dvr'),
-      requirement('caixa_steck', 'Caixa Steck', 'Protege emendas e conexões do cabeamento.', 'caixa steck'),
-      ...FINISHING_KIT_REQUIREMENTS,
-    ],
-  },
-  // Overlay: câmera AcuSense (Hikvision) soma este requisito ao do tipo de câmera (IP/analógica)
-  // detectado no mesmo título — ver detectOverlayCategories.
-  camera_acusense: {
-    requires: [
-      requirement('central_alarme', 'Central de alarme', 'Câmera AcuSense sozinha não é monitorada: sem central de alarme os disparos de linha virtual não geram evento via contact ID. Exceção: cliente quer monitorar só pelo aplicativo Hikvision, sem central de alarme — nesse caso não é necessária.', 'central de alarme'),
-      // Reaproveita a chave 'nvr' da câmera IP/analógica de propósito — mesmo padrão, então um NVR
-      // já no orçamento satisfaz as duas ao mesmo tempo. Cartão de memória só é opção aqui: é a
-      // exceção específica da AcuSense, não vale pra câmera comum (ver REQUIREMENT_PATTERNS.cartao_memoria).
-      alternativeRequirement('gravacao_acusense', 'AcuSense grava por NVR ou, se o modelo suportar, direto num cartão de memória — sem nenhum dos dois só dá pra ver ao vivo, sem histórico.', [
-        { key: 'nvr', label: 'NVR', search_term: 'nvr' },
-        { key: 'cartao_memoria', label: 'Cartão de Memória', search_term: 'cartão de memória 128gb' },
-      ]),
-    ],
-  },
-  // DVR e NVR viraram categorias próprias (não mais uma "dvr_nvr" combinada): DVR é o gravador
-  // clássico de câmera analógica (coaxial), NVR é o gravador de câmera IP (rede) — na prática pedem
-  // cabeamento diferente, então misturar os dois numa receita só estava errado. `detectSecurityCategory`
-  // (usada pela busca/comparação de preço) continua tratando os dois como "dvr_nvr" combinado —
-  // essa distinção é só pra receita de orçamento, ver detectRecipeCategory.
-  dvr: {
-    requires: [
-      requirement('hd_interno', 'HD interno (armazenamento)', 'Sem HD o DVR não grava, só exibe ao vivo.', 'hd para dvr', true, { critical: true }),
-      requirement('cameras', 'Câmeras analógicas compatíveis', 'Um gravador sozinho não gera imagem — precisa das câmeras nos canais.', 'câmera analógica'),
-      requirement('fonte_12v', 'Fonte', 'Alimentação do equipamento, caso não esteja inclusa.', 'fonte 12v'),
-      requirement('cabo_coaxial', 'Cabo coaxial (CFTV)', 'DVR trabalha com câmeras analógicas ligadas por cabo coaxial.', 'cabo coaxial cftv'),
-      requirement('nobreak', 'Nobreak', 'Evita perda de gravação e corrupção do HD em queda de energia.', 'nobreak', false),
-    ],
-  },
-  nvr: {
-    requires: [
-      requirement('hd_interno', 'HD interno (armazenamento)', 'Sem HD o NVR não grava, só exibe ao vivo.', 'hd para nvr', true, { critical: true }),
-      requirement('cameras', 'Câmeras IP compatíveis', 'Um gravador sozinho não gera imagem — precisa das câmeras nos canais.', 'câmera ip'),
-      requirement('fonte_12v', 'Fonte', 'Alimentação do equipamento, caso não esteja inclusa.', 'fonte 12v'),
-      requirement('cabo_rede', 'Cabo de rede (CAT5e/CAT6)', 'NVR trabalha com câmeras IP ligadas por rede, não por cabo coaxial.', 'cabo de rede cat5e'),
-      requirement('nobreak', 'Nobreak', 'Evita perda de gravação e corrupção do HD em queda de energia.', 'nobreak', false),
-    ],
-  },
-  facial: {
-    requires: [
-      requirement('fonte_12v', 'Fonte 12V', 'Alimentação do terminal.', 'fonte 12v'),
-      requirement('fechadura', 'Fechadura elétrica / eletroímã', 'O terminal facial controla o acesso, mas precisa acionar uma fechadura para travar/destravar.', 'fechadura elétrica'),
-      requirement('cabo_rede', 'Cabo de rede', 'A maioria dos terminais faciais é IP e precisa de rede para sincronizar usuários/eventos.', 'cabo de rede cat5e'),
-      requirement('nobreak', 'Nobreak', 'Evita que o terminal fique fora do ar em queda de energia, já que controla acesso físico.', 'nobreak', false),
-    ],
-  },
-  porteiro: {
-    requires: [
-      requirement('fonte_12v', 'Fonte', 'Alimentação do equipamento.', 'fonte 12v'),
-      requirement('cabo_rede', 'Cabeamento (rede ou par trançado conforme o modelo)', 'Liga a botoeira externa à central/monitor.', 'cabo de rede cat5e'),
-      requirement('fechadura', 'Fechadura elétrica', 'Vídeo porteiro normalmente aciona uma fechadura elétrica para abrir a porta/portão remotamente.', 'fechadura elétrica'),
-      requirement('caixa_steck', 'Caixa Steck', 'Protege as conexões da botoeira externa.', 'caixa steck'),
-    ],
-  },
-  mikrotik: {
-    requires: [
-      requirement('fonte_12v', 'Fonte', 'Confirme se o modelo já acompanha fonte — RBs menores (hAP) geralmente incluem, CCR/CRS de rack costumam não incluir.', 'fonte 24v mikrotik', false),
-      requirement('cabo_rede', 'Cabo de rede', 'Necessário para ligar o equipamento à rede.', 'cabo de rede cat6'),
-      requirement('rack', 'Rack', 'Necessário só se o modelo escolhido for de montar em rack (CCR/CRS).', 'rack', false),
-    ],
-  },
-  roteador: {
-    requires: [
-      requirement('cabo_rede', 'Cabo de rede', 'Necessário para ligar o equipamento à rede.', 'cabo de rede cat6'),
-      requirement('nobreak', 'Nobreak', 'Mantém a rede ativa em queda de energia.', 'nobreak', false),
-    ],
-  },
-  switch: {
-    requires: [
-      requirement('cabo_rede', 'Cabo de rede', 'Necessário para ligar os equipamentos ao switch.', 'cabo de rede cat6'),
-      requirement('rack', 'Rack', 'Necessário se o switch for de montar em rack (19").', 'rack', false),
-    ],
-  },
-};
-
-function detectRecipeCategory(title) {
-  const category = detectSecurityCategory(title);
-  if (category === 'dvr_nvr') {
-    // DVR é pra câmera analógica (coaxial), NVR é pra câmera IP (rede) — cabeamento diferente, então
-    // viram receitas separadas aqui. Sem "NVR" explícito, o default é DVR: é o mais comum/tradicional
-    // em CFTV nacional, mesmo critério de "variante mais comum" já usado pra câmera IP x analógica.
-    return /\bnvr\b/i.test(title) ? 'nvr' : 'dvr';
+// Substitui o antigo motor de RECIPES fixo (removido — ver SPEC.md "Motor de sugestões migrado do
+// código pro cadastro de categorias" para o registro completo das regras antigas). Acha a categoria
+// EXATA do catálogo (ex.: "DVR 16 Canais", não só "dvr") cujo `value` aparece no título — todo item
+// do orçamento carrega o value da categoria escolhida no próprio título (ver composeProductTitle no
+// BudgetCanvas), então basta achar o value mais longo (mais específico) que bate, pra não confundir
+// "Câmera IP" com "Câmera IP PoE".
+function detectExactCategory(title, categories) {
+  const t = normalize(title).toLowerCase();
+  let best = null;
+  for (const category of categories) {
+    const value = category.value.toLowerCase();
+    if (t.includes(value) && (!best || value.length > best.value.length)) best = category;
   }
-  if (category !== 'camera') return category;
-  if (!/\bip\b/i.test(title)) return 'camera_analogica';
-  // Sem "PoE" explícito, trata como não-PoE — mesmo critério de default já usado para IP x Analógica:
-  // a variante mais restritiva/comum, para não deixar de sugerir a fonte 12V que ela vai precisar.
-  return /\bpoe\b/i.test(title) ? 'camera_ip_poe' : 'camera_ip';
+  return best;
 }
 
-// Overlay: some anchors add requirements on top of the base category detected above, without
-// replacing it (ex.: uma câmera AcuSense continua precisando do kit normal de câmera IP/analógica).
-function detectOverlayCategories(title, baseCategory) {
-  if (!/^camera/.test(baseCategory || '')) return [];
-  return /\bacusense\b/i.test(title) ? ['camera_acusense'] : [];
+function buildDependencyReason(anchorLabel, depLabel, critical, hasAlternatives) {
+  if (critical && hasAlternatives) return `${anchorLabel} precisa de ${depLabel} ou de uma das alternativas para funcionar.`;
+  if (critical) return `${anchorLabel} não funciona sem ${depLabel}.`;
+  return `Recomendado para ${anchorLabel}.`;
 }
 
-function findSatisfyingTitle(pattern, titles, lowerTitles) {
-  const index = lowerTitles.findIndex((title) => pattern.test(title));
-  return index === -1 ? null : titles[index];
-}
+// Motor de sugestões cadastrável: lê `dependencies` de cada categoria (aba Categorias) em vez de
+// regras fixas em código. Mesmo contrato de saída do antigo computeMissingEssentials.
+// `cartItems`: [{title, quantity}] ou (para chamadas antigas/testes) [string], quantidade 1 no default.
+// `categories` entra por parâmetro pra manter a função pura/testável sem depender de conexão com o Mongo.
+function computeCategoryMissingEssentials(cartItems, categories) {
+  const items = (Array.isArray(cartItems) ? cartItems : []).map((item) => {
+    const title = normalize(typeof item === 'string' ? item : item?.title);
+    const quantity = typeof item === 'string' ? 1 : Math.max(1, Math.trunc(Number(item?.quantity)) || 1);
+    return title ? { title, quantity } : null;
+  }).filter(Boolean);
 
-// Um requisito com alternatives vira uma linha por opção, nunca uma linha combinada: nenhuma
-// escolhida ainda = as duas "critical" (vermelho); uma escolhida = ela some (satisfied_by aponta
-// pra ela) e a outra vira "optional" (laranja) — ainda dá pra arrastar, só deixou de ser obrigatória.
-function evaluateAlternativeRequirement(item, titles, lowerTitles) {
-  const evaluated = item.alternatives.map((alt) => ({ ...alt, satisfied_by: findSatisfyingTitle(alt.pattern, titles, lowerTitles) }));
-  const anySatisfied = evaluated.some((alt) => alt.satisfied_by);
-  return evaluated.map((alt) => ({
-    key: alt.key,
-    label: alt.label,
-    reason: item.reason,
-    search_term: alt.search_term,
-    essential: true,
-    severity: alt.satisfied_by ? null : (anySatisfied ? 'optional' : 'critical'),
-    satisfied_by: alt.satisfied_by,
-  }));
-}
+  const byValue = new Map(categories.map((c) => [c.value, c]));
+  const detectedByItem = items.map((item) => ({ ...item, category: detectExactCategory(item.title, categories) }));
 
-// requirements_by_category dá ao front-end (canvas estilo n8n) a árvore completa por âncora, já
-// com quem satisfaz cada requisito — assim ele desenha a aresta certa (âncora → nó real quando já
-// satisfeito, âncora → nó de sugestão quando ainda falta) sem duplicar a lógica de casamento em JS.
-function computeMissingEssentials(cartTitles) {
-  const titles = (Array.isArray(cartTitles) ? cartTitles : []).map(normalize).filter(Boolean);
-  const lowerTitles = titles.map((title) => title.toLowerCase());
-  const detected_categories = [...new Set(titles.flatMap((title) => {
-    const baseCategory = detectRecipeCategory(title);
-    return [baseCategory, ...detectOverlayCategories(title, baseCategory)];
-  }).filter((category) => RECIPES[category]))];
-  const requirementsByKey = new Map();
+  const satisfyingTitleByValue = new Map();
+  for (const { title, category } of detectedByItem) {
+    if (!category) continue;
+    if (!satisfyingTitleByValue.has(category.value)) satisfyingTitleByValue.set(category.value, title);
+  }
+
+  const detected_categories = [...new Set(detectedByItem.map((d) => d.category?.value).filter(Boolean))]
+    .filter((value) => byValue.get(value)?.dependencies?.length);
+
+  const missingMap = new Map();
   const requirements_by_category = {};
-  // AcuSense soma seu próprio par alternativo NVR-ou-cartão (ver camera_acusense) — o 'nvr' isolado e
-  // obrigatório da câmera IP/analógica base fica redundante (e contradiz a regra: AcuSense pode ser
-  // vendida sem NVR quando usa cartão), então some daqui quando o overlay estiver ativo.
-  const hasAcusense = detected_categories.includes('camera_acusense');
-  for (const category of detected_categories) {
-    const requires = hasAcusense && (category === 'camera_ip' || category === 'camera_ip_poe')
-      ? RECIPES[category].requires.filter((item) => item.key !== 'nvr')
-      : RECIPES[category].requires;
-    requirements_by_category[category] = requires.flatMap((item) => {
-      if (item.alternatives) return evaluateAlternativeRequirement(item, titles, lowerTitles);
-      const { key, label, reason, search_term, essential, critical, pattern } = item;
-      const satisfied_by = findSatisfyingTitle(pattern, titles, lowerTitles);
-      return [{ key, label, reason, search_term, essential, severity: critical && !satisfied_by ? 'critical' : undefined, satisfied_by }];
-    });
-    for (const item of requires) {
-      if (item.alternatives) {
-        for (const alt of item.alternatives) requirementsByKey.set(alt.key, { key: alt.key, label: alt.label, reason: item.reason, search_term: alt.search_term, essential: true, pattern: alt.pattern });
+
+  for (const anchorValue of detected_categories) {
+    const anchor = byValue.get(anchorValue);
+    const handled = new Set();
+    const evaluated = [];
+
+    for (const dep of anchor.dependencies) {
+      if (handled.has(dep.categoryValue)) continue;
+
+      const depLabel = byValue.get(dep.categoryValue)?.label || dep.categoryValue;
+      if (dep.critical && dep.alternatives.length) {
+        const groupValues = [dep.categoryValue, ...dep.alternatives.filter((v) => anchor.dependencies.some((d) => d.categoryValue === v))]
+          .filter((v, i, arr) => arr.indexOf(v) === i);
+        const satisfiedBySome = groupValues.some((v) => satisfyingTitleByValue.has(v));
+        for (const value of groupValues) {
+          // Um mesmo valor pode aparecer em duas listas de alternativa mútua desta categoria (ex.:
+          // switch PoE está no grupo "energia" E no grupo "portas") — sem este guard, a segunda
+          // lista reprocessava e duplicava a linha de quem o primeiro grupo já tinha coberto.
+          if (handled.has(value)) continue;
+          handled.add(value);
+          const label = byValue.get(value)?.label || value;
+          const satisfied_by = satisfyingTitleByValue.get(value) || null;
+          evaluated.push({
+            key: value, label, reason: buildDependencyReason(anchor.label, label, true, true),
+            search_term: label, essential: true,
+            severity: satisfied_by ? null : (satisfiedBySome ? 'optional' : 'critical'),
+            satisfied_by,
+          });
+        }
       } else {
-        requirementsByKey.set(item.key, item);
+        handled.add(dep.categoryValue);
+        const satisfied_by = satisfyingTitleByValue.get(dep.categoryValue) || null;
+        evaluated.push({
+          key: dep.categoryValue, label: depLabel, reason: buildDependencyReason(anchor.label, depLabel, dep.critical, false),
+          search_term: depLabel, essential: true,
+          severity: dep.critical && !satisfied_by ? 'critical' : undefined,
+          satisfied_by,
+        });
       }
     }
+
+    requirements_by_category[anchorValue] = evaluated;
+    for (const item of evaluated) {
+      if (!missingMap.has(item.key)) missingMap.set(item.key, item);
+    }
   }
-  const missing = [...requirementsByKey.values()]
-    .filter((item) => !lowerTitles.some((title) => item.pattern.test(title)))
+
+  const missing = [...missingMap.values()]
+    .filter((item) => !item.satisfied_by)
     .map(({ key, label, reason, search_term, essential }) => ({ key, label, reason, search_term, essential }));
   return { detected_categories, missing, requirements_by_category };
 }
@@ -686,11 +527,16 @@ function validateCompareRequest(request) {
 
 function validateRecipeItems(request) {
   if (!request || typeof request !== 'object') throw new Error('Corpo JSON inválido.');
-  const items = Array.isArray(request.items) ? request.items : [];
-  const titles = items.map((item) => normalize(typeof item === 'string' ? item : item?.title)).filter(Boolean);
-  if (!titles.length) throw new Error('Informe ao menos um item no orçamento.');
-  if (titles.length > 50) throw new Error('Limite de 50 itens por orçamento.');
-  return titles;
+  const rawItems = Array.isArray(request.items) ? request.items : [];
+  const items = rawItems.map((item) => {
+    const title = normalize(typeof item === 'string' ? item : item?.title);
+    if (!title) return null;
+    const rawQuantity = Math.trunc(Number(typeof item === 'string' ? 1 : item?.quantity));
+    return { title, quantity: Number.isFinite(rawQuantity) && rawQuantity > 0 ? rawQuantity : 1 };
+  }).filter(Boolean);
+  if (!items.length) throw new Error('Informe ao menos um item no orçamento.');
+  if (items.length > 50) throw new Error('Limite de 50 itens por orçamento.');
+  return items;
 }
 
 function validateRecipePriceItems(request) {
@@ -713,6 +559,37 @@ function validateProductRequest(request) {
   if (!brand || brand.length > 50) throw new Error('Informe a marca (até 50 caracteres).');
   if (!model || model.length > 100) throw new Error('Informe o modelo (até 100 caracteres).');
   return { category, brand, model };
+}
+
+// dependencies: [{ categoryValue, critical, alternatives }] — outras categorias que esta exige (ou
+// sugere) no orçamento. "alternatives" lista outras dependencies desta MESMA categoria que, se
+// presentes junto no orçamento, dispensam esta de ser crítica (ex.: Switch PoE e Fonte 12V viram
+// alternativas mútuas na Câmera IP PoE). Sanitização fina (dedupe, auto-referência) fica em db.js,
+// que já sabe o "value" final da categoria.
+function validateDependenciesShape(raw) {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) throw new Error('Dependências inválidas.');
+  if (raw.length > 50) throw new Error('Limite de 50 dependências por categoria.');
+  return raw.map((dep) => {
+    const categoryValue = normalize(dep?.categoryValue);
+    if (!categoryValue) throw new Error('Cada dependência precisa apontar para uma categoria válida.');
+    const alternatives = Array.isArray(dep?.alternatives) ? dep.alternatives.map((v) => normalize(v)).filter(Boolean) : [];
+    return { categoryValue, critical: !!dep?.critical, alternatives };
+  });
+}
+
+// capacity: opcional — quantas unidades de outra coisa uma unidade DESTA categoria comporta (portas
+// de switch, canais de DVR/NVR). Ausente/0 = categoria sem noção de capacidade.
+function validateCategoryRequest(request) {
+  if (!request || typeof request !== 'object') throw new Error('Corpo JSON inválido.');
+  const group = normalize(request.group);
+  const label = normalize(request.label);
+  if (!group || group.length > 60) throw new Error('Informe um grupo válido (até 60 caracteres).');
+  if (!label || label.length > 100) throw new Error('Informe um nome de categoria válido (até 100 caracteres).');
+  const rawCapacity = Number(request.capacity);
+  const capacity = Number.isFinite(rawCapacity) && rawCapacity > 0 ? Math.trunc(rawCapacity) : null;
+  const dependencies = validateDependenciesShape(request.dependencies);
+  return { group, label, capacity, dependencies };
 }
 
 function isGoogleHostedLink(url) {
@@ -947,11 +824,12 @@ async function requestHandler(request, response) {
     }
     if (request.method === 'POST' && url.pathname === '/api/recipe/suggestions') {
       const body = await readJson(request);
-      const titles = validateRecipeItems(body);
-      // "items" ecoa a categoria detectada de cada item de entrada, na mesma ordem — o canvas
+      const cartItems = validateRecipeItems(body);
+      const categories = await listCategories();
+      // "items" ecoa a categoria exata detectada de cada item de entrada, na mesma ordem — o canvas
       // (estilo n8n) usa isso pra saber de qual nó desenhar a aresta, sem duplicar detecção em JS.
-      const items = titles.map((title) => ({ title, category: detectRecipeCategory(title) }));
-      return sendJson(response, 200, { ...computeMissingEssentials(titles), items });
+      const items = cartItems.map(({ title }) => ({ title, category: detectExactCategory(title, categories)?.value || null }));
+      return sendJson(response, 200, { ...computeCategoryMissingEssentials(cartItems, categories), items });
     }
     if (request.method === 'POST' && url.pathname === '/api/recipe/prices') {
       const body = await readJson(request);
@@ -979,6 +857,38 @@ async function requestHandler(request, response) {
       if (!(await deleteProduct(id))) return sendJson(response, 404, { detail: 'Produto não encontrado.' });
       return sendJson(response, 200, { deleted: true });
     }
+    if (request.method === 'GET' && url.pathname === '/api/categories') {
+      return sendJson(response, 200, { categories: await listCategories() });
+    }
+    if (request.method === 'POST' && url.pathname === '/api/categories') {
+      const body = await readJson(request);
+      return sendJson(response, 201, await createCategory(validateCategoryRequest(body)));
+    }
+    const categoryIdMatch = url.pathname.match(/^\/api\/categories\/([a-f0-9]{24})$/i);
+    if (categoryIdMatch && request.method === 'PUT') {
+      const id = categoryIdMatch[1];
+      const data = validateCategoryRequest(await readJson(request));
+      if (!(await updateCategory(id, data))) return sendJson(response, 404, { detail: 'Categoria não encontrada.' });
+      return sendJson(response, 200, { id, ...data });
+    }
+    if (categoryIdMatch && request.method === 'DELETE') {
+      const id = categoryIdMatch[1];
+      if (!(await deleteCategory(id))) return sendJson(response, 404, { detail: 'Categoria não encontrada.' });
+      return sendJson(response, 200, { deleted: true });
+    }
+    if (request.method === 'GET' && url.pathname === '/api/groups') {
+      return sendJson(response, 200, { groups: await listGroups() });
+    }
+    if (request.method === 'POST' && url.pathname === '/api/groups') {
+      const body = await readJson(request);
+      return sendJson(response, 201, await createGroup(body?.name));
+    }
+    const groupIdMatch = url.pathname.match(/^\/api\/groups\/([a-f0-9]{24})$/i);
+    if (groupIdMatch && request.method === 'DELETE') {
+      const id = groupIdMatch[1];
+      if (!(await deleteGroup(id))) return sendJson(response, 404, { detail: 'Grupo não encontrado.' });
+      return sendJson(response, 200, { deleted: true });
+    }
     if (request.method === 'GET') return serveStatic(url.pathname, response);
     return sendJson(response, 404, { detail: 'Rota não encontrada.' });
   } catch (error) {
@@ -1001,9 +911,8 @@ if (require.main === module) startServer();
 module.exports = {
   buildGoogleShoppingUrl,
   buildIntelbrasSpecs,
-  computeMissingEssentials,
-  detectOverlayCategories,
-  detectRecipeCategory,
+  computeCategoryMissingEssentials,
+  detectExactCategory,
   detectSecurityCategory,
   excludePriceOutliers,
   extractAcabamentoSpecs,
@@ -1025,7 +934,6 @@ module.exports = {
   normalizeIntelbrasOffers,
   normalizeSerperShopping,
   normalizeSerpApiShopping,
-  RECIPES,
   requestHandler,
   searchAllProviders,
   searchAmazonShopping,

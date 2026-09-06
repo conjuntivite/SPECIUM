@@ -18,11 +18,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import catalog from '@/data/catalog.json'
+import { useCategories } from '@/hooks/useCategories'
 
 const emptyForm = { category: '', brand: '', model: '' }
 
 export function ProductFormDialog({ open, product, onOpenChange, onSubmit }) {
+  const catalog = useCategories()
   const [form, setForm] = useState(emptyForm)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)

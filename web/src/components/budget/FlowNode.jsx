@@ -1,5 +1,6 @@
 import { motion } from 'motion/react'
 import { Handle, Position } from '@xyflow/react'
+import { Minus, Plus, X } from 'lucide-react'
 import { formatBRL, parseBRL } from '@/lib/money'
 
 const handleClass = '!size-2.5 !border-2 !border-[#0a0d14] !bg-slate-300'
@@ -34,11 +35,11 @@ export function FlowNode({ data, dragging }) {
         </span>
         <button
           type="button"
-          className="nodrag flex size-5 shrink-0 items-center justify-center rounded-full bg-black/15 text-[0.7rem] leading-none hover:bg-black/30"
+          className="nodrag flex size-5 shrink-0 items-center justify-center rounded-full bg-black/15 hover:bg-black/30"
           title="Remover"
           onClick={() => onRemove(item.id)}
         >
-          ✕
+          <X className="size-3" />
         </button>
       </div>
 
@@ -49,18 +50,18 @@ export function FlowNode({ data, dragging }) {
           <span className="nodrag flex shrink-0 items-center gap-1.5">
             <button
               type="button"
-              className="size-[1.15rem] rounded-[0.3rem] bg-white/8 text-[0.75rem] leading-none text-slate-200 hover:bg-white/18"
+              className="flex size-[1.15rem] items-center justify-center rounded-[0.3rem] bg-white/8 text-slate-200 hover:bg-white/18"
               onClick={() => onQtyChange(item.id, -1)}
             >
-              −
+              <Minus className="size-2.5" />
             </button>
             <span className="min-w-[1.4rem] text-center font-mono text-[0.88rem] text-slate-200">{item.quantity}</span>
             <button
               type="button"
-              className="size-[1.15rem] rounded-[0.3rem] bg-white/8 text-[0.75rem] leading-none text-slate-200 hover:bg-white/18"
+              className="flex size-[1.15rem] items-center justify-center rounded-[0.3rem] bg-white/8 text-slate-200 hover:bg-white/18"
               onClick={() => onQtyChange(item.id, 1)}
             >
-              +
+              <Plus className="size-2.5" />
             </button>
           </span>
         </div>

@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { ReactFlow, Background, BackgroundVariant, applyNodeChanges, useReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import { CircleDollarSign, Maximize2, Plus, Trash2, ZoomIn, ZoomOut } from 'lucide-react'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -11,8 +12,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
-import catalog from '@/data/catalog.json'
-import { categoryValuesForRequirement } from '@/data/requirementCategories'
+import { useCategories } from '@/hooks/useCategories'
 import { FlowNode } from './FlowNode'
 import { ProductPickerDialog } from './ProductPickerDialog'
 
@@ -33,6 +33,7 @@ const defaultEdgeOptions = {
 }
 
 export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToProducts }, ref) {
+  const catalog = useCategories()
   const { screenToFlowPosition, zoomIn, zoomOut, fitView } = useReactFlow()
   // Posição do último clique com botão direito — usada como ponto de spawn ao adicionar item
   // pelo menu (equivalente ao ponto de solto do drag-and-drop da suggestions strip).
@@ -85,7 +86,7 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
     if (!payload) return
     const { key, label } = JSON.parse(payload)
     const position = screenToFlowPosition({ x: e.clientX, y: e.clientY })
-    setProductPrompt({ label, categories: categoryValuesForRequirement(key), fallbackTitle: label, position })
+    setProductPrompt({ label, categories: [key], fallbackTitle: label, position })
   }, [screenToFlowPosition])
 
   function handleCatalogItemSelect(_group, item) {
@@ -108,7 +109,7 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
   // position fica indefinida e useBudget decide o layout automático, igual ao clique de antes.
   useImperativeHandle(ref, () => ({
     addSuggestion(req) {
-      setProductPrompt({ label: req.label, categories: categoryValuesForRequirement(req.key), fallbackTitle: req.label, position: undefined })
+      setProductPrompt({ label: req.label, categories: [req.key], fallbackTitle: req.label, position: undefined })
     },
   }))
 
@@ -139,7 +140,7 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
 
       <ContextMenuContent className="w-64">
         <ContextMenuSub>
-          <ContextMenuSubTrigger>+ Adicionar item</ContextMenuSubTrigger>
+          <ContextMenuSubTrigger><Plus className="size-4" /> Adicionar item</ContextMenuSubTrigger>
           <ContextMenuSubContent className="max-h-[70vh] overflow-y-auto">
             {catalog.map((group) => (
               <ContextMenuSub key={group.group}>
@@ -157,23 +158,23 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
         </ContextMenuSub>
 
         <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => zoomIn()}>＋ Aumentar zoom</ContextMenuItem>
-        <ContextMenuItem onSelect={() => zoomOut()}>− Diminuir zoom</ContextMenuItem>
-        <ContextMenuItem onSelect={() => fitView()}>⤢ Centralizar</ContextMenuItem>
+        <ContextMenuItem onSelect={() => zoomIn()}><ZoomIn className="size-4" /> Aumentar zoom</ContextMenuItem>
+        <ContextMenuItem onSelect={() => zoomOut()}><ZoomOut className="size-4" /> Diminuir zoom</ContextMenuItem>
+        <ContextMenuItem onSelect={() => fitView()}><Maximize2 className="size-4" /> Centralizar</ContextMenuItem>
 
         <ContextMenuSeparator />
         <ContextMenuItem
           disabled={!budget.items.length || budget.priceLoading}
           onSelect={() => budget.checkPrices()}
         >
-          💰 Verificar preços
+          <CircleDollarSign className="size-4" /> Verificar preços
         </ContextMenuItem>
         <ContextMenuItem
           variant="destructive"
           disabled={!budget.items.length}
           onSelect={() => budget.clearAll()}
         >
-          Limpar fluxo
+          <Trash2 className="size-4" /> Limpar fluxo
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

@@ -48,7 +48,7 @@ function suggestionSeverityRank(req) {
 }
 
 // Dentro do grupo "recomendado", Nobreak vem primeiro — pedido explícito.
-const RECOMMENDED_PRIORITY_KEYS = ['nobreak']
+const RECOMMENDED_PRIORITY_KEYS = ['Nobreak']
 function recommendedPriorityRank(req) {
   const index = RECOMMENDED_PRIORITY_KEYS.indexOf(req.key)
   return index === -1 ? RECOMMENDED_PRIORITY_KEYS.length : index
@@ -83,7 +83,7 @@ export function useBudget() {
       setSuggestionsData({ requirements_by_category: {}, items: [] })
       return
     }
-    getSuggestions(items.map((item) => ({ title: item.title })))
+    getSuggestions(items.map((item) => ({ title: item.title, quantity: item.quantity })))
       .then((data) => {
         if (generation === generationRef.current) setSuggestionsData(data)
       })
@@ -171,12 +171,16 @@ export function useBudget() {
     return result
   }, [items, suggestionsData])
 
-  // Sugestões ainda não satisfeitas, deduplicadas entre âncoras que compartilham o mesmo requisito.
+  // Sugestões ainda não satisfeitas, deduplicadas entre âncoras que compartilham o mesmo requisito
+  // (ex.: "Fonte 12V" pode ser sugestiva pro DVR e crítica/alternativa pra Câmera IP PoE ao mesmo
+  // tempo) — fica a versão mais severa, não a primeira âncora processada.
   const suggestions = useMemo(() => {
     const unsatisfiedByKey = new Map()
     Object.values(suggestionsData.requirements_by_category || {}).forEach((requirements) => {
       requirements.forEach((req) => {
-        if (!req.satisfied_by && !unsatisfiedByKey.has(req.key)) unsatisfiedByKey.set(req.key, req)
+        if (req.satisfied_by) return
+        const existing = unsatisfiedByKey.get(req.key)
+        if (!existing || suggestionSeverityRank(req) < suggestionSeverityRank(existing)) unsatisfiedByKey.set(req.key, req)
       })
     })
     return [...unsatisfiedByKey.values()].sort((a, b) => {

@@ -128,6 +128,36 @@ Causa: `renderFlow()` dispara seu próprio `fetch('/api/recipe/suggestions')` a 
 
 Fix: contador `renderGeneration` incrementado no início de cada `renderFlow()`; depois do `await fetch`, se uma chamada mais nova já tiver assumido (`generation !== renderGeneration`), a chamada atual descarta o resultado sem tocar no DOM — só a resposta da chamada mais recente pode atualizar a tela.
 
+## Motor de sugestões migrado do código pro cadastro de categorias (2026-09-05)
+
+O motor de receitas (`RECIPES`, `computeMissingEssentials`, `detectRecipeCategory`, `detectOverlayCategories`, `REQUIREMENT_PATTERNS` — tudo descrito nas seções acima) foi **removido de `server.js`**. As mesmas regras agora vivem como dados: cada categoria do catálogo ganhou um campo `dependencies` (aba **Categorias**, cadastrável pelo comercial), semeado a partir de `categoryDependencySeed.js` e lido em tempo real por `computeCategoryMissingEssentials` (substituiu `computeMissingEssentials` na rota `/api/recipe/suggestions`). Detecção de categoria também mudou: `detectExactCategory` acha o `value` exato do catálogo (ex. "DVR 16 Canais") que aparece no título, em vez da âncora genérica antiga (`dvr`) — todo item do orçamento carrega o value da categoria escolhida no próprio título (`composeProductTitle`), então isso é seguro; não existe mais caixa de texto livre no orçamento.
+
+Esta seção é só **registro de consulta** — se algo no motor novo parecer errado, compare com a regra original aqui antes de mexer. O código-fonte destas regras não existe mais (nem os testes que as exercitavam direto); o que vale agora é o que estiver cadastrado na aba Categorias.
+
+### Modelo antigo (por âncora genérica, não por categoria exata)
+
+| Âncora (`RECIPES`) | Detectada por | Requisitos (✱ = crítico/vermelho, demais = essencial/recomendado laranja-claro) |
+|---|---|---|
+| `camera_ip` (Câmera IP sem "PoE" no título) | `detectRecipeCategory`: `camera` + sem `/\bip\b/` → analógica; com `ip` sem `poe` → `camera_ip` | Cabo de rede; **Fonte 12V ✱** (sem PoE, sem alternativa); Switch Giga; NVR; Caixa Steck; + kit de acabamento (7 itens, todos recomendados) |
+| `camera_ip_poe` (com "PoE" no título) | idem, com `/\bpoe\b/` | Cabo de rede; **alternativa mútua**: Switch PoE ↔ Fonte 12V (`fonte_poe_alt`, chave própria pra não colidir com o `fonte_12v` de outras âncoras) — as duas vermelhas até uma entrar, aí a outra vira laranja/opcional; Switch Giga; NVR; Caixa Steck; + kit de acabamento |
+| `camera_analogica` (sem "ip" no título) | idem | Cabo coaxial; Baluns; Conector BNC/P4; Fonte 12V (aqui NÃO é crítica, ao contrário da `camera_ip`); DVR; Caixa Steck; + kit de acabamento |
+| `camera_acusense` (overlay, nunca sozinha) | `detectOverlayCategories`: soma-se a QUALQUER câmera (IP/PoE/analógica) cujo título contenha "acusense" | Central de Alarme (recomendado, não crítico); **alternativa mútua**: NVR ↔ Cartão de Memória — vermelhas até uma entrar. Quando ativo, remove o requisito `nvr` isolado da câmera base (senão duplicaria/contradiria a alternativa) |
+| `dvr` (câmera analógica/coaxial) | `dvr_nvr` sem "nvr" explícito no título (default) | **HD interno ✱**; Câmeras analógicas compatíveis; Fonte; Cabo coaxial; Nobreak (recomendado) |
+| `nvr` (câmera IP/rede) | `dvr_nvr` com "nvr" explícito | **HD interno ✱**; Câmeras IP compatíveis; Fonte; Cabo de rede; Nobreak (recomendado) |
+| `facial` | título contém "facial" | Fonte 12V; Fechadura elétrica; Cabo de rede; Nobreak (recomendado) |
+| `porteiro` | "porteiro"/"interfone" | Fonte; Cabo de rede/par trançado; Fechadura elétrica; Caixa Steck |
+| `mikrotik` | "mikrotik"/"routerboard"/`rb\d{3,4}` | Fonte (recomendado); Cabo de rede; Rack (recomendado, só se for de rack) |
+| `roteador` | "roteador(es)" | Cabo de rede; Nobreak (recomendado) |
+| `switch` (qualquer Fast/Giga/PoE) | "switch(es)" — não distinguia Fast/Giga/PoE/portas | Cabo de rede; Rack (recomendado, só se for de rack) |
+
+Kit de acabamento (recomendado, compartilhado pelas 3 câmeras): Canaleta, Cano corrugado, Caixa de passagem, Cotovelo, Abraçadeira, Eletroduto, Adaptador — cada um sua própria caixa na listinha, nunca uma sugestão combinada.
+
+### Satisfação de requisito (como o motor antigo decidia "já tem isso no orçamento")
+
+Por **regex solto contra qualquer título do carrinho** (`REQUIREMENT_PATTERNS`), não por categoria exata — um item digitado livremente que batesse na palavra-chave já resolvia o requisito, mesmo vindo de categoria diferente da esperada (ex.: qualquer título com "cabo"/"cat5e"/"cat6" satisfazia `cabo_rede`, não importa se veio de "Cabo de Rede CAT6" ou de outra coisa com essa palavra). Duas pegadinhas resolvidas por regex mais estrito (viraram bugs encontrados por teste, ver seções acima): "HD" sozinho não bastava pra `hd_interno` (precisa de HDD/SSD/disco rígido/"HD interno"/"HD para DVR"/capacidade em TB-GB, porque câmera anuncia resolução como "Full HD"); e o rótulo do `<select>` não podia conter "DVR"/"NVR" à toa (virava âncora por engano).
+
+O motor novo (`computeCategoryMissingEssentials`) casa por **categoria exata presente no orçamento** (via `detectExactCategory`), não mais por palavra solta — mais preciso, mas também mais estrito: um item precisa carregar o `value` exato da categoria no título pra contar como presente (sempre verdade hoje, pela forma como o item entra no orçamento).
+
 ## Próximos passos (fora de escopo por enquanto)
 
 - **Importar orçamento existente**: ler um arquivo com um orçamento já montado, apontar o que está errado/faltando e sugerir os equipamentos corretos — reaproveitando a mesma engine de `RECIPES`, só trocando a origem dos itens (arquivo em vez de texto livre no formulário). Pedido explicitamente adiado pelo usuário ("mais para frente") — não implementar sem confirmação.

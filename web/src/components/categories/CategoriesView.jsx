@@ -1,0 +1,127 @@
+import { useCallback, useEffect, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+import {
+  createCategory, deleteCategory, getCategories, updateCategory,
+  createGroup, deleteGroup, getGroups,
+} from '@/lib/api'
+import { CategoryFormDialog } from './CategoryFormDialog'
+
+export function CategoriesView() {
+  const [categories, setCategories] = useState([])
+  const [groups, setGroups] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [formOpen, setFormOpen] = useState(false)
+  const [editingCategory, setEditingCategory] = useState(null)
+
+  const reload = useCallback(() => {
+    setLoading(true)
+    setError('')
+    getCategories()
+      .then((data) => setCategories(data.categories || []))
+      .catch((err) => setError(err.message || 'Erro ao carregar categorias.'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const reloadGroups = useCallback(() => {
+    getGroups().then((data) => setGroups(data.groups || [])).catch(() => {})
+  }, [])
+
+  useEffect(() => { reload() }, [reload])
+  useEffect(() => { reloadGroups() }, [reloadGroups])
+
+  async function handleCreateGroup(name) {
+    const created = await createGroup(name)
+    reloadGroups()
+    return created
+  }
+
+  async function handleDeleteGroup(id) {
+    await deleteGroup(id)
+    reloadGroups()
+  }
+
+  function openCreate() {
+    setEditingCategory(null)
+    setFormOpen(true)
+  }
+
+  function openEdit(category) {
+    setEditingCategory(category)
+    setFormOpen(true)
+  }
+
+  async function handleSubmit(form) {
+    if (editingCategory) await updateCategory(editingCategory.id, form)
+    else await createCategory(form)
+    setFormOpen(false)
+    reload()
+  }
+
+  async function handleDelete(category) {
+    if (!window.confirm(`Remover a categoria "${category.label}"?`)) return
+    setError('')
+    try {
+      await deleteCategory(category.id)
+      reload()
+    } catch (err) {
+      setError(err.message || 'Erro ao excluir categoria.')
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-3xl">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Categorias cadastradas</h2>
+        <Button type="button" onClick={openCreate}>+ Nova categoria</Button>
+      </div>
+
+      {loading ? <p className="text-sm text-muted-foreground">Carregando...</p> : null}
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+
+      {categories.length ? (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Grupo</TableHead>
+              <TableHead>Categoria</TableHead>
+              <TableHead>Capacidade</TableHead>
+              <TableHead>Dependências</TableHead>
+              <TableHead className="text-right">Ações</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {categories.map((category) => (
+              <TableRow key={category.id}>
+                <TableCell>{category.group}</TableCell>
+                <TableCell>{category.label}</TableCell>
+                <TableCell className="text-muted-foreground">{category.capacity ?? '—'}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {category.dependencies?.length
+                    ? `${category.dependencies.length} (${category.dependencies.filter((d) => d.critical).length} crítica${category.dependencies.filter((d) => d.critical).length === 1 ? '' : 's'})`
+                    : '—'}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button type="button" variant="ghost" size="sm" onClick={() => openEdit(category)}>Editar</Button>
+                  <Button type="button" variant="destructive" size="sm" onClick={() => handleDelete(category)}>Excluir</Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      ) : null}
+
+      <CategoryFormDialog
+        open={formOpen}
+        category={editingCategory}
+        groups={groups}
+        categories={categories}
+        onOpenChange={setFormOpen}
+        onSubmit={handleSubmit}
+        onCreateGroup={handleCreateGroup}
+        onDeleteGroup={handleDeleteGroup}
+      />
+    </div>
+  )
+}

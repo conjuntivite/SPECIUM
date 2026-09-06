@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -9,15 +9,18 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { getProducts } from '@/lib/api'
-import catalog from '@/data/catalog.json'
-
-const CATEGORY_LABELS = Object.fromEntries(catalog.flatMap((group) => group.items.map((item) => [item.value, item.label])))
+import { useCategories } from '@/hooks/useCategories'
 
 // Toda entrada no orçamento — item de categoria do menu, ou sugestão da listinha lateral (clicada ou
 // arrastada) — passa por aqui antes de virar nó no quadro. `prompt.categories` pode ter mais de um
 // valor de catálogo (ex.: sugestão genérica "NVR" cobre NVR 4/8/.../64 Canais); quando há mais de
 // um, cada linha mostra sua categoria pra diferenciar.
 export function ProductPickerDialog({ prompt, onPick, onSkip, onOpenChange, onGoToProducts }) {
+  const catalog = useCategories()
+  const categoryLabels = useMemo(
+    () => Object.fromEntries(catalog.flatMap((group) => group.items.map((item) => [item.value, item.label]))),
+    [catalog]
+  )
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -66,7 +69,7 @@ export function ProductPickerDialog({ prompt, onPick, onSkip, onOpenChange, onGo
                 className="justify-start"
                 onClick={() => onPick(product)}
               >
-                {showCategoryPerRow ? `${CATEGORY_LABELS[product.category] || product.category} — ` : ''}
+                {showCategoryPerRow ? `${categoryLabels[product.category] || product.category} — ` : ''}
                 {product.brand} — {product.model}
               </Button>
             ))}

@@ -47,3 +47,31 @@ export function updateProduct(id, data) {
 export function deleteProduct(id) {
   return requestJson(`/api/products/${id}`, { method: 'DELETE' })
 }
+
+export function getCategories() {
+  return requestJson('/api/categories')
+}
+
+export function createCategory(data) {
+  return postJson('/api/categories', data)
+}
+
+export function updateCategory(id, data) {
+  return requestJson(`/api/categories/${id}`, { method: 'PUT', body: data })
+}
+
+export function deleteCategory(id) {
+  return requestJson(`/api/categories/${id}`, { method: 'DELETE' })
+}
+
+export function getGroups() {
+  return requestJson('/api/groups')
+}
+
+export function createGroup(name) {
+  return postJson('/api/groups', { name })
+}
+
+export function deleteGroup(id) {
+  return requestJson(`/api/groups/${id}`, { method: 'DELETE' })
+}

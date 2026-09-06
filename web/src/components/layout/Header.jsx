@@ -1,8 +1,11 @@
+import { Lock } from 'lucide-react'
+
 export function Header() {
   return (
     <header className="mb-5 text-center">
-      <div className="mb-5 inline-block rounded-full border border-cyan-500/25 bg-cyan-500/10 px-4 py-1.5 text-sm font-semibold tracking-wide text-[var(--primary)]">
-        🔒 Receita de Instalação para o Comercial
+      <div className="mb-5 inline-flex items-center gap-1.5 rounded-full border border-cyan-500/25 bg-cyan-500/10 px-4 py-1.5 text-sm font-semibold tracking-wide text-[var(--primary)]">
+        <Lock className="size-4" />
+        Receita de Instalação para o Comercial
       </div>
       <h1 className="mb-4 bg-gradient-to-b from-white to-slate-300 bg-clip-text text-4xl font-bold tracking-tight text-transparent sm:text-5xl">
         Monte o orçamento do cliente

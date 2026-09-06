@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { createProduct, deleteProduct, getProducts, updateProduct } from '@/lib/api'
-import catalog from '@/data/catalog.json'
+import { useCategories } from '@/hooks/useCategories'
 import { ProductFormDialog } from './ProductFormDialog'
 
-const CATEGORY_LABELS = Object.fromEntries(catalog.flatMap((group) => group.items.map((item) => [item.value, item.label])))
-
 export function ProductsView() {
+  const catalog = useCategories()
+  const categoryLabels = useMemo(
+    () => Object.fromEntries(catalog.flatMap((group) => group.items.map((item) => [item.value, item.label]))),
+    [catalog]
+  )
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -77,7 +80,7 @@ export function ProductsView() {
           <TableBody>
             {products.map((product) => (
               <TableRow key={product.id}>
-                <TableCell>{CATEGORY_LABELS[product.category] || product.category}</TableCell>
+                <TableCell>{categoryLabels[product.category] || product.category}</TableCell>
                 <TableCell>{product.brand}</TableCell>
                 <TableCell>{product.model}</TableCell>
                 <TableCell className="text-right">

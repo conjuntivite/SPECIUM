@@ -1,3 +1,4 @@
+import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { LoadingState } from './LoadingState'
@@ -25,7 +26,7 @@ export function CompareTable({ items, results, isLoading, error, onClose }) {
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">Comparação de Ficha Técnica</h2>
         <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-          ✕ Fechar
+          <X className="size-4" /> Fechar
         </Button>
       </div>
 

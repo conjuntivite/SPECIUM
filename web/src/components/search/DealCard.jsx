@@ -1,3 +1,4 @@
+import { Lightbulb } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -43,7 +44,9 @@ export function DealCard({ deal, isPrimary, rankLabel, checked, disabled, onTogg
           {deal.snippet || 'Clique para conferir os detalhes na loja.'}
         </p>
         {deal.recommendation_reason ? (
-          <div className="mb-2 rounded-lg bg-white/5 p-2 text-sm">💡 {deal.recommendation_reason}</div>
+          <div className="mb-2 flex items-start gap-1.5 rounded-lg bg-white/5 p-2 text-sm">
+            <Lightbulb className="size-4 shrink-0 translate-y-0.5" /> {deal.recommendation_reason}
+          </div>
         ) : null}
         {deal.installment_info ? (
           <p className="text-sm text-muted-foreground">Cartão: {deal.installment_info}</p>
