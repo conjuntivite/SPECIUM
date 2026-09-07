@@ -1,39 +1,12 @@
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-
-const CUSTOM_RESOURCE = '__custom__'
-
-// Select de recurso com opção "Personalizado" que revela um campo de texto livre — mesmo recurso
-// nomeado usado tanto em `provides` (o que a categoria fornece) quanto nas opções de `requirements`
-// do tipo capacidade (o que ela consome). `resources` vem do cadastro (aba Recursos, useResources) —
-// nada fixo em código, pra dar pra outra empresa/ramo criar os próprios sem mexer em código-fonte.
-function ResourcePicker({ value, onChange, resources }) {
-  const isCustom = value && !resources.some((r) => r.value === value)
-  return (
-    <div className="flex flex-1 flex-col gap-1">
-      <Select value={isCustom ? CUSTOM_RESOURCE : value} onValueChange={(v) => onChange(v === CUSTOM_RESOURCE ? '' : v)}>
-        <SelectTrigger className="w-full"><SelectValue placeholder="Recurso..." /></SelectTrigger>
-        <SelectContent>
-          {resources.map((r) => (<SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>))}
-          <SelectItem value={CUSTOM_RESOURCE}>Personalizado...</SelectItem>
-        </SelectContent>
-      </Select>
-      {isCustom || value === '' ? (
-        <Input
-          value={isCustom ? value : ''}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Ex: power.va"
-          className="text-xs"
-        />
-      ) : null}
-    </div>
-  )
-}
+import { InfoHint } from '@/components/ui/info-hint'
+import { ResourceCombobox } from './ResourceCombobox'
 
 // "O que este item fornece" (seção 4 do documento de arquitetura) — lista de { resource, amount }.
 // Normalmente vazio pra uma câmera, preenchido pra switch/DVR/NVR (portas, canais).
-export function ProvidesEditor({ provides, onChange, resources }) {
+export function ProvidesEditor({ provides, onChange, resources, onCreateResource, onDeleteResource }) {
   function update(index, patch) {
     onChange(provides.map((p, i) => (i === index ? { ...p, ...patch } : p)))
   }
@@ -49,14 +22,31 @@ export function ProvidesEditor({ provides, onChange, resources }) {
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium">O que este item fornece</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm font-medium">O que este item fornece</span>
+          <InfoHint>
+            Quanto de um recurso nomeado cada unidade desta categoria coloca à disposição no
+            orçamento — outras categorias que exigem esse recurso (seção "O que este item exige")
+            consomem dessa oferta.
+            <br /><br />
+            <strong>Exemplo:</strong> "Switch PoE Giga 16 Portas" fornece 16 de "Porta Gigabit" e 16
+            de "Porta PoE" — dá pra alimentar/conectar até 16 câmeras com um único switch.
+          </InfoHint>
+        </div>
         <Button type="button" variant="secondary" size="sm" onClick={add}>+ Adicionar recurso</Button>
       </div>
       {provides.length ? (
         <ul className="flex flex-col gap-1.5">
           {provides.map((p, index) => (
             <li key={index} className="flex items-end gap-2 rounded-md bg-muted/50 px-2.5 py-1.5">
-              <ResourcePicker value={p.resource} onChange={(resource) => update(index, { resource })} resources={resources} />
+              <ResourceCombobox
+                className="flex-1"
+                value={p.resource}
+                onChange={(resource) => update(index, { resource })}
+                resources={resources}
+                onCreateResource={onCreateResource}
+                onDeleteResource={onDeleteResource}
+              />
               <div className="flex w-24 flex-col gap-1">
                 <Input
                   type="number" min="1" value={p.amount}
@@ -84,11 +74,18 @@ function emptyRequirement() { return { type: 'presence', label: '', critical: fa
 // Campos de uma "opção" de requisito — presença (categorias candidatas) ou capacidade (recurso +
 // consumo por unidade). Reaproveitado tanto pra um requisito simples quanto pra cada opção de um
 // requisito "Alternativas" (anyOf) — mesma forma nos dois casos (ver categoryResourceSeed.js).
-function RequirementOptionFields({ option, otherCategories, labelByValue, resources, onChange }) {
+function RequirementOptionFields({ option, otherCategories, labelByValue, resources, onCreateResource, onDeleteResource, onChange }) {
   if (option.type === 'capacity') {
     return (
       <div className="flex items-end gap-2">
-        <ResourcePicker value={option.resource} onChange={(resource) => onChange({ ...option, resource })} resources={resources} />
+        <ResourceCombobox
+          className="flex-1"
+          value={option.resource}
+          onChange={(resource) => onChange({ ...option, resource })}
+          resources={resources}
+          onCreateResource={onCreateResource}
+          onDeleteResource={onDeleteResource}
+        />
         <div className="flex w-28 flex-col gap-1">
           <label className="text-[0.65rem] text-muted-foreground">Consumo/un.</label>
           <Input
@@ -155,7 +152,7 @@ function RequirementTypeSelect({ req, onChangeType }) {
 // 12V pra alimentação). `id` não aparece na tela: é derivado do rótulo na hora de salvar
 // (ver slugifyRequirementId em CategoryFormDialog) — o motor de sugestões não depende dele pra casar
 // nada, só usa pra bookkeeping interno.
-export function RequirementsEditor({ requirements, otherCategories, labelByValue, resources, onChange }) {
+export function RequirementsEditor({ requirements, otherCategories, labelByValue, resources, onCreateResource, onDeleteResource, onChange }) {
   function update(index, patch) {
     onChange(requirements.map((r, i) => (i === index ? { ...r, ...patch } : r)))
   }
@@ -177,7 +174,7 @@ export function RequirementsEditor({ requirements, otherCategories, labelByValue
     onChange(requirements.filter((_, i) => i !== index))
   }
   // Idem: "+ Adicionar requisito" fica em cima da lista — inserir no fim obrigava rolar por todos
-  // os requisitos já cadastrados (e depois pelas dependências antigas) só pra editar o novo.
+  // os requisitos já cadastrados só pra editar o novo.
   function add() {
     onChange([emptyRequirement(), ...requirements])
   }
@@ -185,7 +182,18 @@ export function RequirementsEditor({ requirements, otherCategories, labelByValue
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium">O que este item exige</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm font-medium">O que este item exige</span>
+          <InfoHint>
+            O que uma unidade desta categoria precisa pra funcionar. Três tipos: <strong>Presença</strong>{' '}
+            (precisa de alguma categoria específica no orçamento), <strong>Capacidade</strong>{' '}
+            (consome uma quantidade de um recurso que outra categoria fornece), ou{' '}
+            <strong>Alternativas</strong> (qualquer uma das opções resolve).
+            <br /><br />
+            <strong>Exemplo:</strong> "Câmera IP PoE" exige Conectividade Gigabit (capacidade) e
+            Alimentação via porta PoE OU Fonte 12V (alternativas) — qualquer uma das duas resolve.
+          </InfoHint>
+        </div>
         <Button type="button" variant="secondary" size="sm" onClick={add}>+ Adicionar requisito</Button>
       </div>
 
@@ -232,6 +240,8 @@ export function RequirementsEditor({ requirements, otherCategories, labelByValue
                           otherCategories={otherCategories}
                           labelByValue={labelByValue}
                           resources={resources}
+                          onCreateResource={onCreateResource}
+                          onDeleteResource={onDeleteResource}
                           onChange={(patch) => updateOption(index, optIndex, patch)}
                         />
                       </div>
@@ -252,6 +262,8 @@ export function RequirementsEditor({ requirements, otherCategories, labelByValue
                   otherCategories={otherCategories}
                   labelByValue={labelByValue}
                   resources={resources}
+                  onCreateResource={onCreateResource}
+                  onDeleteResource={onDeleteResource}
                   onChange={(patch) => update(index, patch)}
                 />
               )}

@@ -290,6 +290,45 @@ dentro do container centralizado do App) — precisa disso pra ficar acima do ca
 (`BudgetView` é `fixed z-40` e cobre a tela inteira nessa aba). Sem isso ficaria inacessível a partir
 da tela inicial, o mesmo problema que a aba Recursos teve (ver seção acima).
 
+## Motor antigo de dependencies[] removido — só requirements[]/provides[] daqui pra frente (2026-09-07)
+
+Pedido do usuário depois de ver o motor novo priorizando corretamente equipamento que resolve dois
+déficits de recurso de uma vez (seção acima): "retire o motor antigo da tela e do código, vamos
+trabalhar agora somente encima do motor novo".
+
+**Achado antes de remover**: a migração pro motor novo já estava avançada mas incompleta — 33
+categorias (Câmera IP/PoE/Analógica, todo DVR/NVR/Switch) já tinham `requirements[]` cobrindo
+inclusive os acessórios (Caixa Steck, Canaleta etc.), só que o `dependencies[]` antigo nunca foi
+apagado depois. Isso causava sugestão **duplicada** (a mesma "Caixa Steck" aparecia duas vezes em
+`missing`, uma vinda de cada motor — chave `"Caixa Steck"` do motor antigo e `"presence:Caixa Steck"`
+do motor novo) e ruído (cada uma das 16 variantes de switch e 7 de NVR virava uma linha própria na
+listinha, em vez da sugestão consolidada "Conectividade Gigabit"/"Gravação (NVR)"). Só 7 categorias
+dependiam exclusivamente do motor antigo: as 3 variantes AcuSense de câmera, Terminal Facial, Vídeo
+Porteiro, Mikrotik e Roteador Wi-Fi.
+
+**Migração antes da remoção** (pra não perder sugestão nenhuma): as 3 câmeras AcuSense ganharam os
+mesmos `requirements[]` da câmera equivalente sem AcuSense (mesma necessidade elétrica/rede/gravação
+— AcuSense é só uma camada de IA sobre o mesmo hardware); as outras 4 (todo item não-crítico, sem
+alternativa) viraram um requisito de presença não-crítico por dependência, mesmo padrão do kit de
+acabamento. Rodado via API (`PUT /api/categories/:id`) direto no banco, depois `dependencies[]`
+zerado em todas as 40 categorias que ainda tinham o campo (as 7 migradas + as 33 com sobra
+duplicada). `categoryResourceSeed.js` ganhou essas 7 categorias também, pra uma instalação nova (Mongo
+vazio) já nascer sem depender do motor antigo.
+
+**Removido**: `categoryDependencySeed.js` (arquivo inteiro); em `db.js`, `sanitizeDependencies`,
+`MAX_DEPENDENCIES`, o campo `dependencies` de `createCategory`/`updateCategory`/`toCategory`, e o
+bloqueio de exclusão por `dependencies.categoryValue` em `deleteCategory` — **substituído** (mesmo
+dia, a pedido do usuário) por um equivalente pro motor novo: `deleteCategory` agora bloqueia se
+`requirements.candidates` ou `requirements.options.candidates` de QUALQUER outra categoria
+referenciar o `value` da que está sendo excluída (`$or` com notação de ponto do Mongo, que atravessa
+os dois arrays sozinha). Em `server.js`, o laço do motor antigo dentro de
+`computeCategoryMissingEssentials`, `validateDependenciesShape`, `satisfyingTitleByValue`, e o filtro
+de `detected_categories` simplificado pra só olhar `requirements?.length`. No front,
+`CategoryFormDialog.jsx` perdeu a seção inteira "Dependências (motor antigo)" — estado de
+dependências, diálogo de conflito de críticas mútuas, prefixo de "adicionar grupo inteiro" — e
+`copyFrom`/`copyableFrom` (usados por "Copiar de...", ver seção anterior) passaram a olhar só
+`provides`/`requirements`. `CategoriesView.jsx` perdeu a coluna "Dependências" da tabela.
+
 ## Próximos passos (fora de escopo por enquanto)
 
 - **Importar orçamento existente**: ler um arquivo com um orçamento já montado, apontar o que está errado/faltando e sugerir os equipamentos corretos — reaproveitando a mesma engine de `RECIPES`, só trocando a origem dos itens (arquivo em vez de texto livre no formulário). Pedido explicitamente adiado pelo usuário ("mais para frente") — não implementar sem confirmação.

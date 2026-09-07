@@ -19,10 +19,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useCategories } from '@/hooks/useCategories'
+import { InfoHint } from '@/components/ui/info-hint'
 
 const emptyForm = { category: '', brand: '', model: '' }
 
-export function ProductFormDialog({ open, product, onOpenChange, onSubmit }) {
+export function ProductFormDialog({ open, product, brands = [], onOpenChange, onSubmit }) {
   const catalog = useCategories()
   const [form, setForm] = useState(emptyForm)
   const [error, setError] = useState('')
@@ -84,12 +85,28 @@ export function ProductFormDialog({ open, product, onOpenChange, onSubmit }) {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Marca</label>
+              <div className="flex items-center gap-1.5">
+                <label className="text-sm font-medium">Marca</label>
+                <InfoHint>
+                  Sugere as marcas já usadas em outros produtos cadastrados conforme você digita, mas
+                  também aceita um nome novo — não precisa cadastrar a marca em outro lugar antes.
+                  <br /><br />
+                  <strong>Exemplo:</strong> se "Intelbras" já foi usada antes, digitar "Inte" já
+                  sugere ela na lista — evita cadastrar "Intelbras" e "intelbras" como coisas diferentes.
+                </InfoHint>
+              </div>
               <Input
                 value={form.brand}
                 onChange={(e) => setForm((f) => ({ ...f, brand: e.target.value }))}
                 placeholder="Ex: Intelbras, Hikvision"
+                list="product-brand-suggestions"
               />
+              {/* datalist nativo: sugere marcas já usadas nos produtos cadastrados, sem travar o
+                  texto livre — evita "Intelbras"/"intelbras" duplicados sem precisar de um cadastro
+                  próprio de marca (não é um valor com identidade além do próprio nome). */}
+              <datalist id="product-brand-suggestions">
+                {brands.map((brand) => (<option key={brand} value={brand} />))}
+              </datalist>
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -105,6 +122,7 @@ export function ProductFormDialog({ open, product, onOpenChange, onSubmit }) {
           </div>
 
           <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
             <Button type="submit" disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</Button>
           </DialogFooter>
         </form>

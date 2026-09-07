@@ -1,7 +1,7 @@
 // Pré-build de provides[]/requirements[] — motor de recursos/capacidade (ver
 // "arquitetura_motor_regras_capacidade_comprador_inviolavel.txt", enviado pelo usuário, e a seção
-// correspondente no SPEC.md). Convive com categoryDependencySeed.js: só as categorias listadas aqui
-// usam o motor novo (ledger de recursos); o resto continua no motor antigo de dependencies[].
+// correspondente no SPEC.md). Único motor de sugestões do sistema — o antigo motor de dependencies[]
+// foi removido (ver SPEC.md/histórico de commits); toda categoria-âncora usa requirements[]/provides[].
 //
 // Diferença deliberada em relação ao motor antigo: switch Fast (10/100) NÃO entra como candidato da
 // conectividade de rede da câmera IP (resource `network.gigabit_port`) — só switches Giga fornecem
@@ -119,6 +119,33 @@ CATEGORY_RESOURCE_SEED['Câmera Analógica'] = {
     presence('caixa', 'Caixa Steck', ['Caixa Steck'], false),
     ...finishingKitRequirements(),
   ],
+};
+
+// AcuSense é só uma camada de IA sobre a mesma câmera — mesma necessidade elétrica/rede/gravação da
+// variante equivalente sem AcuSense, então reaproveita o requirements dela em vez de duplicar.
+CATEGORY_RESOURCE_SEED['Câmera AcuSense Analógica'] = { provides: [], requirements: CATEGORY_RESOURCE_SEED['Câmera Analógica'].requirements };
+// Value real desta variante é "Câmera AcuSense IP" — o "(sem PoE)" só existe no rótulo exibido
+// (ver web/src/data/catalog.json), igual à câmera IP normal (value "Câmera IP", label com "(sem PoE)").
+CATEGORY_RESOURCE_SEED['Câmera AcuSense IP'] = { provides: [], requirements: CATEGORY_RESOURCE_SEED['Câmera IP'].requirements };
+CATEGORY_RESOURCE_SEED['Câmera AcuSense IP PoE'] = { provides: [], requirements: CATEGORY_RESOURCE_SEED['Câmera IP PoE'].requirements };
+
+// Categorias simples com uma lista curta de acessórios recomendados (nenhum crítico) — mesmo padrão
+// do FINISHING_KIT acima, só que cada uma com sua própria lista em vez do kit de acabamento padrão.
+CATEGORY_RESOURCE_SEED['Terminal Facial'] = {
+  provides: [],
+  requirements: ['Fonte 12V', 'Fechadura Elétrica', 'Cabo de Rede CAT6', 'Nobreak'].map((label) => presence(`kit:${label}`, label, [label], false)),
+};
+CATEGORY_RESOURCE_SEED['Vídeo Porteiro'] = {
+  provides: [],
+  requirements: ['Fonte 12V', 'Cabo de Rede CAT6', 'Fechadura Elétrica', 'Caixa Steck'].map((label) => presence(`kit:${label}`, label, [label], false)),
+};
+CATEGORY_RESOURCE_SEED['Mikrotik'] = {
+  provides: [],
+  requirements: ['Fonte 12V', 'Cabo de Rede CAT6', 'Rack'].map((label) => presence(`kit:${label}`, label, [label], false)),
+};
+CATEGORY_RESOURCE_SEED['Roteador Wi-Fi'] = {
+  provides: [],
+  requirements: ['Cabo de Rede CAT6', 'Nobreak'].map((label) => presence(`kit:${label}`, label, [label], false)),
 };
 
 module.exports = { CATEGORY_RESOURCE_SEED };

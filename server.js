@@ -243,9 +243,8 @@ function buildDependencyReason(anchorLabel, depLabel, critical, hasAlternatives)
 }
 
 // --- Motor de recursos/capacidade -----------------------------------------------------------
-// Convive com o motor antigo de dependencies[] acima: uma categoria com `requirements[]` cadastrado
-// usa este motor; uma categoria só com `dependencies[]` continua no motor antigo (ver
-// computeCategoryMissingEssentials, que roda os dois e junta o resultado). Ver SPEC.md ("Motor de
+// Único motor de sugestões (o antigo motor de dependencies[] foi removido — ver SPEC.md/histórico
+// de commits): toda categoria-âncora usa `requirements[]`/`provides[]`. Ver SPEC.md ("Motor de
 // recursos e capacidade") e arquitetura_motor_regras_capacidade_comprador_inviolavel.txt (enviado
 // pelo usuário) para o racional completo.
 //
@@ -297,12 +296,23 @@ function buildDemandLedger(categoryTotals, byValue) {
 
 // Categorias candidatas pra resolver um déficit de um recurso — usadas tanto no `missing` quanto no
 // ProductPickerDialog do front (prompt.categories), que já sabe mostrar produto por categoria quando
-// há mais de uma opção. Ordenadas da menor pra maior capacidade (sugestão "mais enxuta" primeiro,
-// sem obrigar o comercial a escolher ela — ver seção 16 do documento de arquitetura).
-function candidateCategoriesForResource(resource, categories) {
+// há mais de uma opção. Prioriza quem também cobre OUTRO recurso ainda em déficit no orçamento atual
+// (ex.: Câmera IP PoE precisando de Conectividade Gigabit E Alimentação PoE ao mesmo tempo — um
+// Switch PoE Giga resolve as duas sozinho, então ele fica na frente de um Switch Giga comum tanto na
+// sugestão de conectividade quanto na de alimentação, em vez do sistema empurrar dois switches
+// diferentes pro carrinho). Dentro do mesmo placar, ordena da menor pra maior capacidade (sugestão
+// "mais enxuta" primeiro, sem obrigar o comercial a escolher ela — ver seção 16 do documento de
+// arquitetura).
+function candidateCategoriesForResource(resource, categories, deficitResources = new Set()) {
+  const jointDeficitScore = (c) =>
+    (c.provides || []).filter((p) => p.resource !== resource && deficitResources.has(p.resource)).length;
   return categories
     .filter((c) => (c.provides || []).some((p) => p.resource === resource))
-    .sort((a, b) => a.provides.find((p) => p.resource === resource).amount - b.provides.find((p) => p.resource === resource).amount)
+    .sort((a, b) => {
+      const scoreDiff = jointDeficitScore(b) - jointDeficitScore(a);
+      if (scoreDiff) return scoreDiff;
+      return a.provides.find((p) => p.resource === resource).amount - b.provides.find((p) => p.resource === resource).amount;
+    })
     .map((c) => c.value);
 }
 
@@ -322,6 +332,10 @@ function satisfyingCategory(candidates, categoryTotals) {
 function computeResourceRequirements(categoryTotals, categories, byValue) {
   const supply = buildSupplyLedger(categoryTotals, byValue);
   const demand = buildDemandLedger(categoryTotals, byValue);
+  // Recursos com demanda > oferta no orçamento atual, calculado uma vez pra todo o carrinho — é o
+  // que candidateCategoriesForResource usa pra priorizar equipamento que resolve mais de um déficit
+  // de uma vez (ver comentário lá).
+  const deficitResources = new Set([...demand.keys()].filter((resource) => (demand.get(resource) || 0) > (supply.get(resource) || 0)));
 
   const requirementsByAnchor = {};
   const missingByKey = new Map();
@@ -353,7 +367,7 @@ function computeResourceRequirements(categoryTotals, categories, byValue) {
           search_term: req.label, essential: true,
           severity: req.critical && deficit ? 'critical' : undefined,
           satisfied_by: deficit ? null : 'ok',
-          categories: candidateCategoriesForResource(req.resource, categories),
+          categories: candidateCategoriesForResource(req.resource, categories, deficitResources),
           need, have, deficit,
         });
       } else if (req.type === 'anyOf') {
@@ -363,7 +377,7 @@ function computeResourceRequirements(categoryTotals, categories, byValue) {
           }
           const need = demand.get(option.resource) || 0;
           const have = supply.get(option.resource) || 0;
-          return { option, satisfied: need > 0 && have >= need, key: `resource:${option.resource}`, categories: candidateCategoriesForResource(option.resource, categories), need, have };
+          return { option, satisfied: need > 0 && have >= need, key: `resource:${option.resource}`, categories: candidateCategoriesForResource(option.resource, categories, deficitResources), need, have };
         });
         const satisfiedBySome = optionStates.some((s) => s.satisfied);
         for (const state of optionStates) {
@@ -394,7 +408,7 @@ function computeResourceRequirements(categoryTotals, categories, byValue) {
   return { requirementsByAnchor, missingByKey };
 }
 
-// Motor de sugestões cadastrável: lê `dependencies`/`requirements` de cada categoria (aba
+// Motor de sugestões cadastrável: lê `requirements[]`/`provides[]` de cada categoria (aba
 // Categorias) em vez de regras fixas em código. `cartItems`: [{title, quantity}] ou (chamadas
 // antigas/testes) [string], quantidade 1 no default. `categories` entra por parâmetro pra manter a
 // função pura/testável sem depender de conexão com o Mongo.
@@ -409,80 +423,15 @@ function computeCategoryMissingEssentials(cartItems, categories) {
   const detectedByItem = items.map((item) => ({ ...item, category: detectExactCategory(item.title, categories) }));
   const categoryTotals = sumCategoryQuantities(detectedByItem);
 
-  const satisfyingTitleByValue = new Map();
-  for (const { title, category } of detectedByItem) {
-    if (!category) continue;
-    if (!satisfyingTitleByValue.has(category.value)) satisfyingTitleByValue.set(category.value, title);
-  }
-
   const detected_categories = [...new Set(detectedByItem.map((d) => d.category?.value).filter(Boolean))]
-    .filter((value) => byValue.get(value)?.dependencies?.length || byValue.get(value)?.requirements?.length);
+    .filter((value) => byValue.get(value)?.requirements?.length);
 
-  const missingMap = new Map();
-  const requirements_by_category = {};
-
-  // Motor antigo: só roda pra âncoras que ainda usam dependencies[] (categorias já migradas pro
-  // motor de recursos têm requirements[] e são puladas aqui — ver computeResourceRequirements).
-  for (const anchorValue of detected_categories) {
-    const anchor = byValue.get(anchorValue);
-    if (!anchor.dependencies?.length) continue;
-    const handled = new Set();
-    const evaluated = [];
-
-    for (const dep of anchor.dependencies) {
-      if (handled.has(dep.categoryValue)) continue;
-
-      const depLabel = byValue.get(dep.categoryValue)?.label || dep.categoryValue;
-      if (dep.critical && dep.alternatives.length) {
-        const groupValues = [dep.categoryValue, ...dep.alternatives.filter((v) => anchor.dependencies.some((d) => d.categoryValue === v))]
-          .filter((v, i, arr) => arr.indexOf(v) === i);
-        const satisfiedBySome = groupValues.some((v) => satisfyingTitleByValue.has(v));
-        for (const value of groupValues) {
-          // Um mesmo valor pode aparecer em duas listas de alternativa mútua desta categoria (ex.:
-          // switch PoE está no grupo "energia" E no grupo "portas") — sem este guard, a segunda
-          // lista reprocessava e duplicava a linha de quem o primeiro grupo já tinha coberto.
-          if (handled.has(value)) continue;
-          handled.add(value);
-          const label = byValue.get(value)?.label || value;
-          const satisfied_by = satisfyingTitleByValue.get(value) || null;
-          evaluated.push({
-            key: value, label, reason: buildDependencyReason(anchor.label, label, true, true),
-            search_term: label, essential: true,
-            severity: satisfied_by ? null : (satisfiedBySome ? 'optional' : 'critical'),
-            satisfied_by, categories: [value],
-          });
-        }
-      } else {
-        handled.add(dep.categoryValue);
-        const satisfied_by = satisfyingTitleByValue.get(dep.categoryValue) || null;
-        evaluated.push({
-          key: dep.categoryValue, label: depLabel, reason: buildDependencyReason(anchor.label, depLabel, dep.critical, false),
-          search_term: depLabel, essential: true,
-          severity: dep.critical && !satisfied_by ? 'critical' : undefined,
-          satisfied_by, categories: [dep.categoryValue],
-        });
-      }
-    }
-
-    requirements_by_category[anchorValue] = evaluated;
-    for (const item of evaluated) {
-      if (!missingMap.has(item.key)) missingMap.set(item.key, item);
-    }
-  }
-
-  // Motor novo: ledger de recursos, só pras âncoras com requirements[] cadastrado.
   const { requirementsByAnchor, missingByKey } = computeResourceRequirements(categoryTotals, categories, byValue);
-  for (const [anchorValue, evaluated] of Object.entries(requirementsByAnchor)) {
-    requirements_by_category[anchorValue] = evaluated;
-  }
-  for (const [key, item] of missingByKey) {
-    if (!missingMap.has(key)) missingMap.set(key, item);
-  }
 
-  const missing = [...missingMap.values()]
+  const missing = [...missingByKey.values()]
     .filter((item) => !item.satisfied_by)
     .map(({ key, label, reason, search_term, essential, categories }) => ({ key, label, reason, search_term, essential, categories }));
-  return { detected_categories, missing, requirements_by_category };
+  return { detected_categories, missing, requirements_by_category: requirementsByAnchor };
 }
 
 function formatBRL(value) {
@@ -727,30 +676,12 @@ function validateProductRequest(request) {
   return { category, brand, model };
 }
 
-// dependencies: [{ categoryValue, critical, alternatives }] — outras categorias que esta exige (ou
-// sugere) no orçamento. "alternatives" lista outras dependencies desta MESMA categoria que, se
-// presentes junto no orçamento, dispensam esta de ser crítica (ex.: Switch PoE e Fonte 12V viram
-// alternativas mútuas na Câmera IP PoE). Sanitização fina (dedupe, auto-referência) fica em db.js,
-// que já sabe o "value" final da categoria.
-function validateDependenciesShape(raw) {
-  if (raw === undefined) return [];
-  if (!Array.isArray(raw)) throw new Error('Dependências inválidas.');
-  if (raw.length > 50) throw new Error('Limite de 50 dependências por categoria.');
-  return raw.map((dep) => {
-    const categoryValue = normalize(dep?.categoryValue);
-    if (!categoryValue) throw new Error('Cada dependência precisa apontar para uma categoria válida.');
-    const alternatives = Array.isArray(dep?.alternatives) ? dep.alternatives.map((v) => normalize(v)).filter(Boolean) : [];
-    return { categoryValue, critical: !!dep?.critical, alternatives };
-  });
-}
-
 // provides: [{ resource, amount }] — quanto desse recurso uma unidade desta categoria fornece (ex.:
 // Switch PoE Giga 16 Portas fornece 16 de `network.gigabit_port` e 16 de `power.poe_port`).
 // requirements: [{ id, label, critical, type: 'presence'|'capacity', ... } | { type: 'anyOf', options: [...] }]
 // — o que uma unidade desta categoria exige. Validação aqui é só de forma (shape); sanitização fina
-// (dedupe, limites) fica em db.js, igual ao padrão já usado por dependencies. Ver categoryResourceSeed.js
-// e SPEC.md ("Motor de recursos e capacidade") pro racional — o cadastro (CategoryFormDialog) ainda
-// não edita esses dois campos, só a API/seed; por isso ambos são opcionais aqui.
+// (dedupe, limites) fica em db.js. Ver categoryResourceSeed.js e SPEC.md ("Motor de recursos e
+// capacidade") pro racional — ambos são opcionais aqui (undefined = chamador não enviou o campo).
 function validateProvidesShape(raw) {
   if (raw === undefined) return undefined;
   if (!Array.isArray(raw)) throw new Error('Recursos fornecidos inválidos.');
@@ -803,10 +734,9 @@ function validateCategoryRequest(request) {
   if (!label || label.length > 100) throw new Error('Informe um nome de categoria válido (até 100 caracteres).');
   const rawCapacity = Number(request.capacity);
   const capacity = Number.isFinite(rawCapacity) && rawCapacity > 0 ? Math.trunc(rawCapacity) : null;
-  const dependencies = validateDependenciesShape(request.dependencies);
   const provides = validateProvidesShape(request.provides);
   const requirements = validateRequirementsShape(request.requirements);
-  return { group, label, capacity, dependencies, provides, requirements };
+  return { group, label, capacity, provides, requirements };
 }
 
 // key: identificador técnico gravado em provides[].resource/requirements[].resource (ex.:

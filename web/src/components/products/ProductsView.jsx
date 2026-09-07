@@ -15,6 +15,10 @@ export function ProductsView() {
     [catalog]
   )
   const [products, setProducts] = useState([])
+  const brands = useMemo(
+    () => [...new Set(products.map((p) => p.brand).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [products]
+  )
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [formOpen, setFormOpen] = useState(false)
@@ -126,6 +130,7 @@ export function ProductsView() {
       <ProductFormDialog
         open={formOpen}
         product={editingProduct}
+        brands={brands}
         onOpenChange={setFormOpen}
         onSubmit={handleSubmit}
       />

@@ -461,10 +461,10 @@ test('POST /api/recipe/suggestions validates the payload and returns missing ess
 });
 
 // --- computeCategoryMissingEssentials / detectExactCategory: motor de sugestões cadastrável ---
-// Fixture isolada (não depende do Mongo) pra testar as funções puras que leem `dependencies`.
+// Fixture isolada (não depende do Mongo) pra testar as funções puras.
 
-function fixtureCategory(value, dependencies = []) {
-  return { id: value, group: 'Teste', value, label: value, dependencies };
+function fixtureCategory(value) {
+  return { id: value, group: 'Teste', value, label: value };
 }
 
 test('detectExactCategory prefere o value mais longo/específico quando um é prefixo do outro', () => {
@@ -474,47 +474,7 @@ test('detectExactCategory prefere o value mais longo/específico quando um é pr
   assert.equal(detectExactCategory('Monitor Gamer 27"', categories), null);
 });
 
-test('computeCategoryMissingEssentials: dependência crítica única fica critical até a categoria satisfatora entrar no orçamento', () => {
-  const categories = [
-    fixtureCategory('DVR 16 Canais', [{ categoryValue: 'HD Interno (armazenamento)', critical: true, alternatives: [] }]),
-    fixtureCategory('HD Interno (armazenamento)'),
-  ];
-  // Título sempre começa com o value exato da categoria (ver composeProductTitle no
-  // BudgetCanvas) — não é texto livre, então o casamento por substring é seguro.
-  const missing = computeCategoryMissingEssentials(['DVR 16 Canais Intelbras MHDX 1116'], categories);
-  assert.deepEqual(missing.detected_categories, ['DVR 16 Canais']);
-  const req = missing.requirements_by_category['DVR 16 Canais'][0];
-  assert.equal(req.severity, 'critical');
-  assert.equal(req.satisfied_by, null);
-
-  const satisfied = computeCategoryMissingEssentials(['DVR 16 Canais Intelbras MHDX 1116', 'HD Interno (armazenamento) 1TB'], categories);
-  const reqSatisfied = satisfied.requirements_by_category['DVR 16 Canais'][0];
-  assert.equal(reqSatisfied.severity, undefined);
-  assert.equal(reqSatisfied.satisfied_by, 'HD Interno (armazenamento) 1TB');
-  assert.deepEqual(satisfied.missing, []);
-});
-
-test('computeCategoryMissingEssentials: alternativa mútua fica crítica nos dois lados até uma entrar, aí a outra vira optional', () => {
-  const categories = [
-    fixtureCategory('Câmera IP PoE', [
-      { categoryValue: 'Fonte 12V', critical: true, alternatives: ['Switch PoE Fast 8 Portas'] },
-      { categoryValue: 'Switch PoE Fast 8 Portas', critical: true, alternatives: ['Fonte 12V'] },
-    ]),
-    fixtureCategory('Fonte 12V'),
-    fixtureCategory('Switch PoE Fast 8 Portas'),
-  ];
-
-  const neither = computeCategoryMissingEssentials(['Câmera IP PoE Intelbras VIP 3230'], categories);
-  const reqsNeither = neither.requirements_by_category['Câmera IP PoE'];
-  assert.ok(reqsNeither.every((item) => item.severity === 'critical'));
-
-  const withSwitch = computeCategoryMissingEssentials(['Câmera IP PoE Intelbras VIP 3230', 'Switch PoE Fast 8 Portas Intelbras'], categories);
-  const reqsWithSwitch = withSwitch.requirements_by_category['Câmera IP PoE'];
-  assert.equal(reqsWithSwitch.find((item) => item.key === 'Switch PoE Fast 8 Portas').severity, null);
-  assert.equal(reqsWithSwitch.find((item) => item.key === 'Fonte 12V').severity, 'optional');
-});
-
-test('computeCategoryMissingEssentials ignora categorias sem dependencies cadastradas (acessórios-folha não viram âncora)', () => {
+test('computeCategoryMissingEssentials ignora categorias sem requirements cadastrado (acessórios-folha não viram âncora)', () => {
   const categories = [fixtureCategory('Fonte 12V')];
   const result = computeCategoryMissingEssentials(['Fonte 12V 2A Intelbras'], categories);
   assert.deepEqual(result, { detected_categories: [], missing: [], requirements_by_category: {} });
@@ -522,30 +482,13 @@ test('computeCategoryMissingEssentials ignora categorias sem dependencies cadast
 
 test('computeCategoryMissingEssentials: strings simples continuam funcionando com quantidade 1 (compat com chamadas antigas)', () => {
   const categories = [
-    fixtureCategory('Câmera IP', [{ categoryValue: 'Fonte 12V', critical: true, alternatives: [] }]),
+    fixtureResourceCategory('Câmera IP', { requirements: [
+      { id: 'power', label: 'Fonte 12V', type: 'presence', candidates: ['Fonte 12V'], critical: true },
+    ] }),
     fixtureCategory('Fonte 12V'),
   ];
   const result = computeCategoryMissingEssentials(['Câmera IP Intelbras VIP 1230'], categories);
   assert.equal(result.requirements_by_category['Câmera IP'][0].severity, 'critical');
-});
-
-test('computeCategoryMissingEssentials: um valor referenciado por duas listas de alternativa mútua diferentes (ex.: switch PoE conta pro grupo de energia E é citado no grupo de conectividade) não duplica linha', () => {
-  const categories = [
-    fixtureCategory('Câmera IP PoE', [
-      { categoryValue: 'Fonte 12V', critical: true, alternatives: ['Switch PoE 8 Portas'] },
-      { categoryValue: 'Switch PoE 8 Portas', critical: true, alternatives: ['Fonte 12V'] },
-      { categoryValue: 'Switch Giga 8 Portas', critical: true, alternatives: ['Switch PoE 8 Portas', 'Switch Fast 8 Portas'] },
-      { categoryValue: 'Switch Fast 8 Portas', critical: true, alternatives: ['Switch PoE 8 Portas', 'Switch Giga 8 Portas'] },
-    ]),
-    fixtureCategory('Fonte 12V'),
-    fixtureCategory('Switch PoE 8 Portas'),
-    fixtureCategory('Switch Giga 8 Portas'),
-    fixtureCategory('Switch Fast 8 Portas'),
-  ];
-  const result = computeCategoryMissingEssentials(['Câmera IP PoE Intelbras VIP 3230'], categories);
-  const keys = result.requirements_by_category['Câmera IP PoE'].map((r) => r.key);
-  assert.deepEqual(keys.sort(), ['Fonte 12V', 'Switch PoE 8 Portas', 'Switch Giga 8 Portas', 'Switch Fast 8 Portas'].sort());
-  assert.deepEqual(keys, [...new Set(keys)]); // "Switch PoE 8 Portas" some no grupo de energia E é citado nas alternatives do grupo de conectividade — só 1 linha
 });
 
 // --- Motor de recursos/capacidade (requirements[]/provides[]) ---
@@ -554,7 +497,7 @@ test('computeCategoryMissingEssentials: um valor referenciado por duas listas de
 // capacidade entre vários equipamentos, e o caso canônico "16 câmeras cabem, a 17ª não".
 
 function fixtureResourceCategory(value, { provides = [], requirements = [] } = {}) {
-  return { id: value, group: 'Teste', value, label: value, dependencies: [], provides, requirements };
+  return { id: value, group: 'Teste', value, label: value, provides, requirements };
 }
 
 const cameraIpPoeFixture = fixtureResourceCategory('Câmera IP PoE', {
@@ -576,6 +519,14 @@ function switchPoeGigaFixture(ports) {
 
 function nvrFixture(channels) {
   return fixtureResourceCategory(`NVR ${channels} Canais`, { provides: [{ resource: 'recording.ip_channel', amount: channels }] });
+}
+
+function switchGigaFixture(ports) {
+  return fixtureResourceCategory(`Switch Giga ${ports} Portas`, { provides: [{ resource: 'network.gigabit_port', amount: ports }] });
+}
+
+function switchPoeFastFixture(ports) {
+  return fixtureResourceCategory(`Switch PoE Fast ${ports} Portas`, { provides: [{ resource: 'power.poe_port', amount: ports }] });
 }
 
 test('computeCategoryMissingEssentials (motor de recursos): 16 câmeras IP PoE + switch PoE Giga 16 portas + NVR 16 canais fecha sem déficit', () => {
@@ -622,6 +573,21 @@ test('computeCategoryMissingEssentials (motor de recursos): a 17ª câmera estou
   assert.ok(power.every((r) => r.severity === 'critical'));
 });
 
+test('computeCategoryMissingEssentials (motor de recursos): prioriza o Switch PoE Giga (resolve conectividade E alimentação) em vez de dois switches de propósito único', () => {
+  // Switch Giga (só conectividade, menos portas) e Switch PoE Fast (só alimentação, menos portas)
+  // teriam prioridade se a ordenação fosse só por capacidade crescente — o teste prova que o Switch
+  // PoE Giga (mais portas, mas resolve os dois déficits de uma vez) vem na frente mesmo assim.
+  const categories = [cameraIpPoeFixture, switchGigaFixture(4), switchPoeFastFixture(4), switchPoeGigaFixture(8)];
+  const result = computeCategoryMissingEssentials([{ title: 'Câmera IP PoE Intelbras VIP 3230', quantity: 1 }], categories);
+
+  const reqs = result.requirements_by_category['Câmera IP PoE'];
+  const network = reqs.find((r) => r.key === 'resource:network.gigabit_port');
+  assert.deepEqual(network.categories, ['Switch PoE Giga 8 Portas', 'Switch Giga 4 Portas']);
+
+  const power = reqs.find((r) => r.key === 'resource:power.poe_port');
+  assert.deepEqual(power.categories, ['Switch PoE Giga 8 Portas', 'Switch PoE Fast 4 Portas']);
+});
+
 test('computeCategoryMissingEssentials (motor de recursos): capacidade soma entre vários equipamentos do mesmo recurso (dois NVRs)', () => {
   const categories = [cameraIpPoeFixture, switchPoeGigaFixture(24), nvrFixture(16), nvrFixture(8)];
   const result = computeCategoryMissingEssentials([
@@ -634,22 +600,6 @@ test('computeCategoryMissingEssentials (motor de recursos): capacidade soma entr
   const recording = result.requirements_by_category['Câmera IP PoE'].find((r) => r.key === 'resource:recording.ip_channel');
   assert.equal(recording.have, 24); // 16 + 8, um NVR só não bastaria
   assert.equal(recording.deficit, 0);
-});
-
-test('computeCategoryMissingEssentials: motor antigo (dependencies) e motor novo (requirements) convivem na mesma chamada', () => {
-  const categories = [
-    fixtureCategory('Vídeo Porteiro', [{ categoryValue: 'Fonte 12V', critical: true, alternatives: [] }]),
-    fixtureCategory('Fonte 12V'),
-    cameraIpPoeFixture, switchPoeGigaFixture(16), nvrFixture(16),
-  ];
-  const result = computeCategoryMissingEssentials([
-    { title: 'Vídeo Porteiro Intelbras', quantity: 1 },
-    { title: 'Câmera IP PoE Intelbras VIP 3230', quantity: 1 },
-  ], categories);
-
-  assert.deepEqual(result.detected_categories.sort(), ['Câmera IP PoE', 'Vídeo Porteiro'].sort());
-  assert.equal(result.requirements_by_category['Vídeo Porteiro'][0].severity, 'critical');
-  assert.ok(result.requirements_by_category['Câmera IP PoE'].some((r) => r.key === 'resource:network.gigabit_port' && r.severity === 'critical'));
 });
 
 test('POST /api/recipe/prices searches each suggested item and reports its average price', async (t) => {
@@ -740,6 +690,22 @@ test('CRUD de /api/categories: lista a pré-build semeada, cadastra, atualiza e 
   assert.equal(category.group, '__teste__ Grupo');
   assert.equal(category.value, label);
 
+  // "value" (=label) é a chave usada em products.category/requirements.candidates/provides.resource
+  // em toda a base — duplicata colidiria nela, então recusa mesmo em outro grupo e mesmo com
+  // maiúsculas/minúsculas diferentes (mesma regra de nome duplicado do createGroup).
+  const dupSameCase = await fetch(`${baseUrl}/api/categories`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ group: '__teste__ Outro Grupo', label }),
+  });
+  assert.equal(dupSameCase.status, 400);
+  assert.match((await dupSameCase.json()).detail, /já existe/i);
+
+  const dupDifferentCase = await fetch(`${baseUrl}/api/categories`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ group: '__teste__ Grupo', label: label.toUpperCase() }),
+  });
+  assert.equal(dupDifferentCase.status, 400);
+
   const updated = await fetch(`${baseUrl}/api/categories/${category.id}`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ group: '__teste__ Grupo 2', label: `${label} editado` }),
@@ -786,86 +752,54 @@ test('DELETE /api/categories/:id recusa remover categoria com produto cadastrado
   assert.equal(allowed.status, 200);
 });
 
-test('POST/PUT /api/categories: grava dependencies (crítica + alternativas mútuas), ignora auto-referência e duplicatas', async (t) => {
+test('DELETE /api/categories/:id recusa remover categoria referenciada como candidata num requirement de outra (presença direta ou dentro de anyOf), e libera depois que a referência sai', async (t) => {
   const server = http.createServer(requestHandler);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => server.close());
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   const suffix = Date.now();
 
-  const fonte = await (await fetch(`${baseUrl}/api/categories`, {
+  const candidate = await (await fetch(`${baseUrl}/api/categories`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ group: '__teste__ Grupo', label: `__teste__ Fonte ${suffix}` }),
-  })).json();
-  const switchPoe = await (await fetch(`${baseUrl}/api/categories`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ group: '__teste__ Grupo', label: `__teste__ Switch PoE ${suffix}` }),
+    body: JSON.stringify({ group: '__teste__ Grupo', label: `__teste__ Candidata ${suffix}` }),
   })).json();
 
-  const created = await (await fetch(`${baseUrl}/api/categories`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      group: '__teste__ Grupo',
-      label: `__teste__ Câmera PoE ${suffix}`,
-      dependencies: [
-        { categoryValue: fonte.value, critical: true, alternatives: [switchPoe.value] },
-        { categoryValue: switchPoe.value, critical: true, alternatives: [fonte.value] },
-        { categoryValue: fonte.value, critical: true, alternatives: [] }, // duplicata: deve ser ignorada
-        { categoryValue: `__teste__ Câmera PoE ${suffix}` }, // auto-referência: deve ser ignorada
-      ],
-    }),
-  })).json();
-
-  assert.equal(created.dependencies.length, 2);
-  const bySwitch = created.dependencies.find((d) => d.categoryValue === switchPoe.value);
-  assert.equal(bySwitch.critical, true);
-  assert.deepEqual(bySwitch.alternatives, [fonte.value]);
-
-  const updated = await (await fetch(`${baseUrl}/api/categories/${created.id}`, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ group: created.group, label: created.label, dependencies: [{ categoryValue: fonte.value, critical: true, alternatives: [] }] }),
-  })).json();
-  assert.equal(updated.dependencies.length, 1);
-
-  const refetched = await (await fetch(`${baseUrl}/api/categories`)).json();
-  const persisted = refetched.categories.find((c) => c.id === created.id);
-  assert.equal(persisted.dependencies.length, 1);
-  assert.equal(persisted.dependencies[0].categoryValue, fonte.value);
-
-  await fetch(`${baseUrl}/api/categories/${created.id}`, { method: 'DELETE' });
-  await fetch(`${baseUrl}/api/categories/${switchPoe.id}`, { method: 'DELETE' });
-  await fetch(`${baseUrl}/api/categories/${fonte.id}`, { method: 'DELETE' });
-});
-
-test('DELETE /api/categories/:id recusa remover categoria referenciada como dependência de outra, e libera depois que a referência sai', async (t) => {
-  const server = http.createServer(requestHandler);
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  t.after(() => server.close());
-  const baseUrl = `http://127.0.0.1:${server.address().port}`;
-  const suffix = Date.now();
-
-  const dependency = await (await fetch(`${baseUrl}/api/categories`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ group: '__teste__ Grupo', label: `__teste__ Dependência ${suffix}` }),
-  })).json();
   const dependent = await (await fetch(`${baseUrl}/api/categories`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       group: '__teste__ Grupo', label: `__teste__ Dependente ${suffix}`,
-      dependencies: [{ categoryValue: dependency.value, critical: true, alternatives: [] }],
+      requirements: [
+        { id: 'req', label: 'Requisito', type: 'presence', candidates: [candidate.value], critical: false },
+      ],
     }),
   })).json();
 
-  const blocked = await fetch(`${baseUrl}/api/categories/${dependency.id}`, { method: 'DELETE' });
+  const blocked = await fetch(`${baseUrl}/api/categories/${candidate.id}`, { method: 'DELETE' });
   assert.equal(blocked.status, 400);
   assert.match((await blocked.json()).detail, /categoria/i);
 
+  // Também bloqueia quando a referência está dentro de uma opção de anyOf, não só num requisito direto.
   await fetch(`${baseUrl}/api/categories/${dependent.id}`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ group: dependent.group, label: dependent.label, dependencies: [] }),
+    body: JSON.stringify({
+      group: dependent.group, label: dependent.label,
+      requirements: [
+        { id: 'req', label: 'Requisito', type: 'anyOf', critical: false, options: [
+          { type: 'presence', candidates: [candidate.value] },
+          { type: 'capacity', resource: 'network.gigabit_port', unitsPerItem: 1 },
+        ] },
+      ],
+    }),
+  });
+  const stillBlocked = await fetch(`${baseUrl}/api/categories/${candidate.id}`, { method: 'DELETE' });
+  assert.equal(stillBlocked.status, 400);
+
+  await fetch(`${baseUrl}/api/categories/${dependent.id}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ group: dependent.group, label: dependent.label, requirements: [] }),
   });
 
-  const allowed = await fetch(`${baseUrl}/api/categories/${dependency.id}`, { method: 'DELETE' });
+  const allowed = await fetch(`${baseUrl}/api/categories/${candidate.id}`, { method: 'DELETE' });
   assert.equal(allowed.status, 200);
 
   await fetch(`${baseUrl}/api/categories/${dependent.id}`, { method: 'DELETE' });

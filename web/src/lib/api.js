@@ -84,10 +84,6 @@ export function createResource(data) {
   return postJson('/api/resources', data)
 }
 
-export function updateResource(id, data) {
-  return requestJson(`/api/resources/${id}`, { method: 'PUT', body: data })
-}
-
 export function deleteResource(id) {
   return requestJson(`/api/resources/${id}`, { method: 'DELETE' })
 }

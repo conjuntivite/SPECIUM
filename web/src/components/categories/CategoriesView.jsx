@@ -7,12 +7,14 @@ import { normalizeSearch } from '@/lib/utils'
 import {
   createCategory, deleteCategory, getCategories, updateCategory,
   createGroup, deleteGroup, getGroups,
+  createResource, deleteResource, getResources,
 } from '@/lib/api'
 import { CategoryFormDialog } from './CategoryFormDialog'
 
 export function CategoriesView() {
   const [categories, setCategories] = useState([])
   const [groups, setGroups] = useState([])
+  const [resources, setResources] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [formOpen, setFormOpen] = useState(false)
@@ -20,7 +22,7 @@ export function CategoriesView() {
   const [search, setSearch] = useState('')
 
   // Filtra só o que aparece na tabela — o form de edição continua recebendo a lista completa
-  // (precisa de todas as categorias pra montar os seletores de dependência/requisito).
+  // (precisa de todas as categorias pra montar o seletor de candidata de requisito).
   const filteredCategories = useMemo(() => {
     const q = normalizeSearch(search.trim())
     if (!q) return categories
@@ -40,8 +42,13 @@ export function CategoriesView() {
     getGroups().then((data) => setGroups(data.groups || [])).catch(() => {})
   }, [])
 
+  const reloadResources = useCallback(() => {
+    getResources().then((data) => setResources(data.resources || [])).catch(() => {})
+  }, [])
+
   useEffect(() => { reload() }, [reload])
   useEffect(() => { reloadGroups() }, [reloadGroups])
+  useEffect(() => { reloadResources() }, [reloadResources])
 
   async function handleCreateGroup(name) {
     const created = await createGroup(name)
@@ -52,6 +59,17 @@ export function CategoriesView() {
   async function handleDeleteGroup(id) {
     await deleteGroup(id)
     reloadGroups()
+  }
+
+  async function handleCreateResource(data) {
+    const created = await createResource(data)
+    reloadResources()
+    return created
+  }
+
+  async function handleDeleteResource(id) {
+    await deleteResource(id)
+    reloadResources()
   }
 
   function openCreate() {
@@ -111,8 +129,7 @@ export function CategoriesView() {
               <TableHead>Grupo</TableHead>
               <TableHead>Categoria</TableHead>
               <TableHead>Capacidade</TableHead>
-              <TableHead>Recursos</TableHead>
-              <TableHead>Dependências</TableHead>
+              <TableHead>Requisitos</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -124,11 +141,6 @@ export function CategoriesView() {
                 <TableCell className="text-muted-foreground">{category.capacity ?? '—'}</TableCell>
                 <TableCell className="text-muted-foreground">
                   {category.requirements?.length ? `${category.requirements.length} requisito${category.requirements.length === 1 ? '' : 's'}` : '—'}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {category.dependencies?.length
-                    ? `${category.dependencies.length} (${category.dependencies.filter((d) => d.critical).length} crítica${category.dependencies.filter((d) => d.critical).length === 1 ? '' : 's'})`
-                    : '—'}
                 </TableCell>
                 <TableCell className="text-right">
                   <Button type="button" variant="ghost" size="sm" onClick={() => openEdit(category)}>Editar</Button>
@@ -149,10 +161,13 @@ export function CategoriesView() {
         category={editingCategory}
         groups={groups}
         categories={categories}
+        resources={resources}
         onOpenChange={setFormOpen}
         onSubmit={handleSubmit}
         onCreateGroup={handleCreateGroup}
         onDeleteGroup={handleDeleteGroup}
+        onCreateResource={handleCreateResource}
+        onDeleteResource={handleDeleteResource}
       />
     </div>
   )

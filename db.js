@@ -1,6 +1,5 @@
 const { MongoClient, ObjectId } = require('mongodb');
 const catalogSeed = require('./web/src/data/catalog.json');
-const { CATEGORY_DEPENDENCY_SEED } = require('./categoryDependencySeed');
 const { CATEGORY_RESOURCE_SEED } = require('./categoryResourceSeed');
 
 // Conexão lazy (só na primeira query): assim process.env.MONGODB_URI já está carregado do .env
@@ -72,16 +71,14 @@ function inferSeedCapacity(value) {
 }
 
 // Semeia a coleção uma única vez com os 12 grupos fixos de web/src/data/catalog.json (a
-// pré-build) e já traz as dependências equivalentes às antigas RECIPES fixas em server.js (ver
-// categoryDependencySeed.js). Depois disso a coleção manda: a tela de cadastro edita esses
-// documentos, não os arquivos-fonte.
+// pré-build), já com provides/requirements do motor de recursos (ver categoryResourceSeed.js).
+// Depois disso a coleção manda: a tela de cadastro edita esses documentos, não os arquivos-fonte.
 async function ensureCategoriesSeeded(categories) {
   if (await categories.countDocuments() > 0) return;
   const seedDocs = catalogSeed.flatMap((group) =>
     group.items.map((item) => ({
       group: group.group, value: item.value, label: item.label,
       capacity: inferSeedCapacity(item.value),
-      dependencies: CATEGORY_DEPENDENCY_SEED[item.value] || [],
       provides: CATEGORY_RESOURCE_SEED[item.value]?.provides || [],
       requirements: CATEGORY_RESOURCE_SEED[item.value]?.requirements || [],
       createdAt: new Date(),
@@ -92,8 +89,7 @@ async function ensureCategoriesSeeded(categories) {
 
 // Backfill idempotente pra bancos já semeados antes do motor de recursos existir (ensureCategoriesSeeded
 // só roda uma vez, na coleção vazia — não alcança quem já tinha dados). Só toca documentos sem o campo
-// `provides` (nunca sobrescreve edição feita pelo cadastro) e só para as categorias que o motor novo
-// conhece (ver categoryResourceSeed.js); o resto continua só no motor antigo de dependencies[].
+// `provides` (nunca sobrescreve edição feita pelo cadastro).
 async function ensureCategoryResourceSeeded(categories) {
   const knownValues = Object.keys(CATEGORY_RESOURCE_SEED);
   if (!knownValues.length) return;
@@ -108,13 +104,11 @@ function toCategory(doc) {
   return {
     id: doc._id.toString(), group: doc.group, value: doc.value, label: doc.label,
     capacity: Number.isFinite(doc.capacity) ? doc.capacity : null,
-    dependencies: doc.dependencies || [],
     provides: doc.provides || [],
     requirements: doc.requirements || [],
   };
 }
 
-const MAX_DEPENDENCIES = 50;
 const MAX_PROVIDES = 20;
 const MAX_REQUIREMENTS = 30;
 
@@ -176,26 +170,6 @@ function sanitizeCapacity(raw) {
   return Number.isFinite(n) && n > 0 ? Math.min(n, 100000) : null;
 }
 
-// "alternatives" só referencia outras entradas da MESMA lista (por categoryValue) — nunca aponta pra
-// fora do documento, então não existe referência pendente entre categorias diferentes por causa dela
-// (só o próprio categoryValue de cada dependência aponta pra outro documento, ver deleteCategory).
-function sanitizeDependencies(rawDependencies, ownValue) {
-  if (!Array.isArray(rawDependencies)) return [];
-  const seen = new Set();
-  const deps = [];
-  for (const dep of rawDependencies) {
-    const categoryValue = String(dep?.categoryValue || '').trim();
-    if (!categoryValue || categoryValue === ownValue || seen.has(categoryValue)) continue;
-    seen.add(categoryValue);
-    const alternatives = Array.isArray(dep?.alternatives)
-      ? [...new Set(dep.alternatives.map((v) => String(v || '').trim()).filter((v) => v && v !== ownValue))]
-      : [];
-    deps.push({ categoryValue, critical: !!dep?.critical, alternatives });
-    if (deps.length >= MAX_DEPENDENCIES) break;
-  }
-  return deps;
-}
-
 // numeric:true trata número embutido no rótulo como número, não como texto — "4 Portas" < "8
 // Portas" < "16 Portas" < "24 Portas", nunca "16" < "24" < "4" < "8" (o que uma comparação de string
 // pura daria). Isso preserva a progressão numérica que a antiga ordenação por _id garantia, mas
@@ -211,33 +185,38 @@ async function listCategories() {
   return docs.map(toCategory);
 }
 
-async function createCategory({ group, label, capacity, dependencies, provides, requirements }) {
+// "value" (usado em products.category, requirements.candidates e provides.resource em toda a
+// base) sai direto do label e nunca muda depois — duas categorias com o mesmo nome colidiriam nessa
+// chave e uma ficaria inacessível pro motor de sugestões. Mesma checagem de duplicata do createGroup.
+async function createCategory({ group, label, capacity, provides, requirements }) {
   const categories = await getCategoriesCollection();
   const value = label;
+  const all = await categories.find({}, { projection: { value: 1 } }).toArray();
+  if (all.some((c) => c.value.toLowerCase() === value.toLowerCase())) {
+    throw new Error('Já existe uma categoria com esse nome.');
+  }
   const cleanCapacity = sanitizeCapacity(capacity);
-  const cleanDeps = sanitizeDependencies(dependencies, value);
   const cleanProvides = sanitizeProvides(provides);
   const cleanRequirements = sanitizeRequirements(requirements);
   const { insertedId } = await categories.insertOne({
-    group, value, label, capacity: cleanCapacity, dependencies: cleanDeps,
+    group, value, label, capacity: cleanCapacity,
     provides: cleanProvides, requirements: cleanRequirements, createdAt: new Date(),
   });
-  return { id: insertedId.toString(), group, value, label, capacity: cleanCapacity, dependencies: cleanDeps, provides: cleanProvides, requirements: cleanRequirements };
+  return { id: insertedId.toString(), group, value, label, capacity: cleanCapacity, provides: cleanProvides, requirements: cleanRequirements };
 }
 
 // "value" não é editável: é a chave que já pode estar gravada em products.category e nas
-// dependencies de outras categorias — renomear só o rótulo exibido não pode quebrar essas referências.
-// provides/requirements só entram no $set quando o chamador realmente os envia (undefined = não
-// mexe) — o CategoryFormDialog ainda não edita esses campos, então uma edição comum (grupo, nome,
-// dependencies) não pode apagar o que o backfill/seed de recursos gravou.
-async function updateCategory(id, { group, label, capacity, dependencies, provides, requirements }) {
+// candidates de requirements de outras categorias — renomear só o rótulo exibido não pode quebrar
+// essas referências. provides/requirements só entram no $set quando o chamador realmente os envia
+// (undefined = não mexe), pra uma edição comum (grupo, nome, capacidade) não apagar o que já estava
+// cadastrado ali.
+async function updateCategory(id, { group, label, capacity, provides, requirements }) {
   if (!ObjectId.isValid(id)) return false;
   const categories = await getCategoriesCollection();
   const existing = await categories.findOne({ _id: new ObjectId(id) });
   if (!existing) return false;
   const cleanCapacity = sanitizeCapacity(capacity);
-  const cleanDeps = sanitizeDependencies(dependencies, existing.value);
-  const update = { group, label, capacity: cleanCapacity, dependencies: cleanDeps };
+  const update = { group, label, capacity: cleanCapacity };
   if (provides !== undefined) update.provides = sanitizeProvides(provides);
   if (requirements !== undefined) update.requirements = sanitizeRequirements(requirements);
   const { matchedCount } = await categories.updateOne({ _id: new ObjectId(id) }, { $set: update });
@@ -311,9 +290,19 @@ async function deleteCategory(id) {
     throw new Error(`Não é possível excluir: há ${productsInCategory} produto(s) cadastrado(s) nessa categoria.`);
   }
 
-  const dependentsCount = await categories.countDocuments({ 'dependencies.categoryValue': category.value });
+  // Bloqueia exclusão enquanto algum requirement de presença (direto ou dentro de uma opção de
+  // anyOf) de outra categoria listar esta como candidata — mesma proteção que dependencies[] tinha
+  // no motor antigo, agora pro motor novo. Notação de ponto do Mongo atravessa os dois arrays
+  // (requirements[] e requirements[].options[]) sozinha: casa se QUALQUER elemento tiver o value.
+  const dependentsCount = await categories.countDocuments({
+    _id: { $ne: category._id },
+    $or: [
+      { 'requirements.candidates': category.value },
+      { 'requirements.options.candidates': category.value },
+    ],
+  });
   if (dependentsCount > 0) {
-    throw new Error(`Não é possível excluir: ${dependentsCount} categoria(s) dependem dela.`);
+    throw new Error(`Não é possível excluir: ${dependentsCount} categoria(s) usam esta como candidata em algum requisito.`);
   }
 
   const { deletedCount } = await categories.deleteOne({ _id: new ObjectId(id) });

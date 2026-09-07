@@ -6,7 +6,6 @@ import { SearchView } from '@/components/search/SearchView'
 import { BudgetView } from '@/components/budget/BudgetView'
 import { ProductsView } from '@/components/products/ProductsView'
 import { CategoriesView } from '@/components/categories/CategoriesView'
-import { ResourcesView } from '@/components/resources/ResourcesView'
 
 function App() {
   const [activeTab, setActiveTab] = useState('budget')
@@ -18,11 +17,10 @@ function App() {
       <ViewTabs
         value={activeTab}
         onValueChange={setActiveTab}
-        budgetPanel={<BudgetView onSwitchToSearch={() => setActiveTab('search')} onGoToProducts={() => setActiveTab('products')} onGoToCategories={() => setActiveTab('categories')} onGoToResources={() => setActiveTab('resources')} />}
+        budgetPanel={<BudgetView onSwitchToSearch={() => setActiveTab('search')} onGoToProducts={() => setActiveTab('products')} onGoToCategories={() => setActiveTab('categories')} />}
         searchPanel={<SearchView />}
         productsPanel={<ProductsView />}
         categoriesPanel={<CategoriesView />}
-        resourcesPanel={<ResourcesView />}
       />
       <footer className="mt-10 text-center text-sm text-muted-foreground">
         <p>Comprador Inviolável © 2026 • Análise inteligente de custo-benefício em tempo real</p>
