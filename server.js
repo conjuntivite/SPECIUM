@@ -324,6 +324,28 @@ function satisfyingCategory(candidates, categoryTotals) {
   return candidates.find((value) => categoryTotals.has(value)) || null;
 }
 
+// Ledger global de requisitos `presence`, no mesmo espírito do buildDemandLedger/buildSupplyLedger
+// de `capacity` — sem isso, um requisito de presença fica "satisfeito" assim que existe 1 unidade do
+// candidato em QUALQUER lugar do orçamento, não importa quantas âncoras (ex.: 2 NVR) o exijam ao
+// mesmo tempo, nem quando duas âncoras diferentes (DVR e NVR) disputam a mesma unidade (ex.: 1 HD
+// Interno não cobre um DVR E um NVR simultaneamente). Chave = candidatos ordenados e unidos, a mesma
+// já usada em `key`/`satisfied_by` do requisito.
+function buildPresenceLedger(categoryTotals, byValue) {
+  const demand = new Map();
+  const supply = new Map();
+  for (const [anchorValue, quantity] of categoryTotals) {
+    for (const req of byValue.get(anchorValue)?.requirements || []) {
+      if (req.type !== 'presence') continue;
+      const key = req.candidates.slice().sort().join('|');
+      demand.set(key, (demand.get(key) || 0) + quantity);
+      if (!supply.has(key)) {
+        supply.set(key, req.candidates.reduce((sum, value) => sum + (categoryTotals.get(value) || 0), 0));
+      }
+    }
+  }
+  return { demand, supply };
+}
+
 // Avalia `requirements[]` das categorias-âncora presentes no orçamento contra o ledger global de
 // oferta/demanda. Retorna o mesmo formato de `requirements_by_category`/`missing` do motor antigo
 // (key/label/reason/search_term/essential/severity/satisfied_by), com dois campos a mais:
@@ -336,6 +358,7 @@ function computeResourceRequirements(categoryTotals, categories, byValue) {
   // que candidateCategoriesForResource usa pra priorizar equipamento que resolve mais de um déficit
   // de uma vez (ver comentário lá).
   const deficitResources = new Set([...demand.keys()].filter((resource) => (demand.get(resource) || 0) > (supply.get(resource) || 0)));
+  const { demand: presenceDemand, supply: presenceSupply } = buildPresenceLedger(categoryTotals, byValue);
 
   const requirementsByAnchor = {};
   const missingByKey = new Map();
@@ -347,12 +370,18 @@ function computeResourceRequirements(categoryTotals, categories, byValue) {
 
     for (const req of anchor.requirements) {
       if (req.type === 'presence') {
-        const satisfied_by = satisfyingCategory(req.candidates, categoryTotals);
+        const presenceKey = req.candidates.slice().sort().join('|');
+        const need = presenceDemand.get(presenceKey) || 0;
+        const have = presenceSupply.get(presenceKey) || 0;
+        const deficit = Math.max(0, need - have);
+        const satisfied_by = deficit ? null : satisfyingCategory(req.candidates, categoryTotals);
         evaluated.push({
-          key: `presence:${req.candidates.slice().sort().join('|')}`, label: req.label,
-          reason: buildDependencyReason(anchor.label, req.label, req.critical, false),
+          key: `presence:${presenceKey}`, label: req.label,
+          reason: deficit
+            ? `${req.label}: faltam ${deficit} (${need} necessário${need === 1 ? '' : 's'}, ${have} disponíve${have === 1 ? 'l' : 'is'}).`
+            : buildDependencyReason(anchor.label, req.label, req.critical, false),
           search_term: req.label, essential: true,
-          severity: req.critical && !satisfied_by ? 'critical' : undefined,
+          severity: req.critical && deficit ? 'critical' : undefined,
           satisfied_by, categories: req.candidates,
         });
       } else if (req.type === 'capacity') {
@@ -670,10 +699,12 @@ function validateProductRequest(request) {
   const category = normalize(request.category);
   const brand = normalize(request.brand);
   const model = normalize(request.model);
+  const icon = normalize(request.icon);
   if (!category || category.length > 100) throw new Error('Informe uma categoria válida.');
   if (!brand || brand.length > 50) throw new Error('Informe a marca (até 50 caracteres).');
   if (!model || model.length > 100) throw new Error('Informe o modelo (até 100 caracteres).');
-  return { category, brand, model };
+  if (icon && !/^[a-z0-9-]{1,40}$/.test(icon)) throw new Error('Ícone inválido.');
+  return { category, brand, model, icon };
 }
 
 // provides: [{ resource, amount }] — quanto desse recurso uma unidade desta categoria fornece (ex.:
@@ -736,7 +767,8 @@ function validateCategoryRequest(request) {
   const capacity = Number.isFinite(rawCapacity) && rawCapacity > 0 ? Math.trunc(rawCapacity) : null;
   const provides = validateProvidesShape(request.provides);
   const requirements = validateRequirementsShape(request.requirements);
-  return { group, label, capacity, provides, requirements };
+  const canBeContainer = request.canBeContainer === true;
+  return { group, label, capacity, provides, requirements, canBeContainer };
 }
 
 // key: identificador técnico gravado em provides[].resource/requirements[].resource (ex.:

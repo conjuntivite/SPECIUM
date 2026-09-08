@@ -20,8 +20,9 @@ import {
 } from '@/components/ui/select'
 import { useCategories } from '@/hooks/useCategories'
 import { InfoHint } from '@/components/ui/info-hint'
+import { IconPicker } from '@/components/ui/icon-picker'
 
-const emptyForm = { category: '', brand: '', model: '' }
+const emptyForm = { category: '', brand: '', model: '', icon: '' }
 
 export function ProductFormDialog({ open, product, brands = [], onOpenChange, onSubmit }) {
   const catalog = useCategories()
@@ -31,7 +32,7 @@ export function ProductFormDialog({ open, product, brands = [], onOpenChange, on
 
   useEffect(() => {
     if (open) {
-      setForm(product ? { category: product.category, brand: product.brand, model: product.model } : emptyForm)
+      setForm(product ? { category: product.category, brand: product.brand, model: product.model, icon: product.icon || '' } : emptyForm)
       setError('')
     }
   }, [open, product])
@@ -65,6 +66,18 @@ export function ProductFormDialog({ open, product, brands = [], onOpenChange, on
           </DialogHeader>
 
           <div className="mt-4 flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-1.5">
+                <label className="text-sm font-medium">Ícone (opcional)</label>
+                <InfoHint>
+                  Escolha um ícone pra identificar esse produto de relance. Depois de escolhido, ele
+                  aparece na lista de produtos, no seletor de produto do orçamento e no card do item
+                  dentro do quadro.
+                </InfoHint>
+              </div>
+              <IconPicker value={form.icon} onChange={(icon) => setForm((f) => ({ ...f, icon }))} />
+            </div>
+
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">Categoria</label>
               <Select value={form.category} onValueChange={(value) => setForm((f) => ({ ...f, category: value }))}>

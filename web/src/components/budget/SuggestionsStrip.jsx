@@ -1,17 +1,18 @@
 import { useState } from 'react'
-import { ArrowLeftRight, Asterisk, Lightbulb, OctagonAlert, Plus } from 'lucide-react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faArrowRightArrowLeft, faAsterisk, faLightbulb, faCircleExclamation, faPlus } from '@fortawesome/free-solid-svg-icons'
 
 const SEVERITY_STYLES = {
-  critical: { border: 'border-l-flow-red', bg: 'bg-flow-red/12', Icon: OctagonAlert, kind: 'Sem isso não liga' },
-  optional: { border: 'border-l-flow-orange', bg: '', Icon: ArrowLeftRight, kind: 'Alternativa (opcional)' },
-  essential: { border: 'border-l-flow-amber', bg: '', Icon: Asterisk, kind: 'Essencial' },
+  critical: { border: 'border-l-flow-red', bg: 'bg-flow-red/12', icon: faCircleExclamation, kind: 'Sem isso não liga' },
+  optional: { border: 'border-l-flow-orange', bg: '', icon: faArrowRightArrowLeft, kind: 'Alternativa (opcional)' },
+  essential: { border: 'border-l-flow-amber', bg: '', icon: faAsterisk, kind: 'Essencial' },
 }
 
 function suggestionStyle(req) {
   if (req.severity === 'critical') return SEVERITY_STYLES.critical
   if (req.severity === 'optional') return SEVERITY_STYLES.optional
   if (req.essential) return SEVERITY_STYLES.essential
-  return { border: 'border-l-flow-gray', bg: '', Icon: Lightbulb, kind: 'Recomendado' }
+  return { border: 'border-l-flow-gray', bg: '', icon: faLightbulb, kind: 'Recomendado' }
 }
 
 function SuggestionCard({ req, onAdd }) {
@@ -36,11 +37,11 @@ function SuggestionCard({ req, onAdd }) {
         onClick={() => onAdd(req)}
         className="absolute right-1 top-1 flex size-3.5 items-center justify-center rounded-full bg-white/10 text-muted-foreground transition-colors hover:bg-flow-green hover:text-flow-green-text"
       >
-        <Plus className="size-2.5" />
+        <FontAwesomeIcon icon={faPlus} className="size-2.5" />
       </button>
       <span className="mb-0.5 block truncate pr-4 text-xs font-semibold">{req.label}</span>
       <span className="mb-0.5 flex items-center gap-1 truncate text-[0.65rem] text-muted-foreground">
-        <style.Icon className="size-3 shrink-0" /> {style.kind}
+        <FontAwesomeIcon icon={style.icon} className="size-3 shrink-0" /> {style.kind}
       </span>
       <span className="line-clamp-2 text-[0.65rem] leading-snug text-muted-foreground">{req.reason || ''}</span>
     </div>

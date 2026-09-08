@@ -3,7 +3,8 @@ import { cn } from "cn"
 import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { Button } from "@/components/ui/button"
-import { XIcon } from "lucide-react"
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
+import { faXmark } from "@fortawesome/free-solid-svg-icons"
 
 function Dialog({
   ...props
@@ -70,8 +71,7 @@ function DialogContent({
               className="absolute top-2 right-2"
               size="icon-sm"
             >
-              <XIcon
-              />
+              <FontAwesomeIcon icon={faXmark} />
               <span className="sr-only">Close</span>
             </Button>
           </DialogPrimitive.Close>

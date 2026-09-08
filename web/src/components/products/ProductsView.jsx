@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Search } from 'lucide-react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+import { ProductIcon } from '@/components/ui/product-icon'
 import { normalizeSearch } from '@/lib/utils'
 import { createProduct, deleteProduct, getProducts, updateProduct } from '@/lib/api'
 import { useCategories } from '@/hooks/useCategories'
@@ -87,7 +89,7 @@ export function ProductsView() {
 
       {products.length ? (
         <div className="relative mb-3">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <FontAwesomeIcon icon={faMagnifyingGlass} className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -101,6 +103,7 @@ export function ProductsView() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10"></TableHead>
               <TableHead>Categoria</TableHead>
               <TableHead>Marca</TableHead>
               <TableHead>Modelo</TableHead>
@@ -110,6 +113,7 @@ export function ProductsView() {
           <TableBody>
             {filteredProducts.map((product) => (
               <TableRow key={product.id}>
+                <TableCell><ProductIcon icon={product.icon} className="size-4 text-muted-foreground" /></TableCell>
                 <TableCell>{categoryLabels[product.category] || product.category}</TableCell>
                 <TableCell>{product.brand}</TableCell>
                 <TableCell>{product.model}</TableCell>

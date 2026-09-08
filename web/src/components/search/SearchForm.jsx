@@ -1,4 +1,5 @@
-import { Search } from 'lucide-react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -120,7 +121,7 @@ export function SearchForm({
       <QuickTags onSelect={onQuickTag} />
 
       <Button type="submit" disabled={isLoading} className="self-start">
-        <Search className="size-4" /> Buscar Melhores Ofertas
+        <FontAwesomeIcon icon={faMagnifyingGlass} className="size-4" /> Buscar Melhores Ofertas
       </Button>
     </form>
   )

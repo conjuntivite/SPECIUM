@@ -1,4 +1,5 @@
-import { Lightbulb } from 'lucide-react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faLightbulb } from '@fortawesome/free-solid-svg-icons'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -45,7 +46,7 @@ export function DealCard({ deal, isPrimary, rankLabel, checked, disabled, onTogg
         </p>
         {deal.recommendation_reason ? (
           <div className="mb-2 flex items-start gap-1.5 rounded-lg bg-white/5 p-2 text-sm">
-            <Lightbulb className="size-4 shrink-0 translate-y-0.5" /> {deal.recommendation_reason}
+            <FontAwesomeIcon icon={faLightbulb} className="size-4 shrink-0 translate-y-0.5" /> {deal.recommendation_reason}
           </div>
         ) : null}
         {deal.installment_info ? (

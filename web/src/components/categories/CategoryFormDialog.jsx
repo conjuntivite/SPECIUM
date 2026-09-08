@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Copy } from 'lucide-react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faCopy } from '@fortawesome/free-solid-svg-icons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { GroupCombobox } from './GroupCombobox'
@@ -21,7 +22,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select'
 
-const emptyForm = { group: '', label: '', capacity: '', capacityTouched: false }
+const emptyForm = { group: '', label: '', capacity: '', capacityTouched: false, canBeContainer: false }
 
 // Mesmo padrão do inferSeedCapacity em db.js: o número já está no nome ("Switch Giga 8 Portas",
 // "DVR 16 Canais"), então preenchemos sozinhos em vez de pedir pra digitar de novo. Categorias sem
@@ -97,7 +98,7 @@ export function CategoryFormDialog({
     if (open) {
       setForm(
         category
-          ? { group: category.group, label: category.label, capacity: category.capacity ?? '', capacityTouched: category.capacity != null }
+          ? { group: category.group, label: category.label, capacity: category.capacity ?? '', capacityTouched: category.capacity != null, canBeContainer: !!category.canBeContainer }
           : emptyForm
       )
       setProvides((category?.provides || []).map((p) => ({ ...p })))
@@ -130,7 +131,7 @@ export function CategoryFormDialog({
     try {
       const capacity = form.capacity === '' ? null : Math.max(1, Math.trunc(Number(form.capacity)) || 1)
       await onSubmit({
-        group: form.group, label: form.label, capacity,
+        group: form.group, label: form.label, capacity, canBeContainer: form.canBeContainer,
         provides: cleanProvides(provides), requirements: cleanRequirements(requirements),
       })
     } catch (err) {
@@ -178,6 +179,26 @@ export function CategoryFormDialog({
               />
             </div>
 
+            <div className="flex items-center gap-1.5">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  className="size-4"
+                  checked={form.canBeContainer}
+                  onChange={(e) => setForm((f) => ({ ...f, canBeContainer: e.target.checked }))}
+                />
+                Pode funcionar como container (ex.: Rack, Caixa hermética)
+              </label>
+              <InfoHint>
+                Categorias marcadas como container ganham um botão "Abrir Container" no card do
+                orçamento — dá pra mover outros equipamentos pra dentro dele, que somem do canvas
+                principal enquanto o container estiver fechado.
+                <br /><br />
+                <strong>Exemplo:</strong> um Rack contendo Nobreak, Switch e NVR aparece fechado
+                como um card só ("3 equipamentos internos"), sem os três ocupando espaço à parte.
+              </InfoHint>
+            </div>
+
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-1.5">
                 <label className="text-sm font-medium">Capacidade (opcional)</label>
@@ -207,7 +228,7 @@ export function CategoryFormDialog({
                   <div className="w-fit">
                     <Select value={copyFromValue} onValueChange={copyFrom}>
                       <SelectTrigger size="sm" className="w-fit px-2">
-                        <Copy className="size-3.5" />
+                        <FontAwesomeIcon icon={faCopy} className="size-3.5" />
                       </SelectTrigger>
                       <SelectContent>
                         {copyableFrom.map((c) => (<SelectItem key={c.id} value={c.value}>{c.label}</SelectItem>))}

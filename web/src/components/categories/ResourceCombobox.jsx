@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, Trash2 } from 'lucide-react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faChevronDown, faTrashCan } from '@fortawesome/free-solid-svg-icons'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { InfoHint } from '@/components/ui/info-hint'
@@ -125,7 +126,7 @@ export function ResourceCombobox({ value, onChange, resources, onCreateResource,
         placeholder="Ex: Porta Gigabit, Canal de gravação IP..."
         className="pr-8"
       />
-      <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+      <FontAwesomeIcon icon={faChevronDown} className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
 
       {open ? (
         <div className="absolute z-[60] mt-1 w-full rounded-md border border-input bg-popover p-1 text-popover-foreground shadow-md">
@@ -165,7 +166,7 @@ export function ResourceCombobox({ value, onChange, resources, onCreateResource,
                       title="Excluir recurso"
                       onClick={(e) => handleDeleteRow(e, r)}
                     >
-                      <Trash2 className="size-3.5" />
+                      <FontAwesomeIcon icon={faTrashCan} className="size-3.5" />
                     </button>
                   </div>
                 ))

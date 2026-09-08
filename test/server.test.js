@@ -602,6 +602,57 @@ test('computeCategoryMissingEssentials (motor de recursos): capacidade soma entr
   assert.equal(recording.deficit, 0);
 });
 
+function nvrWithHdFixture(channels) {
+  return fixtureResourceCategory(`NVR ${channels} Canais`, {
+    provides: [{ resource: 'recording.ip_channel', amount: channels }],
+    requirements: [
+      { id: 'hd', label: 'HD Interno (armazenamento)', type: 'presence', candidates: ['HD Interno (armazenamento)'], critical: true },
+    ],
+  });
+}
+
+test('computeCategoryMissingEssentials (motor de recursos): presença soma por quantidade de âncoras — 2 NVR exigem 2 HD Interno, não 1', () => {
+  const categories = [nvrWithHdFixture(4), fixtureCategory('HD Interno (armazenamento)')];
+  const result = computeCategoryMissingEssentials([
+    { title: 'NVR 4 Canais Intelbras', quantity: 2 },
+    { title: 'HD Interno (armazenamento) 2TB', quantity: 1 },
+  ], categories);
+
+  const hd = result.requirements_by_category['NVR 4 Canais'].find((r) => r.key.startsWith('presence:'));
+  assert.equal(hd.severity, 'critical');
+  assert.equal(hd.satisfied_by, null);
+});
+
+test('computeCategoryMissingEssentials (motor de recursos): presença fecha quando a oferta cobre a demanda de todas as âncoras', () => {
+  const categories = [nvrWithHdFixture(4), fixtureCategory('HD Interno (armazenamento)')];
+  const result = computeCategoryMissingEssentials([
+    { title: 'NVR 4 Canais Intelbras', quantity: 2 },
+    { title: 'HD Interno (armazenamento) 2TB', quantity: 2 },
+  ], categories);
+
+  const hd = result.requirements_by_category['NVR 4 Canais'].find((r) => r.key.startsWith('presence:'));
+  assert.equal(hd.severity, undefined);
+  assert.equal(hd.satisfied_by, 'HD Interno (armazenamento)');
+});
+
+test('computeCategoryMissingEssentials (motor de recursos): duas âncoras diferentes (DVR e NVR) não dividem a mesma unidade de presença', () => {
+  const categories = [
+    nvrWithHdFixture(4),
+    fixtureResourceCategory('DVR 4 Canais', { requirements: [
+      { id: 'hd', label: 'HD Interno (armazenamento)', type: 'presence', candidates: ['HD Interno (armazenamento)'], critical: true },
+    ] }),
+    fixtureCategory('HD Interno (armazenamento)'),
+  ];
+  const result = computeCategoryMissingEssentials([
+    { title: 'NVR 4 Canais Intelbras', quantity: 1 },
+    { title: 'DVR 4 Canais Intelbras', quantity: 1 },
+    { title: 'HD Interno (armazenamento) 2TB', quantity: 1 },
+  ], categories);
+
+  assert.equal(result.requirements_by_category['NVR 4 Canais'].find((r) => r.key.startsWith('presence:')).severity, 'critical');
+  assert.equal(result.requirements_by_category['DVR 4 Canais'].find((r) => r.key.startsWith('presence:')).severity, 'critical');
+});
+
 test('POST /api/recipe/prices searches each suggested item and reports its average price', async (t) => {
   setGoogleShoppingFetcher(async () => new Response(JSON.stringify([intelbrasProduct({ productName: 'Switch PoE Intelbras', linkText: 'switch-poe' })]), { status: 200 }));
   t.after(() => setGoogleShoppingFetcher((...args) => fetch(...args)));
@@ -683,12 +734,15 @@ test('CRUD de /api/categories: lista a pré-build semeada, cadastra, atualiza e 
 
   const created = await fetch(`${baseUrl}/api/categories`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ group: '__teste__ Grupo', label }),
+    body: JSON.stringify({ group: '__teste__ Grupo', label, canBeContainer: true }),
   });
   const category = await created.json();
   assert.equal(created.status, 201);
   assert.equal(category.group, '__teste__ Grupo');
   assert.equal(category.value, label);
+  // canBeContainer (container de itens no canvas, ex.: Rack) é boolean simples — sem candidate
+  // list pra colidir, então pode ser criado e devolvido de cara, sem precisar de outro requisito.
+  assert.equal(category.canBeContainer, true);
 
   // "value" (=label) é a chave usada em products.category/requirements.candidates/provides.resource
   // em toda a base — duplicata colidiria nela, então recusa mesmo em outro grupo e mesmo com
@@ -711,7 +765,12 @@ test('CRUD de /api/categories: lista a pré-build semeada, cadastra, atualiza e 
     body: JSON.stringify({ group: '__teste__ Grupo 2', label: `${label} editado` }),
   });
   assert.equal(updated.status, 200);
-  assert.equal((await updated.json()).label, `${label} editado`);
+  const updatedBody = await updated.json();
+  assert.equal(updatedBody.label, `${label} editado`);
+  // canBeContainer viaja no mesmo corpo que group/label/capacity a cada salvamento do form (não é
+  // campo de edição parcial como provides/requirements) — omitir no PUT desliga, igual a desmarcar
+  // o checkbox no cadastro.
+  assert.equal(updatedBody.canBeContainer, false);
 
   const missingUpdate = await fetch(`${baseUrl}/api/categories/ffffffffffffffffffffffff`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },

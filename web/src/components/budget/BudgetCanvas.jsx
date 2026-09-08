@@ -1,7 +1,8 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
-import { ReactFlow, Background, BackgroundVariant, applyNodeChanges, useReactFlow } from '@xyflow/react'
+import { ReactFlow, Background, BackgroundVariant, applyNodeChanges, applyEdgeChanges, useReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { CircleDollarSign, Maximize2, Plus, Trash2, ZoomIn, ZoomOut } from 'lucide-react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faSackDollar, faExpand, faPlus, faTrashCan, faMagnifyingGlassPlus, faMagnifyingGlassMinus } from '@fortawesome/free-solid-svg-icons'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -53,15 +54,69 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
   // real; só ao soltar (onNodeDragStop) a posição final é persistida em budget.positions.
   const [nodes, setNodes] = useState([])
 
+  const looseItems = useMemo(() => budget.items.filter((item) => item.containerId == null), [budget.items])
+
+  // Toda entrada no orçamento — item de categoria do menu, sugestão arrastada ou clicada na
+  // listinha lateral, ou "+ Novo equipamento" dentro de um container aberto — para aqui antes de
+  // virar nó: { label, categories, fallbackTitle, position, containerId? }. `position` já vem em
+  // coordenadas do flow (indefinida = useBudget decide um layout automático); `containerId` marca
+  // que o item nasce dentro de um container em vez de solto no canvas.
+  const [productPrompt, setProductPrompt] = useState(null)
+
+  // "+ Novo equipamento" dentro de um container aberto (ContainerAddPanel, via FlowNode).
+  const handleAddCategoryToContainer = useCallback((containerId, item) => {
+    setProductPrompt({ label: item.label, categories: [item.value], fallbackTitle: item.value, position: undefined, containerId })
+  }, [])
+
+  // Excluir um item que é container com filhos dentro merece confirmação — os filhos não são
+  // excluídos junto (useBudget.removeItem já garante isso), mas o usuário precisa saber que eles
+  // voltam soltos pro canvas antes de clicar (recurso-container.txt, seção 11).
+  const handleNodeRemove = useCallback((itemId, childCount) => {
+    if (childCount > 0) {
+      const ok = window.confirm(
+        `Este item contém ${childCount} equipamento${childCount === 1 ? '' : 's'} interno${childCount === 1 ? '' : 's'}. ` +
+        'Removê-lo NÃO exclui os equipamentos internos — eles voltam soltos pro canvas principal.\n\nContinuar?'
+      )
+      if (!ok) return
+    }
+    budget.removeItem(itemId)
+  }, [budget])
+
   useEffect(() => {
     setNodes(budget.nodes.map((node) => ({
       ...node,
-      data: { ...node.data, onRemove: budget.removeItem, onQtyChange: budget.updateQuantity },
+      data: {
+        ...node.data,
+        onRemove: () => handleNodeRemove(node.data.item.id, node.data.childCount),
+        onQtyChange: budget.updateQuantity,
+        onToggleContainer: budget.toggleContainer,
+        onRemoveFromContainer: budget.removeFromContainer,
+        onMoveToContainer: budget.moveToContainer,
+        onResizeContainer: budget.resizeContainer,
+        onAddCategoryToContainer: handleAddCategoryToContainer,
+        // Item solto não pode "mover pra dentro de si mesmo" — filtra o próprio container da lista
+        // que o ContainerAddPanel dele mostra (só importa pra node que é container, mas filtrar
+        // sempre é mais simples do que decidir condicionalmente aqui).
+        looseItems: looseItems.filter((loose) => loose.id !== node.data.item.id),
+      },
     })))
-  }, [budget.nodes, budget.removeItem, budget.updateQuantity])
+  }, [budget.nodes, handleNodeRemove, budget.updateQuantity, budget.toggleContainer, budget.removeFromContainer, budget.moveToContainer, budget.resizeContainer, handleAddCategoryToContainer, looseItems])
 
   const onNodesChange = useCallback((changes) => {
     setNodes((nds) => applyNodeChanges(changes, nds))
+  }, [])
+
+  // Mesmo motivo do espelho de nodes acima: como `edges` é controlado (vem pronto de budget.edges),
+  // sem esse estado local + onEdgesChange o clique numa aresta pra selecioná-la (e depois apagar com
+  // Delete) não "gruda" — o React Flow não tem onde guardar o `selected: true` antes do próximo render.
+  const [edges, setEdges] = useState([])
+
+  useEffect(() => {
+    setEdges(budget.edges)
+  }, [budget.edges])
+
+  const onEdgesChange = useCallback((changes) => {
+    setEdges((eds) => applyEdgeChanges(changes, eds))
   }, [])
 
   const handleNodeDragStop = useCallback((_event, node) => {
@@ -70,20 +125,24 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
 
   const handleNodesDelete = useCallback((deleted) => {
     deleted.forEach((node) => {
-      if (node.data?.item) budget.removeItem(node.data.item.id)
+      if (node.data?.item) handleNodeRemove(node.data.item.id, node.data.childCount)
     })
+  }, [handleNodeRemove])
+
+  // Ligação manual: o usuário arrasta de um handle a outro pra conectar dois cards — sem isso, só as
+  // arestas automáticas do motor de sugestões apareciam no quadro.
+  const handleConnect = useCallback((connection) => {
+    budget.addConnection(connection.source, connection.target, connection.sourceHandle, connection.targetHandle)
+  }, [budget])
+
+  const handleEdgesDelete = useCallback((deleted) => {
+    deleted.forEach((edge) => budget.removeConnection(edge.id))
   }, [budget])
 
   const handleDragOver = useCallback((e) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'copy'
   }, [])
-
-  // Toda entrada no orçamento — item de categoria do menu, sugestão arrastada ou clicada na
-  // listinha lateral — para aqui antes de virar nó: { label, categories, fallbackTitle, position }.
-  // `position` já vem em coordenadas do flow (indefinida = useBudget decide um layout automático,
-  // caso do clique na sugestão, que não tem ponto de solto).
-  const [productPrompt, setProductPrompt] = useState(null)
 
   // Drag-and-drop nativo (HTML5 DnD) da suggestions strip pro canvas — independente do drag interno
   // do React Flow usado pra mover nós já existentes.
@@ -103,12 +162,12 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
   }
 
   function handleProductPick(product) {
-    if (productPrompt) budget.addItem(composeProductTitle(product), 1, productPrompt.position)
+    if (productPrompt) budget.addItem(composeProductTitle(product), 1, productPrompt.position, product.icon, productPrompt.containerId ?? null)
     setProductPrompt(null)
   }
 
   function handleProductSkip() {
-    if (productPrompt) budget.addItem(productPrompt.fallbackTitle, 1, productPrompt.position)
+    if (productPrompt) budget.addItem(productPrompt.fallbackTitle, 1, productPrompt.position, null, productPrompt.containerId ?? null)
     setProductPrompt(null)
   }
 
@@ -134,12 +193,17 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
         >
           <ReactFlow
             nodes={nodes}
-            edges={budget.edges}
+            edges={edges}
             nodeTypes={nodeTypes}
             defaultEdgeOptions={defaultEdgeOptions}
             onNodesChange={onNodesChange}
             onNodeDragStop={handleNodeDragStop}
             onNodesDelete={handleNodesDelete}
+            onEdgesChange={onEdgesChange}
+            onConnect={handleConnect}
+            onEdgesDelete={handleEdgesDelete}
+            connectionMode="loose"
+            connectionRadius={45}
             deleteKeyCode={['Delete', 'Backspace']}
           >
             <Background variant={BackgroundVariant.Lines} gap={90} color="var(--color-flow-grid)" />
@@ -149,7 +213,7 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
 
       <ContextMenuContent className="w-64">
         <ContextMenuSub>
-          <ContextMenuSubTrigger><Plus className="size-4" /> Adicionar item</ContextMenuSubTrigger>
+          <ContextMenuSubTrigger><FontAwesomeIcon icon={faPlus} className="size-4" /> Adicionar item</ContextMenuSubTrigger>
           <ContextMenuSubContent className="max-h-[70vh] overflow-y-auto">
             {catalog.map((group) => (
               <ContextMenuSub key={group.group}>
@@ -167,23 +231,23 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
         </ContextMenuSub>
 
         <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => zoomIn()}><ZoomIn className="size-4" /> Aumentar zoom</ContextMenuItem>
-        <ContextMenuItem onSelect={() => zoomOut()}><ZoomOut className="size-4" /> Diminuir zoom</ContextMenuItem>
-        <ContextMenuItem onSelect={() => fitView()}><Maximize2 className="size-4" /> Centralizar</ContextMenuItem>
+        <ContextMenuItem onSelect={() => zoomIn()}><FontAwesomeIcon icon={faMagnifyingGlassPlus} className="size-4" /> Aumentar zoom</ContextMenuItem>
+        <ContextMenuItem onSelect={() => zoomOut()}><FontAwesomeIcon icon={faMagnifyingGlassMinus} className="size-4" /> Diminuir zoom</ContextMenuItem>
+        <ContextMenuItem onSelect={() => fitView()}><FontAwesomeIcon icon={faExpand} className="size-4" /> Centralizar</ContextMenuItem>
 
         <ContextMenuSeparator />
         <ContextMenuItem
           disabled={!budget.items.length || budget.priceLoading}
           onSelect={() => budget.checkPrices()}
         >
-          <CircleDollarSign className="size-4" /> Verificar preços
+          <FontAwesomeIcon icon={faSackDollar} className="size-4" /> Verificar preços
         </ContextMenuItem>
         <ContextMenuItem
           variant="destructive"
           disabled={!budget.items.length}
           onSelect={() => budget.clearAll()}
         >
-          <Trash2 className="size-4" /> Limpar fluxo
+          <FontAwesomeIcon icon={faTrashCan} className="size-4" /> Limpar fluxo
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

@@ -1,7 +1,8 @@
 import * as React from "react"
 import { cn } from "cn"
 import { ContextMenu as ContextMenuPrimitive } from "radix-ui"
-import { ChevronRightIcon, CheckIcon } from "lucide-react"
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
+import { faChevronRight, faCheck } from "@fortawesome/free-solid-svg-icons"
 
 function ContextMenu({
   ...props
@@ -107,7 +108,7 @@ function ContextMenuSubTrigger({
       {...props}
     >
       {children}
-      <ChevronRightIcon className="ml-auto" />
+      <FontAwesomeIcon icon={faChevronRight} className="ml-auto" />
     </ContextMenuPrimitive.SubTrigger>
   )
 }
@@ -145,8 +146,7 @@ function ContextMenuCheckboxItem({
     >
       <span className="pointer-events-none absolute right-2">
         <ContextMenuPrimitive.ItemIndicator>
-          <CheckIcon
-          />
+          <FontAwesomeIcon icon={faCheck} />
         </ContextMenuPrimitive.ItemIndicator>
       </span>
       {children}
@@ -172,8 +172,7 @@ function ContextMenuRadioItem({
     >
       <span className="pointer-events-none absolute right-2">
         <ContextMenuPrimitive.ItemIndicator>
-          <CheckIcon
-          />
+          <FontAwesomeIcon icon={faCheck} />
         </ContextMenuPrimitive.ItemIndicator>
       </span>
       {children}

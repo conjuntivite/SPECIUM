@@ -1,4 +1,5 @@
-import { TriangleAlert } from 'lucide-react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
 export function ErrorAlert({ message }) {
@@ -6,7 +7,7 @@ export function ErrorAlert({ message }) {
   return (
     <Alert variant="destructive">
       <AlertDescription className="flex items-center gap-1.5">
-        <TriangleAlert className="size-4" /> {message}
+        <FontAwesomeIcon icon={faTriangleExclamation} className="size-4" /> {message}
       </AlertDescription>
     </Alert>
   )

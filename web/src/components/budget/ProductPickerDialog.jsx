@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog'
 import { getProducts } from '@/lib/api'
 import { useCategories } from '@/hooks/useCategories'
+import { ProductIcon } from '@/components/ui/product-icon'
 
 // Toda entrada no orçamento — item de categoria do menu, ou sugestão da listinha lateral (clicada ou
 // arrastada) — passa por aqui antes de virar nó no quadro. `prompt.categories` pode ter mais de um
@@ -69,6 +70,7 @@ export function ProductPickerDialog({ prompt, onPick, onSkip, onOpenChange, onGo
                 className="justify-start"
                 onClick={() => onPick(product)}
               >
+                <ProductIcon icon={product.icon} className="size-4 shrink-0" />
                 {showCategoryPerRow ? `${categoryLabels[product.category] || product.category} — ` : ''}
                 {product.brand} — {product.model}
               </Button>

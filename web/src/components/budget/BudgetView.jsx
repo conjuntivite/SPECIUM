@@ -1,5 +1,6 @@
 import { useRef } from 'react'
-import { Package, Search, Tag, TriangleAlert } from 'lucide-react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faBox, faMagnifyingGlass, faTag, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
 import { ReactFlowProvider } from '@xyflow/react'
 import { useBudget } from '@/hooks/useBudget'
 import { formatBRL } from '@/lib/money'
@@ -30,21 +31,21 @@ export function BudgetView({ onSwitchToSearch, onGoToProducts, onGoToCategories 
                 onClick={onSwitchToSearch}
                 className="flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur transition-colors hover:bg-secondary"
               >
-                <Search className="size-4" /> Busca avançada por item
+                <FontAwesomeIcon icon={faMagnifyingGlass} className="size-4" /> Busca avançada por item
               </button>
               <button
                 type="button"
                 onClick={onGoToProducts}
                 className="flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur transition-colors hover:bg-secondary"
               >
-                <Package className="size-4" /> Produtos
+                <FontAwesomeIcon icon={faBox} className="size-4" /> Produtos
               </button>
               <button
                 type="button"
                 onClick={onGoToCategories}
                 className="flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur transition-colors hover:bg-secondary"
               >
-                <Tag className="size-4" /> Categorias
+                <FontAwesomeIcon icon={faTag} className="size-4" /> Categorias
               </button>
             </div>
 
@@ -73,7 +74,7 @@ export function BudgetView({ onSwitchToSearch, onGoToProducts, onGoToCategories 
         {budget.priceError ? (
           <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center">
             <p className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-destructive/40 bg-card/90 px-4 py-1.5 text-sm text-destructive backdrop-blur">
-              <TriangleAlert className="size-4" /> {budget.priceError}
+              <FontAwesomeIcon icon={faTriangleExclamation} className="size-4" /> {budget.priceError}
             </p>
           </div>
         ) : null}
