@@ -1,4 +1,4 @@
-# Comprador Inviolável
+# Orçamento Inteligente
 
 Ferramenta para o comercial montar o orçamento de uma instalação de segurança eletrônica sem esquecer equipamento. Você vai adicionando os itens que o cliente vai levar (câmera IP, DVR, switch...); a cada item, o sistema recalcula quais complementos ainda faltam para a instalação funcionar de verdade (cabo, switch PoE, caixa Steck, gravação etc.), separando o que é essencial do que é só recomendado. Preço não é mais o ponto de partida — só é consultado quando o comercial pede, item por item, contra Intelbras/Amazon/Google Shopping.
 
