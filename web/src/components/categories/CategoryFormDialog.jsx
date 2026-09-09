@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input'
 import { GroupCombobox } from './GroupCombobox'
 import { ProvidesEditor, RequirementsEditor } from './RequirementsEditor'
 import { InfoHint } from '@/components/ui/info-hint'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Dialog,
   DialogContent,
@@ -220,30 +219,28 @@ export function CategoryFormDialog({
             </div>
 
             {copyableFrom.length ? (
-              // O tooltip ancora num wrapper, não no próprio SelectTrigger — dois "asChild"
-              // disputando a mesma ref (Tooltip E o posicionamento interno do Select) fazia o
-              // SelectContent renderizar desalinhado e o clique num item não disparar onValueChange.
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="w-fit">
-                    <Select value={copyFromValue} onValueChange={copyFrom}>
-                      <SelectTrigger size="sm" className="w-fit px-2">
-                        <FontAwesomeIcon icon={faCopy} className="size-3.5" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {copyableFrom.map((c) => (<SelectItem key={c.id} value={c.value}>{c.label}</SelectItem>))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
+              // InfoHint ao lado, não em volta do Select (Tooltip+Select aninhados brigavam pela
+              // mesma ref). position="popper": o modo padrão ("item-aligned") tenta abrir o menu
+              // alinhado sobre o item já selecionado — sem nenhum valor selecionado (é sempre "",
+              // dispara ao escolher e não fica marcado, de propósito) o Radix não acha esse item
+              // pra ancorar e o menu nascia a milhares de pixels de distância, no fim da página.
+              <div className="flex items-center gap-1.5">
+                <Select value={copyFromValue} onValueChange={copyFrom}>
+                  <SelectTrigger size="sm" className="w-fit px-2">
+                    <FontAwesomeIcon icon={faCopy} className="size-3.5" />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    {copyableFrom.map((c) => (<SelectItem key={c.id} value={c.value}>{c.label}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+                <InfoHint>
                   Copia o que outra categoria já cadastrada fornece e exige (recursos/requisitos)
                   pra esta, sem redigitar tudo.
                   <br /><br />
                   <strong>Exemplo:</strong> criar "Switch Giga 24 Portas" copiando de "Switch Giga
                   16 Portas" e só ajustar a capacidade.
-                </TooltipContent>
-              </Tooltip>
+                </InfoHint>
+              </div>
             ) : null}
 
             <ProvidesEditor

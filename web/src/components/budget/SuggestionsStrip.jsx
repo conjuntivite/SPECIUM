@@ -28,14 +28,14 @@ function SuggestionCard({ req, onAdd }) {
         setDragging(true)
       }}
       onDragEnd={() => setDragging(false)}
-      className={`relative w-[110px] shrink-0 cursor-grab select-none rounded-md border-l-2 px-1.5 py-1 transition-opacity active:cursor-grabbing ${style.border} ${style.bg || 'bg-white/4'} ${dragging ? 'opacity-40' : ''}`}
+      className={`relative w-full shrink-0 cursor-grab select-none rounded-md border-l-2 px-2 py-1.5 transition-opacity active:cursor-grabbing ${style.border} ${style.bg || 'bg-white/4'} ${dragging ? 'opacity-40' : ''}`}
     >
       <button
         type="button"
         title="Adicionar ao quadro"
         onMouseDown={(e) => e.stopPropagation()}
         onClick={() => onAdd(req)}
-        className="absolute right-1 top-1 flex size-3.5 items-center justify-center rounded-full bg-white/10 text-muted-foreground transition-colors hover:bg-flow-green hover:text-flow-green-text"
+        className="absolute right-1.5 top-1.5 flex size-3.5 items-center justify-center rounded-full bg-white/10 text-muted-foreground transition-colors hover:bg-flow-green hover:text-flow-green-text"
       >
         <FontAwesomeIcon icon={faPlus} className="size-2.5" />
       </button>
@@ -48,21 +48,24 @@ function SuggestionCard({ req, onAdd }) {
   )
 }
 
+// Coluna vertical (era faixa horizontal no topo) — cabe na borda direita do canvas, ao lado dos
+// cards, sem disputar espaço horizontal com eles. Rolagem própria (max-h vem de quem posiciona,
+// em BudgetView) pra lista de sugestões não empurrar o painel pra fora da tela quando crescer.
 export function SuggestionsStrip({ suggestions, onAdd }) {
   return (
-    <div className="mb-2 flex items-center gap-2 rounded-xl border border-border bg-white/[0.02] px-2.5 py-2">
-      <div className="w-[110px] shrink-0">
+    <div className="flex max-h-full w-56 flex-col gap-2 rounded-xl border border-border bg-white/[0.02] p-2.5">
+      <div className="shrink-0">
         <h3 className="text-xs font-bold">Sugestões</h3>
         <p className="text-[0.65rem] leading-snug text-muted-foreground">Arraste ou clique no +.</p>
       </div>
       {suggestions.length ? (
-        <div className="flex flex-1 items-stretch gap-1.5 overflow-x-auto pb-1">
+        <div className="flex flex-col gap-1.5 overflow-y-auto">
           {suggestions.map((req) => (
             <SuggestionCard key={req.key} req={req} onAdd={onAdd} />
           ))}
         </div>
       ) : (
-        <p className="whitespace-nowrap text-xs text-muted-foreground">Nenhuma sugestão pendente.</p>
+        <p className="text-xs text-muted-foreground">Nenhuma sugestão pendente.</p>
       )}
     </div>
   )

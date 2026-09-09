@@ -13,7 +13,9 @@ const handleClass = '!size-2.5 !border-2 !border-[#0a0d14] !bg-slate-300'
 // usada tanto aqui (tamanho do próprio node) quanto em useBudget.js (posição relativa de cada
 // filho) — os dois têm que concordar, senão os filhos desalinham do espaço reservado no card.
 export const CONTAINER_GRID = { columns: 2, spacingX: 236, spacingY: 128, originX: 16, originY: 58 }
-const CONTAINER_FOOTER_HEIGHT = 64
+// 72 = padding (16) + os dois selects do rodapé empilhados (28px cada + 6px de gap) quando há item
+// solto no canvas pra mover — com só 64 o segundo select ficava cortado pelo overflow-hidden do card.
+const CONTAINER_FOOTER_HEIGHT = 72
 
 export function containerChildRows(childCount) {
   return Math.max(1, Math.ceil(childCount / CONTAINER_GRID.columns))
@@ -58,14 +60,16 @@ function NodeTitle({ item }) {
   )
 }
 
-export function FlowNode({ data, dragging }) {
+export function FlowNode({ data, dragging, selected }) {
   const {
     item, onRemove, onQtyChange, hasCriticalGap,
     isContainer, containerOpen, containerSize, childCount, childQuantityTotal, childValueTotal,
     containedIn, onToggleContainer, onRemoveFromContainer, onAddCategoryToContainer, onMoveToContainer, onResizeContainer, looseItems,
   } = data
   const unitValue = parseBRL(item.averagePrice)
-  const borderClass = hasCriticalGap ? 'border-flow-red' : 'border-transparent'
+  // Seleção (clique/shift/ctrl+clique, ou caixa de seleção) tem prioridade visual sobre o alerta de
+  // lacuna crítica — o usuário precisa ver o que está selecionado antes de arrastar o grupo.
+  const borderClass = selected ? 'border-cyan-400' : hasCriticalGap ? 'border-flow-red' : 'border-transparent'
 
   // Container fechado: card compacto de resumo, sem os filhos ocupando espaço no canvas.
   if (isContainer && !containerOpen) {
@@ -111,7 +115,7 @@ export function FlowNode({ data, dragging }) {
     const rows = containerChildRows(childCount)
     return (
       <motion.div
-        className={`overflow-hidden rounded-lg border-2 ${borderClass}`}
+        className={`overflow-hidden rounded-lg border-2 bg-flow-body ${borderClass}`}
         style={{ width, height }}
         animate={{ scale: dragging ? 1.02 : 1, boxShadow: dragging ? draggingShadow : restShadow }}
         transition={{ type: 'spring', stiffness: 500, damping: 32, mass: 0.6 }}

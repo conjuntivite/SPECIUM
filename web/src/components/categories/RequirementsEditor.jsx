@@ -1,3 +1,5 @@
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faArrowUpFromBracket, faListCheck } from '@fortawesome/free-solid-svg-icons'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -20,9 +22,10 @@ export function ProvidesEditor({ provides, onChange, resources, onCreateResource
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+    <div className="flex flex-col gap-2 rounded-lg border border-flow-green/30 bg-flow-green/5 p-3">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
+          <FontAwesomeIcon icon={faArrowUpFromBracket} className="size-3.5 text-flow-green" />
           <span className="text-sm font-medium">O que este item fornece</span>
           <InfoHint>
             Quanto de um recurso nomeado cada unidade desta categoria coloca à disposição no
@@ -180,9 +183,10 @@ export function RequirementsEditor({ requirements, otherCategories, labelByValue
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+    <div className="flex flex-col gap-2 rounded-lg border border-flow-amber/30 bg-flow-amber/5 p-3">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
+          <FontAwesomeIcon icon={faListCheck} className="size-3.5 text-flow-amber" />
           <span className="text-sm font-medium">O que este item exige</span>
           <InfoHint>
             O que uma unidade desta categoria precisa pra funcionar. Três tipos: <strong>Presença</strong>{' '}

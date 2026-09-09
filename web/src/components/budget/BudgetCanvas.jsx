@@ -27,12 +27,6 @@ function composeProductTitle(product) {
   return `${product.category} ${product.brand} ${product.model}`.trim()
 }
 
-// Elbow tracejado — equivalente ao monkeypatch de createCurvature do Drawflow original.
-const defaultEdgeOptions = {
-  type: 'step',
-  style: { stroke: 'rgba(226, 232, 240, 0.55)', strokeWidth: 1.5, strokeDasharray: '5,4' },
-}
-
 export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToProducts }, ref) {
   const catalog = useCategories()
   // Uma sugestão de capacidade (ex.: "Conectividade Gigabit") pode ter mais de uma categoria
@@ -42,7 +36,7 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
     () => Object.fromEntries(catalog.flatMap((group) => group.items.map((item) => [item.value, item.label]))),
     [catalog]
   )
-  const { screenToFlowPosition, zoomIn, zoomOut, fitView } = useReactFlow()
+  const { screenToFlowPosition, zoomIn, zoomOut, fitView, getIntersectingNodes } = useReactFlow()
   // Posição do último clique com botão direito — usada como ponto de spawn ao adicionar item
   // pelo menu (equivalente ao ponto de solto do drag-and-drop da suggestions strip).
   const lastContextPosRef = useRef({ x: 0, y: 0 })
@@ -119,9 +113,32 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
     setEdges((eds) => applyEdgeChanges(changes, eds))
   }, [])
 
-  const handleNodeDragStop = useCallback((_event, node) => {
-    budget.updatePosition(node.id, node.position)
-  }, [budget])
+  // Aresta manual já nasce com `style.stroke` próprio (cyan, pra se diferenciar da automática
+  // tracejada) — esse inline style tem mais especificidade que o `.selected` do CSS padrão do React
+  // Flow, então sem isso aqui o clique seleciona (funciona, dá pra apagar) mas não SE VÊ selecionado.
+  const displayEdges = useMemo(() => edges.map((edge) => (
+    edge.selected && edge.style
+      ? { ...edge, style: { ...edge.style, stroke: '#67e8f9', strokeWidth: (edge.style.strokeWidth ?? 2) + 1.5 } }
+      : edge
+  )), [edges])
+
+  // `nodes` (3º argumento) é todo o grupo selecionado que moveu junto, não só o card que o usuário
+  // pegou pelo cursor — sem persistir a posição de cada um, os outros card do grupo "voltam" pro
+  // lugar antigo no próximo render (só o clicado gravava antes de existir seleção múltipla aqui).
+  const handleNodeDragStop = useCallback((_event, node, nodes) => {
+    const moved = nodes?.length ? nodes : [node]
+    moved.forEach((n) => budget.updatePosition(n.id, n.position))
+
+    // Largou (o grupo inteiro, ou um item só) em cima de um container aberto? Cada item solto que
+    // aterrissou lá dentro vira filho dele — item já filho de outro container fica de fora (extent
+    // "parent" do node já trava ele lá dentro, não tem como soltar fora) e o próprio container
+    // também fica de fora (aninhar container dentro de container por arraste é além do pedido).
+    moved.forEach((n) => {
+      if (n.parentId || n.data?.isContainer) return
+      const target = getIntersectingNodes(n).find((cand) => cand.id !== n.id && cand.data?.isContainer && cand.data?.containerOpen)
+      if (target) budget.moveToContainer(n.data.item.id, target.data.item.id)
+    })
+  }, [budget, getIntersectingNodes])
 
   const handleNodesDelete = useCallback((deleted) => {
     deleted.forEach((node) => {
@@ -156,9 +173,18 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
     setProductPrompt({ label, categories: resolvedCategories, fallbackTitle: categoryLabelByValue[resolvedCategories[0]] || label, position })
   }, [screenToFlowPosition, categoryLabelByValue])
 
+  // Botão direito com o cursor em cima de um container aberto -> "Adicionar item" do menu deve
+  // nascer lá dentro, não solto no canvas atrás dele (mesmo teste de sobreposição do drag-and-drop
+  // pra dentro de container, só que num ponto em vez de um node inteiro).
+  function containerAtPosition(position) {
+    const hit = getIntersectingNodes({ x: position.x, y: position.y, width: 1, height: 1 })
+      .find((n) => n.data?.isContainer && n.data?.containerOpen)
+    return hit ? hit.data.item.id : null
+  }
+
   function handleCatalogItemSelect(_group, item) {
     const position = screenToFlowPosition(lastContextPosRef.current)
-    setProductPrompt({ label: item.label, categories: [item.value], fallbackTitle: item.value, position })
+    setProductPrompt({ label: item.label, categories: [item.value], fallbackTitle: item.value, position, containerId: containerAtPosition(position) })
   }
 
   function handleProductPick(product) {
@@ -193,9 +219,8 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
         >
           <ReactFlow
             nodes={nodes}
-            edges={edges}
+            edges={displayEdges}
             nodeTypes={nodeTypes}
-            defaultEdgeOptions={defaultEdgeOptions}
             onNodesChange={onNodesChange}
             onNodeDragStop={handleNodeDragStop}
             onNodesDelete={handleNodesDelete}

@@ -23,41 +23,42 @@ export function BudgetView({ onSwitchToSearch, onGoToProducts, onGoToCategories 
       <ReactFlowProvider>
         <BudgetCanvas ref={canvasRef} budget={budget} onGoToProducts={onGoToProducts} />
 
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col gap-3 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="pointer-events-auto flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={onSwitchToSearch}
-                className="flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur transition-colors hover:bg-secondary"
-              >
-                <FontAwesomeIcon icon={faMagnifyingGlass} className="size-4" /> Busca avançada por item
-              </button>
-              <button
-                type="button"
-                onClick={onGoToProducts}
-                className="flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur transition-colors hover:bg-secondary"
-              >
-                <FontAwesomeIcon icon={faBox} className="size-4" /> Produtos
-              </button>
-              <button
-                type="button"
-                onClick={onGoToCategories}
-                className="flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur transition-colors hover:bg-secondary"
-              >
-                <FontAwesomeIcon icon={faTag} className="size-4" /> Categorias
-              </button>
-            </div>
-
-            <div className="pointer-events-auto flex flex-wrap items-center gap-4 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm text-muted-foreground backdrop-blur">
-              <FlowLegend compact />
-              {budget.total > 0 ? (
-                <span className="font-mono font-bold text-flow-green">{formatBRL(budget.total)}</span>
-              ) : null}
-            </div>
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-center justify-between gap-3 p-4">
+          <div className="pointer-events-auto flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onSwitchToSearch}
+              className="flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur transition-colors hover:bg-secondary"
+            >
+              <FontAwesomeIcon icon={faMagnifyingGlass} className="size-4" /> Busca avançada por item
+            </button>
+            <button
+              type="button"
+              onClick={onGoToProducts}
+              className="flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur transition-colors hover:bg-secondary"
+            >
+              <FontAwesomeIcon icon={faBox} className="size-4" /> Produtos
+            </button>
+            <button
+              type="button"
+              onClick={onGoToCategories}
+              className="flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur transition-colors hover:bg-secondary"
+            >
+              <FontAwesomeIcon icon={faTag} className="size-4" /> Categorias
+            </button>
           </div>
 
-          <div className="pointer-events-auto">
+          <div className="pointer-events-auto flex flex-wrap items-center gap-4 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm text-muted-foreground backdrop-blur">
+            <FlowLegend compact />
+            {budget.total > 0 ? (
+              <span className="font-mono font-bold text-flow-green">{formatBRL(budget.total)}</span>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Coluna direita, abaixo da barra superior — era faixa horizontal em cima do canvas antes. */}
+        <div className="pointer-events-none absolute right-4 top-20 bottom-4 z-10">
+          <div className="pointer-events-auto h-full">
             <SuggestionsStrip suggestions={budget.suggestions} onAdd={(req) => canvasRef.current?.addSuggestion(req)} />
           </div>
         </div>

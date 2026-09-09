@@ -352,63 +352,40 @@ export function useBudget() {
     return result
   }, [items, positions, criticalItemIds, isContainerItemIds])
 
-  // Arestas automáticas: de cada item-âncora pra quem já satisfaz cada requisito seu — requisito
-  // ainda não satisfeito fica sem aresta até o usuário arrastar a sugestão correspondente pro canvas.
-  // Não-selecionável/não-deletável: é derivada do motor a cada render, apagar não "gruda" (reaparece
-  // no próximo recálculo) — quem quiser desfazer essa relação precisa é do item deixar de satisfazer.
-  const autoEdges = useMemo(() => {
-    const firstItemByTitle = new Map()
-    items.forEach((item) => { if (!firstItemByTitle.has(item.title)) firstItemByTitle.set(item.title, item) })
-    const result = []
-    items.forEach((item, index) => {
-      const category = suggestionsData.items?.[index]?.category
-      const requirements = category && suggestionsData.requirements_by_category?.[category]
-      if (!requirements) return
-      const fromKey = itemFlowKey(item)
-      requirements.forEach((req) => {
-        if (!req.satisfied_by) return
-        const target = firstItemByTitle.get(req.satisfied_by)
-        if (!target) return
-        const toKey = itemFlowKey(target)
-        if (fromKey === toKey) return
-        result.push({
-          id: `${fromKey}->${toKey}->${req.key}`, source: fromKey, target: toKey, type: 'step',
-          selectable: false, deletable: false, focusable: false, reconnectable: false,
-        })
-      })
-    })
-    return result
-  }, [items, suggestionsData])
-
-  // Arestas manuais: o usuário desenha arrastando de um handle a outro — traço sólido cyan pra se
-  // diferenciar do tracejado das automáticas. Ficam selecionáveis/deletáveis (Delete/Backspace).
+  // Arestas manuais: o usuário desenha arrastando de um handle a outro — traço sólido cyan. Ficam
+  // selecionáveis/deletáveis (Delete/Backspace). As ligações não são mais inferidas automaticamente
+  // pelo motor de sugestões — o usuário decide quais equipamentos conectar no canvas.
   const manualEdges = useMemo(() => connections.map((c) => ({
     id: c.id, source: c.source, target: c.target,
     sourceHandle: c.sourceHandle, targetHandle: c.targetHandle, type: 'step',
     style: { stroke: 'rgba(34,211,238,0.85)', strokeWidth: 2 },
   })), [connections])
 
-  // Reancora qualquer aresta (automática ou manual) que aponte pra um item escondido — dentro de um
-  // container fechado — pro ancestral visível mais próximo, em vez de simplesmente sumir (é o que
-  // recurso-container.txt mostra: Rack/Switch continuam recebendo a ligação externa da Câmera
-  // enquanto o Rack está fechado). ponytail: duas ligações escondidas que reancoram no mesmo par
-  // (origem, destino) colapsam numa aresta só — perde a contagem de "eram N", suficiente pro MVP.
+  // Reancora uma ligação manual que aponte pra um item escondido — dentro de um container fechado —
+  // pro ancestral visível mais próximo, em vez de simplesmente sumir (é o que recurso-container.txt
+  // mostra: Rack/Switch continuam recebendo a ligação externa da Câmera enquanto o Rack está
+  // fechado). ponytail: duas ligações escondidas que reancoram no mesmo par (origem, destino)
+  // colapsam numa aresta só — perde a contagem de "eram N", suficiente pro MVP. Só colapsa quando a
+  // reancoragem de fato mudou uma ponta (item escondido) — ligações entre dois itens já visíveis
+  // passam direto, cada uma com sua própria linha.
   const edges = useMemo(() => {
     const itemsById = new Map(items.map((item) => [item.id, item]))
     const remapEndpoint = (flowKey) => {
       const itemId = Number(flowKey.slice('item-'.length))
       return itemFlowKey({ id: nearestVisibleAncestorId(itemId, itemsById) })
     }
+    const visible = []
     const bySourceTarget = new Map()
-    for (const edge of [...autoEdges, ...manualEdges]) {
+    for (const edge of manualEdges) {
       const source = remapEndpoint(edge.source)
       const target = remapEndpoint(edge.target)
       if (source === target) continue // os dois lados escondidos atrás do mesmo container
+      if (source === edge.source && target === edge.target) { visible.push(edge); continue }
       const key = `${source}->${target}`
       if (!bySourceTarget.has(key)) bySourceTarget.set(key, { ...edge, source, target })
     }
-    return [...bySourceTarget.values()]
-  }, [autoEdges, manualEdges, items])
+    return [...visible, ...bySourceTarget.values()]
+  }, [manualEdges, items])
 
   // Sugestões ainda não satisfeitas, deduplicadas entre âncoras que compartilham o mesmo requisito
   // (ex.: "Fonte 12V" pode ser sugestiva pro DVR e crítica/alternativa pra Câmera IP PoE ao mesmo
