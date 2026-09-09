@@ -62,7 +62,7 @@ function NodeTitle({ item }) {
 
 export function FlowNode({ data, dragging, selected }) {
   const {
-    item, onRemove, onQtyChange, hasCriticalGap,
+    item, onRemove, onQtyChange, hasCriticalGap, isLinked,
     isContainer, containerOpen, containerSize, childCount, childQuantityTotal, childValueTotal,
     containedIn, onToggleContainer, onRemoveFromContainer, onAddCategoryToContainer, onMoveToContainer, onResizeContainer, looseItems,
   } = data
@@ -70,6 +70,9 @@ export function FlowNode({ data, dragging, selected }) {
   // Seleção (clique/shift/ctrl+clique, ou caixa de seleção) tem prioridade visual sobre o alerta de
   // lacuna crítica — o usuário precisa ver o que está selecionado antes de arrastar o grupo.
   const borderClass = selected ? 'border-cyan-400' : hasCriticalGap ? 'border-flow-red' : 'border-transparent'
+  // Cabeçalho só vira verde depois que o card ganha uma linha manual pra outro — antes disso fica
+  // neutro (cinza-escuro), pra não sugerir que o item já está "encaixado" no fluxo sem estar.
+  const headerClass = isLinked ? 'bg-flow-green text-flow-green-text' : 'bg-slate-700 text-slate-200'
 
   // Container fechado: card compacto de resumo, sem os filhos ocupando espaço no canvas.
   if (isContainer && !containerOpen) {
@@ -81,19 +84,19 @@ export function FlowNode({ data, dragging, selected }) {
         transition={{ type: 'spring', stiffness: 500, damping: 32, mass: 0.6 }}
       >
         <NodeHandles />
-        <div className="flex items-center justify-between gap-2 bg-flow-green px-3 py-2 font-bold text-flow-green-text">
+        <div className={`flex items-center justify-between gap-2 px-3 py-2 font-bold ${headerClass}`}>
           <NodeTitle item={item} />
           <button type="button" className="nodrag flex size-5 shrink-0 items-center justify-center rounded-full bg-black/15 hover:bg-black/30" title="Remover" onClick={() => onRemove(item.id)}>
             <FontAwesomeIcon icon={faXmark} className="size-3" />
           </button>
         </div>
-        <div className="flex flex-col gap-1 bg-flow-body px-3 py-2 text-sm text-slate-200">
+        <div className="flex flex-col gap-1 bg-card px-3 py-2 text-sm text-card-foreground">
           <span>{childCount} equipamento{childCount === 1 ? '' : 's'} interno{childCount === 1 ? '' : 's'}</span>
           {childQuantityTotal > childCount ? <span className="text-xs text-muted-foreground">{childQuantityTotal} itens no total</span> : null}
           {childValueTotal ? <span className="font-mono text-flow-green">{formatBRL(childValueTotal)}</span> : null}
           <button
             type="button"
-            className="nodrag mt-1 flex items-center justify-center gap-1.5 rounded-md bg-white/8 py-1.5 text-xs font-medium hover:bg-white/18"
+            className="nodrag mt-1 flex items-center justify-center gap-1.5 rounded-md bg-foreground/8 py-1.5 text-xs font-medium hover:bg-foreground/15"
             onClick={() => onToggleContainer(item.id)}
           >
             <FontAwesomeIcon icon={faBoxOpen} className="size-3" /> Abrir Container
@@ -115,7 +118,7 @@ export function FlowNode({ data, dragging, selected }) {
     const rows = containerChildRows(childCount)
     return (
       <motion.div
-        className={`overflow-hidden rounded-lg border-2 bg-flow-body ${borderClass}`}
+        className={`overflow-hidden rounded-lg border-2 bg-card ${borderClass}`}
         style={{ width, height }}
         animate={{ scale: dragging ? 1.02 : 1, boxShadow: dragging ? draggingShadow : restShadow }}
         transition={{ type: 'spring', stiffness: 500, damping: 32, mass: 0.6 }}
@@ -126,7 +129,7 @@ export function FlowNode({ data, dragging, selected }) {
           onResizeEnd={(_event, params) => onResizeContainer(item.id, Math.round(params.width), Math.round(params.height))}
         />
         <NodeHandles />
-        <div className="flex items-center justify-between gap-2 bg-flow-green px-3 py-2 font-bold text-flow-green-text">
+        <div className={`flex items-center justify-between gap-2 px-3 py-2 font-bold ${headerClass}`}>
           <NodeTitle item={item} />
           <span className="nodrag flex shrink-0 items-center gap-1">
             <button type="button" className="flex size-5 items-center justify-center rounded-full bg-black/15 hover:bg-black/30" title="Fechar Container" onClick={() => onToggleContainer(item.id)}>
@@ -137,7 +140,7 @@ export function FlowNode({ data, dragging, selected }) {
             </button>
           </span>
         </div>
-        <div className="flex flex-col bg-flow-body p-2" style={{ height: height - CONTAINER_GRID.originY }}>
+        <div className="flex flex-col bg-card p-2" style={{ height: height - CONTAINER_GRID.originY }}>
           <div className="shrink-0" style={{ height: rows * CONTAINER_GRID.spacingY - 8 }} />
           {/* mt-auto: gruda o painel na borda de baixo do container — o espaço reservado pra grade
               (acima) fica fixo, sobra de altura ao arrastar os cantos vira gap aqui, não embaixo. */}
@@ -162,7 +165,7 @@ export function FlowNode({ data, dragging, selected }) {
     >
       <NodeHandles />
 
-      <div className="flex items-center justify-between gap-2 bg-flow-green px-3 py-2 font-bold text-flow-green-text">
+      <div className={`flex items-center justify-between gap-2 px-3 py-2 font-bold ${headerClass}`}>
         <NodeTitle item={item} />
         <span className="nodrag flex shrink-0 items-center gap-1">
           {containedIn != null ? (
@@ -186,22 +189,22 @@ export function FlowNode({ data, dragging, selected }) {
         </span>
       </div>
 
-      <div className="bg-flow-body py-2">
+      <div className="bg-card py-2">
         <div className="flex items-center gap-2 px-3 py-1.5 text-sm">
           <span className="w-4 shrink-0 text-center text-[0.82rem] text-muted-foreground">#</span>
-          <span className="flex-1 text-slate-200">Quantidade</span>
+          <span className="flex-1 text-card-foreground">Quantidade</span>
           <span className="nodrag flex shrink-0 items-center gap-1.5">
             <button
               type="button"
-              className="flex size-[1.15rem] items-center justify-center rounded-[0.3rem] bg-white/8 text-slate-200 hover:bg-white/18"
+              className="flex size-[1.15rem] items-center justify-center rounded-[0.3rem] bg-foreground/8 text-card-foreground hover:bg-foreground/15"
               onClick={() => onQtyChange(item.id, -1)}
             >
               <FontAwesomeIcon icon={faMinus} className="size-2.5" />
             </button>
-            <span className="min-w-[1.4rem] text-center font-mono text-[0.88rem] text-slate-200">{item.quantity}</span>
+            <span className="min-w-[1.4rem] text-center font-mono text-[0.88rem] text-card-foreground">{item.quantity}</span>
             <button
               type="button"
-              className="flex size-[1.15rem] items-center justify-center rounded-[0.3rem] bg-white/8 text-slate-200 hover:bg-white/18"
+              className="flex size-[1.15rem] items-center justify-center rounded-[0.3rem] bg-foreground/8 text-card-foreground hover:bg-foreground/15"
               onClick={() => onQtyChange(item.id, 1)}
             >
               <FontAwesomeIcon icon={faPlus} className="size-2.5" />
@@ -212,7 +215,7 @@ export function FlowNode({ data, dragging, selected }) {
         {item.averagePrice ? (
           <div className="flex items-center gap-2 px-3 py-1.5 text-sm">
             <span className="w-4 shrink-0 text-center text-[0.82rem] text-muted-foreground">$</span>
-            <span className="flex-1 truncate text-slate-200">Preço médio (un.)</span>
+            <span className="flex-1 truncate text-card-foreground">Preço médio (un.)</span>
             <span className="shrink-0 font-mono text-[0.84rem] text-muted-foreground">~{item.averagePrice}</span>
           </div>
         ) : null}
@@ -220,7 +223,7 @@ export function FlowNode({ data, dragging, selected }) {
         {unitValue !== null && item.quantity > 1 ? (
           <div className="flex items-center gap-2 px-3 py-1.5 text-sm">
             <span className="w-4 shrink-0 text-center text-[0.82rem] text-muted-foreground">Σ</span>
-            <span className="flex-1 text-slate-200">Subtotal</span>
+            <span className="flex-1 text-card-foreground">Subtotal</span>
             <span className="shrink-0 font-mono text-[0.84rem] text-muted-foreground">{formatBRL(unitValue * item.quantity)}</span>
           </div>
         ) : null}
@@ -228,7 +231,7 @@ export function FlowNode({ data, dragging, selected }) {
         {item.bestOffer ? (
           <div className="flex items-center gap-2 px-3 py-1.5 text-sm">
             <span className="w-4 shrink-0 text-center text-[0.82rem] text-muted-foreground">↗</span>
-            <span className="flex-1 text-slate-200">Melhor oferta</span>
+            <span className="flex-1 text-card-foreground">Melhor oferta</span>
             <a
               className="nodrag shrink-0 font-mono text-[0.84rem] text-flow-green hover:underline"
               href={item.bestOffer.url}

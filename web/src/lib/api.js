@@ -6,7 +6,9 @@ async function requestJson(path, { method = 'GET', body } = {}) {
   })
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}))
-    throw new Error(errData.detail || 'Não foi possível completar a requisição.')
+    const error = new Error(errData.detail || 'Não foi possível completar a requisição.')
+    if (errData.errors) error.errors = errData.errors
+    throw error
   }
   return response.status === 204 ? null : response.json()
 }
@@ -46,6 +48,10 @@ export function updateProduct(id, data) {
 
 export function deleteProduct(id) {
   return requestJson(`/api/products/${id}`, { method: 'DELETE' })
+}
+
+export function importProducts(csv) {
+  return postJson('/api/products/import', { csv })
 }
 
 export function getCategories() {

@@ -50,6 +50,24 @@ async function updateProduct(id, { category, brand, model, icon }) {
   return matchedCount > 0;
 }
 
+// Ignora duplicata exata (mesma categoria+marca+modelo, sem diferenciar maiúsculas) já cadastrada —
+// reimportar a mesma planilha (ou uma planilha com sobreposição) não duplica produto no catálogo.
+async function importProducts(items) {
+  const products = await getProductsCollection();
+  const existing = await products.find({}, { projection: { category: 1, brand: 1, model: 1 } }).toArray();
+  const seen = new Set(existing.map((p) => `${p.category}|${p.brand}|${p.model}`.toLowerCase()));
+  const toInsert = [];
+  let skipped = 0;
+  for (const item of items) {
+    const key = `${item.category}|${item.brand}|${item.model}`.toLowerCase();
+    if (seen.has(key)) { skipped++; continue; }
+    seen.add(key);
+    toInsert.push({ category: item.category, brand: item.brand, model: item.model, icon: item.icon || '', createdAt: new Date() });
+  }
+  if (toInsert.length) await products.insertMany(toInsert);
+  return { imported: toInsert.length, skipped };
+}
+
 async function deleteProduct(id) {
   if (!ObjectId.isValid(id)) return false;
   const products = await getProductsCollection();
@@ -394,7 +412,7 @@ async function closeDb() {
 }
 
 module.exports = {
-  listProducts, createProduct, updateProduct, deleteProduct,
+  listProducts, createProduct, updateProduct, deleteProduct, importProducts,
   listCategories, createCategory, updateCategory, deleteCategory,
   listGroups, createGroup, deleteGroup,
   listResources, createResource, updateResource, deleteResource,

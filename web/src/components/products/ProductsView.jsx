@@ -9,6 +9,7 @@ import { normalizeSearch } from '@/lib/utils'
 import { createProduct, deleteProduct, getProducts, updateProduct } from '@/lib/api'
 import { useCategories } from '@/hooks/useCategories'
 import { ProductFormDialog } from './ProductFormDialog'
+import { ImportProductsDialog } from './ImportProductsDialog'
 
 export function ProductsView() {
   const catalog = useCategories()
@@ -24,6 +25,7 @@ export function ProductsView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [formOpen, setFormOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState(null)
   const [search, setSearch] = useState('')
 
@@ -75,7 +77,10 @@ export function ProductsView() {
     <div className="mx-auto max-w-3xl">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">Produtos cadastrados</h2>
-        <Button type="button" onClick={openCreate}>+ Novo produto</Button>
+        <div className="flex gap-2">
+          <Button type="button" variant="secondary" onClick={() => setImportOpen(true)}>Importar planilha</Button>
+          <Button type="button" onClick={openCreate}>+ Novo produto</Button>
+        </div>
       </div>
 
       {loading ? <p className="text-sm text-muted-foreground">Carregando...</p> : null}
@@ -137,6 +142,12 @@ export function ProductsView() {
         brands={brands}
         onOpenChange={setFormOpen}
         onSubmit={handleSubmit}
+      />
+
+      <ImportProductsDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImported={reload}
       />
     </div>
   )

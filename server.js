@@ -1,7 +1,7 @@
 const http = require('node:http');
 const { URL } = require('node:url');
 const {
-  listProducts, createProduct, updateProduct, deleteProduct,
+  listProducts, createProduct, updateProduct, deleteProduct, importProducts,
   listCategories, createCategory, updateCategory, deleteCategory,
   listGroups, createGroup, deleteGroup,
   listResources, createResource, updateResource, deleteResource,
@@ -19,11 +19,12 @@ const {
   extractFonteSpecs, extractCaboSpecs, extractMikrotikSpecs, extractRoteadorSpecs, extractAcabamentoSpecs,
 } = require('./lib/specs');
 const { computeCategoryMissingEssentials } = require('./lib/recipeEngine');
-const { sendJson, readJson, serveStatic } = require('./lib/http');
+const { sendJson, sendCsv, readJson, serveStatic } = require('./lib/http');
 const {
   validateSearchRequest, validateCompareRequest, validateRecipeItems, validateRecipePriceItems,
   validateProductRequest, validateCategoryRequest, validateResourceRequest,
 } = require('./lib/validators');
+const { buildProductTemplateCsv, parseProductImportCsv } = require('./lib/productImport');
 const { setShoppingFetcher } = require('./lib/providers/shoppingFetcher');
 const { excludePriceOutliers, selectTopDistinctStores, buildGoogleShoppingUrl } = require('./lib/providers/shared');
 const {
@@ -61,16 +62,30 @@ async function requestHandler(request, response) {
       const body = await readJson(request);
       const cartItems = validateRecipeItems(body);
       const categories = await listCategories();
+      const resources = await listResources();
       // "items" ecoa a categoria exata detectada de cada item de entrada, na mesma ordem — o canvas
       // (estilo n8n) usa isso pra saber de qual nó desenhar a aresta, sem duplicar detecção em JS.
       const items = cartItems.map(({ title }) => ({ title, category: detectExactCategory(title, categories)?.value || null }));
-      return sendJson(response, 200, { ...computeCategoryMissingEssentials(cartItems, categories), items });
+      return sendJson(response, 200, { ...computeCategoryMissingEssentials(cartItems, categories, resources), items });
     }
     if (request.method === 'POST' && url.pathname === '/api/recipe/prices') {
       const body = await readJson(request);
       const items = validateRecipePriceItems(body);
       const results = await Promise.all(items.map(fetchRecipeItemPrice));
       return sendJson(response, 200, { results });
+    }
+    if (request.method === 'GET' && url.pathname === '/api/products/template') {
+      const categories = await listCategories();
+      return sendCsv(response, 'produtos-modelo.csv', buildProductTemplateCsv(categories));
+    }
+    if (request.method === 'POST' && url.pathname === '/api/products/import') {
+      const body = await readJson(request);
+      const csvText = typeof body.csv === 'string' ? body.csv : '';
+      if (!csvText.trim()) throw new Error('Envie o conteúdo da planilha.');
+      const categories = await listCategories();
+      const { products, errors } = parseProductImportCsv(csvText, categories);
+      if (errors.length) return sendJson(response, 400, { detail: 'A planilha tem linhas inválidas.', errors });
+      return sendJson(response, 200, await importProducts(products));
     }
     if (request.method === 'GET' && url.pathname === '/api/products') {
       const category = normalize(url.searchParams.get('category'));

@@ -411,9 +411,12 @@ test('POST /api/recipe/suggestions expõe severidade critical/optional para o re
   });
   const result = await response.json();
   const reqs = result.requirements_by_category['Câmera IP PoE'];
-  const powerOptions = reqs.filter((item) => item.label === 'Alimentação');
+  const powerOptions = reqs.filter((item) => item.key === 'resource:power.poe_port' || item.key === 'presence:Fonte 12V');
   assert.equal(powerOptions.length, 2);
   assert.ok(powerOptions.every((item) => item.severity === 'critical'));
+  // Cada opção do anyOf tem seu próprio rótulo (reportado: as duas apareciam só como "Alimentação",
+  // sem jeito de saber qual card era PoE e qual era Fonte 12V) — ver lib/recipeEngine.js.
+  assert.deepEqual(powerOptions.map((item) => item.label).sort(), ['Alimentação: Fonte 12V', 'Alimentação: Porta PoE']);
 
   // Switch PoE Fast 8 Portas fornece 8 portas PoE — cobre a demanda de alimentação de 1 câmera
   // (capacidade), então a opção de PoE fica satisfeita e a Fonte 12V (a outra opção do anyOf) vira
@@ -424,7 +427,7 @@ test('POST /api/recipe/suggestions expõe severidade critical/optional para o re
   });
   const result2 = await withSwitchPoe.json();
   const reqs2 = result2.requirements_by_category['Câmera IP PoE'];
-  const powerOptions2 = reqs2.filter((item) => item.label === 'Alimentação');
+  const powerOptions2 = reqs2.filter((item) => item.key === 'resource:power.poe_port' || item.key === 'presence:Fonte 12V');
   const poeOption = powerOptions2.find((item) => item.key === 'resource:power.poe_port');
   const fonteOption = powerOptions2.find((item) => item.key === 'presence:Fonte 12V');
   assert.equal(poeOption.severity, null);
@@ -540,7 +543,7 @@ test('computeCategoryMissingEssentials (motor de recursos): 16 câmeras IP PoE +
   const reqs = result.requirements_by_category['Câmera IP PoE'];
   assert.equal(reqs.find((r) => r.key === 'resource:network.gigabit_port').deficit, 0);
   assert.equal(reqs.find((r) => r.key === 'resource:recording.ip_channel').deficit, 0);
-  const power = reqs.filter((r) => r.label === 'Alimentação');
+  const power = reqs.filter((r) => r.key === 'resource:power.poe_port' || r.key === 'presence:Fonte 12V');
   assert.ok(power.some((r) => r.key === 'resource:power.poe_port' && r.severity === null));
   // A opção de alimentação não usada (Fonte 12V) segue aparecendo em `missing` como alternativa
   // opcional — mesmo comportamento do motor antigo pra um par satisfeito por só um dos lados (ver
@@ -569,7 +572,7 @@ test('computeCategoryMissingEssentials (motor de recursos): a 17ª câmera estou
   // o NVR também ficou pra trás — a mesma câmera extra afeta os três recursos que ela consome.
   const recording = result.requirements_by_category['Câmera IP PoE'].find((r) => r.key === 'resource:recording.ip_channel');
   assert.equal(recording.deficit, 1);
-  const power = result.requirements_by_category['Câmera IP PoE'].filter((r) => r.label === 'Alimentação');
+  const power = result.requirements_by_category['Câmera IP PoE'].filter((r) => r.key === 'resource:power.poe_port' || r.key === 'presence:Fonte 12V');
   assert.ok(power.every((r) => r.severity === 'critical'));
 });
 

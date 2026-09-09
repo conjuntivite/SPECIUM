@@ -288,6 +288,15 @@ export function useBudget() {
     return ids
   }, [items, suggestionsData, containerCategoryValues])
 
+  // Cabeçalho do card só fica verde depois que o item ganha uma ligação manual (linha desenhada pelo
+  // usuário) com outro card — antes disso fica neutro, pra não passar a falsa impressão de que já
+  // está "resolvido" dentro do fluxo. Ver FlowNode.jsx.
+  const linkedFlowKeys = useMemo(() => {
+    const set = new Set()
+    connections.forEach((c) => { set.add(c.source); set.add(c.target) })
+    return set
+  }, [connections])
+
   // Um nó por item solto (na posição salva, ou 60+index*300 como fallback pra item antigo sem
   // posição) — item contido só vira node quando o container dele está aberto, aninhado nativamente
   // via parentId/extent do React Flow (BudgetCanvas liga connectionMode="loose" + o resto). Pai
@@ -314,7 +323,7 @@ export function useBudget() {
         ? { width: Math.max(item.containerSize?.width || 0, autoSize.width), height: Math.max(item.containerSize?.height || 0, autoSize.height) }
         : null
       const data = {
-        item, hasCriticalGap: criticalItemIds.has(item.id),
+        item, hasCriticalGap: criticalItemIds.has(item.id), isLinked: linkedFlowKeys.has(flowKey),
         isContainer, containerOpen, containerSize,
         childCount: children.length,
         childQuantityTotal: children.reduce((sum, c) => sum + c.quantity, 0),
@@ -350,7 +359,7 @@ export function useBudget() {
       pushNode(item, index, position, null)
     })
     return result
-  }, [items, positions, criticalItemIds, isContainerItemIds])
+  }, [items, positions, criticalItemIds, isContainerItemIds, linkedFlowKeys])
 
   // Arestas manuais: o usuário desenha arrastando de um handle a outro — traço sólido cyan. Ficam
   // selecionáveis/deletáveis (Delete/Backspace). As ligações não são mais inferidas automaticamente
