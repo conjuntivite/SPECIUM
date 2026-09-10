@@ -409,14 +409,40 @@ async function getUsersCollection() {
 }
 
 function toPublicUser(doc) {
-  return { id: doc._id.toString(), email: doc.email };
+  return { id: doc._id.toString(), email: doc.email, name: doc.name || null, role: doc.role || 'user', createdAt: doc.createdAt || null };
 }
 
-async function createUser({ email, passwordHash }) {
+async function createUser({ email, passwordHash, name = null }) {
   const users = await getUsersCollection();
   if (await users.findOne({ email })) throw new Error('Já existe uma conta com esse e-mail.');
-  const { insertedId } = await users.insertOne({ email, passwordHash, createdAt: new Date() });
-  return { id: insertedId.toString(), email };
+  // Toda conta nasce "user" — virar admin é uma promoção manual (cadastro de usuários, admin-only),
+  // nunca uma escolha do próprio registro.
+  const doc = { email, passwordHash, name, role: 'user', createdAt: new Date() };
+  const { insertedId } = await users.insertOne(doc);
+  return toPublicUser({ _id: insertedId, ...doc });
+}
+
+async function listUsers() {
+  const users = await getUsersCollection();
+  const docs = await users.find({}).sort({ email: 1 }).toArray();
+  return docs.map(toPublicUser);
+}
+
+// Admin-only (checado em server.js) — edita nome/e-mail/senha/papel de qualquer conta. `patch` já
+// vem com passwordHash pronto (server.js faz o hash antes de chamar), nunca a senha em texto puro.
+async function updateUser(id, patch) {
+  if (!ObjectId.isValid(id)) return null;
+  const users = await getUsersCollection();
+  if (patch.email) {
+    const existing = await users.findOne({ email: patch.email, _id: { $ne: new ObjectId(id) } });
+    if (existing) throw new Error('Já existe uma conta com esse e-mail.');
+  }
+  const updated = await users.findOneAndUpdate(
+    { _id: new ObjectId(id) },
+    { $set: patch },
+    { returnDocument: 'after' }
+  );
+  return updated ? toPublicUser(updated) : null;
 }
 
 // Devolve o doc cru (com passwordHash) — só pro fluxo de login conferir a senha.
@@ -575,7 +601,7 @@ module.exports = {
   listCategories, createCategory, updateCategory, deleteCategory,
   listGroups, createGroup, deleteGroup,
   listResources, createResource, updateResource, deleteResource,
-  createUser, findUserByEmail, findUserById,
+  createUser, findUserByEmail, findUserById, listUsers, updateUser,
   createSession, findSessionUser, deleteSession,
   createBudget, listBudgetsForUser, getBudgetForUser, updateBudgetForUser, setBudgetAddressForUser, deleteBudgetForUser,
   closeDb,

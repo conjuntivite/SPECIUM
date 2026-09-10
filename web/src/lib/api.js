@@ -98,6 +98,14 @@ export function getMe() {
   return requestJson('/api/auth/me')
 }
 
+export function listUsers() {
+  return requestJson('/api/users')
+}
+
+export function updateUser(id, patch) {
+  return requestJson(`/api/users/${id}`, { method: 'PATCH', body: patch })
+}
+
 export function listBudgets() {
   return requestJson('/api/budgets')
 }

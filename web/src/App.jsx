@@ -7,6 +7,7 @@ import { BudgetView } from '@/components/budget/BudgetView'
 import { BudgetsListView } from '@/components/budget/BudgetsListView'
 import { ProductsView } from '@/components/products/ProductsView'
 import { CategoriesView } from '@/components/categories/CategoriesView'
+import { UsersView } from '@/components/users/UsersView'
 import { LoginView } from '@/components/auth/LoginView'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -48,6 +49,8 @@ function App() {
         searchPanel={<SearchView />}
         productsPanel={<ProductsView />}
         categoriesPanel={<CategoriesView />}
+        showUsersTab={auth.user?.role === 'admin'}
+        usersPanel={<UsersView auth={auth} />}
       />
       <footer className="mt-10 text-center text-sm text-muted-foreground">
         <p>Comprador Inviolável © 2026 • Análise inteligente de custo-benefício em tempo real</p>

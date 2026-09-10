@@ -6,9 +6,13 @@ export function useAuth() {
   const [checking, setChecking] = useState(true)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    getMe().then(setUser).catch(() => setUser(null)).finally(() => setChecking(false))
+  const refresh = useCallback(() => {
+    return getMe().then(setUser).catch(() => setUser(null))
   }, [])
+
+  useEffect(() => {
+    refresh().finally(() => setChecking(false))
+  }, [refresh])
 
   const login = useCallback(async (email, password) => {
     setError('')
@@ -37,5 +41,5 @@ export function useAuth() {
     setUser(null)
   }, [])
 
-  return { user, checking, error, login, register, logout }
+  return { user, checking, error, login, register, logout, refresh }
 }

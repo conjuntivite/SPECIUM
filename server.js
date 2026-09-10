@@ -5,7 +5,7 @@ const {
   listCategories, createCategory, updateCategory, deleteCategory,
   listGroups, createGroup, deleteGroup,
   listResources, createResource, updateResource, deleteResource,
-  createUser, findUserByEmail,
+  createUser, findUserByEmail, listUsers, updateUser,
   createSession, findSessionUser, deleteSession,
   createBudget, listBudgetsForUser, getBudgetForUser, updateBudgetForUser, setBudgetAddressForUser, deleteBudgetForUser,
   closeDb,
@@ -26,7 +26,7 @@ const { sendJson, sendCsv, readJson, serveStatic, parseCookies } = require('./li
 const {
   validateSearchRequest, validateCompareRequest, validateRecipeItems, validateRecipePriceItems,
   validateProductRequest, validateCategoryRequest, validateResourceRequest,
-  validateAuthRequest, validateSetAddressRequest, validateBudgetSaveRequest,
+  validateAuthRequest, validateUserUpdateRequest, validateSetAddressRequest, validateBudgetSaveRequest,
 } = require('./lib/validators');
 const {
   hashPassword, verifyPassword, generateSessionToken, SESSION_COOKIE_NAME, SESSION_TTL_MS,
@@ -70,7 +70,8 @@ async function requestHandler(request, response) {
       if (!userDoc || !verifyPassword(password, userDoc.passwordHash)) throw new Error('E-mail ou senha inválidos.');
       const token = generateSessionToken();
       await createSession(token, userDoc._id.toString(), new Date(Date.now() + SESSION_TTL_MS));
-      return sendJson(response, 200, { id: userDoc._id.toString(), email: userDoc.email }, { 'Set-Cookie': serializeSessionCookie(token) });
+      const loggedInUser = { id: userDoc._id.toString(), email: userDoc.email, name: userDoc.name || null, role: userDoc.role || 'user' };
+      return sendJson(response, 200, loggedInUser, { 'Set-Cookie': serializeSessionCookie(token) });
     }
     if (request.method === 'POST' && url.pathname === '/api/auth/logout') {
       const token = parseCookies(request)[SESSION_COOKIE_NAME];
@@ -81,6 +82,24 @@ async function requestHandler(request, response) {
       const user = await getAuthenticatedUser(request);
       if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
       return sendJson(response, 200, user);
+    }
+    // Cadastro de usuários e permissões — só administrador enxerga ou edita conta de terceiros.
+    if (request.method === 'GET' && url.pathname === '/api/users') {
+      const user = await getAuthenticatedUser(request);
+      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      if (user.role !== 'admin') return sendJson(response, 403, { detail: 'Só administradores podem ver os usuários cadastrados.' });
+      return sendJson(response, 200, { users: await listUsers() });
+    }
+    const userIdMatch = url.pathname.match(/^\/api\/users\/([a-f0-9]{24})$/i);
+    if (userIdMatch && request.method === 'PATCH') {
+      const user = await getAuthenticatedUser(request);
+      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      if (user.role !== 'admin') return sendJson(response, 403, { detail: 'Só administradores podem editar usuários.' });
+      const { password, ...rest } = validateUserUpdateRequest(await readJson(request));
+      const patch = password ? { ...rest, passwordHash: hashPassword(password) } : rest;
+      const updated = await updateUser(userIdMatch[1], patch);
+      if (!updated) return sendJson(response, 404, { detail: 'Usuário não encontrado.' });
+      return sendJson(response, 200, updated);
     }
     if (request.method === 'POST' && url.pathname === '/api/search') {
       const body = await readJson(request);
