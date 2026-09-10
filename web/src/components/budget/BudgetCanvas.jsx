@@ -27,7 +27,7 @@ function composeProductTitle(product) {
   return `${product.category} ${product.brand} ${product.model}`.trim()
 }
 
-export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToProducts }, ref) {
+export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToProducts, readOnly }, ref) {
   const catalog = useCategories()
   // Uma sugestão de capacidade (ex.: "Conectividade Gigabit") pode ter mais de uma categoria
   // candidata — o rótulo do requisito não é um value de categoria real, então "Adicionar sem
@@ -92,9 +92,13 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
         // que o ContainerAddPanel dele mostra (só importa pra node que é container, mas filtrar
         // sempre é mais simples do que decidir condicionalmente aqui).
         looseItems: looseItems.filter((loose) => loose.id !== node.data.item.id),
+        // Orçamento fechado: FlowNode esconde os controles que mudam composição (qtd, remover,
+        // redimensionar, mover pra dentro/fora de container) — abrir/fechar container continua
+        // liberado (não persiste sem Salvar, é só conveniência de visualização).
+        readOnly,
       },
     })))
-  }, [budget.nodes, handleNodeRemove, budget.updateQuantity, budget.toggleContainer, budget.removeFromContainer, budget.moveToContainer, budget.resizeContainer, handleAddCategoryToContainer, looseItems])
+  }, [budget.nodes, handleNodeRemove, budget.updateQuantity, budget.toggleContainer, budget.removeFromContainer, budget.moveToContainer, budget.resizeContainer, handleAddCategoryToContainer, looseItems, readOnly])
 
   const onNodesChange = useCallback((changes) => {
     setNodes((nds) => applyNodeChanges(changes, nds))
@@ -157,13 +161,15 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
   }, [budget])
 
   const handleDragOver = useCallback((e) => {
+    if (readOnly) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'copy'
-  }, [])
+  }, [readOnly])
 
   // Drag-and-drop nativo (HTML5 DnD) da suggestions strip pro canvas — independente do drag interno
   // do React Flow usado pra mover nós já existentes.
   const handleDrop = useCallback((e) => {
+    if (readOnly) return
     e.preventDefault()
     const payload = e.dataTransfer.getData('application/json')
     if (!payload) return
@@ -171,7 +177,7 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
     const resolvedCategories = categories?.length ? categories : [key]
     const position = screenToFlowPosition({ x: e.clientX, y: e.clientY })
     setProductPrompt({ label, categories: resolvedCategories, fallbackTitle: categoryLabelByValue[resolvedCategories[0]] || label, position })
-  }, [screenToFlowPosition, categoryLabelByValue])
+  }, [readOnly, screenToFlowPosition, categoryLabelByValue])
 
   // Botão direito com o cursor em cima de um container aberto -> "Adicionar item" do menu deve
   // nascer lá dentro, não solto no canvas atrás dele (mesmo teste de sobreposição do drag-and-drop
@@ -229,7 +235,10 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
             onEdgesDelete={handleEdgesDelete}
             connectionMode="loose"
             connectionRadius={45}
-            deleteKeyCode={['Delete', 'Backspace']}
+            deleteKeyCode={readOnly ? [] : ['Delete', 'Backspace']}
+            nodesDraggable={!readOnly}
+            nodesConnectable={!readOnly}
+            elementsSelectable={!readOnly}
           >
             <Background variant={BackgroundVariant.Lines} gap={90} color="var(--color-flow-grid)" />
           </ReactFlow>
@@ -237,43 +246,51 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
       </ContextMenuTrigger>
 
       <ContextMenuContent className="w-64">
-        <ContextMenuSub>
-          <ContextMenuSubTrigger><FontAwesomeIcon icon={faPlus} className="size-4" /> Adicionar item</ContextMenuSubTrigger>
-          <ContextMenuSubContent className="max-h-[70vh] overflow-y-auto">
-            {catalog.map((group) => (
-              <ContextMenuSub key={group.group}>
-                <ContextMenuSubTrigger>{group.group}</ContextMenuSubTrigger>
-                <ContextMenuSubContent className="max-h-[70vh] overflow-y-auto">
-                  {group.items.map((item) => (
-                    <ContextMenuItem key={item.value} onSelect={() => handleCatalogItemSelect(group.group, item)}>
-                      {item.label}
-                    </ContextMenuItem>
-                  ))}
-                </ContextMenuSubContent>
-              </ContextMenuSub>
-            ))}
-          </ContextMenuSubContent>
-        </ContextMenuSub>
+        {!readOnly ? (
+          <>
+            <ContextMenuSub>
+              <ContextMenuSubTrigger><FontAwesomeIcon icon={faPlus} className="size-4" /> Adicionar item</ContextMenuSubTrigger>
+              <ContextMenuSubContent className="max-h-[70vh] overflow-y-auto">
+                {catalog.map((group) => (
+                  <ContextMenuSub key={group.group}>
+                    <ContextMenuSubTrigger>{group.group}</ContextMenuSubTrigger>
+                    <ContextMenuSubContent className="max-h-[70vh] overflow-y-auto">
+                      {group.items.map((item) => (
+                        <ContextMenuItem key={item.value} onSelect={() => handleCatalogItemSelect(group.group, item)}>
+                          {item.label}
+                        </ContextMenuItem>
+                      ))}
+                    </ContextMenuSubContent>
+                  </ContextMenuSub>
+                ))}
+              </ContextMenuSubContent>
+            </ContextMenuSub>
+            <ContextMenuSeparator />
+          </>
+        ) : null}
 
-        <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => zoomIn()}><FontAwesomeIcon icon={faMagnifyingGlassPlus} className="size-4" /> Aumentar zoom</ContextMenuItem>
         <ContextMenuItem onSelect={() => zoomOut()}><FontAwesomeIcon icon={faMagnifyingGlassMinus} className="size-4" /> Diminuir zoom</ContextMenuItem>
         <ContextMenuItem onSelect={() => fitView()}><FontAwesomeIcon icon={faExpand} className="size-4" /> Centralizar</ContextMenuItem>
 
-        <ContextMenuSeparator />
-        <ContextMenuItem
-          disabled={!budget.items.length || budget.priceLoading}
-          onSelect={() => budget.checkPrices()}
-        >
-          <FontAwesomeIcon icon={faSackDollar} className="size-4" /> Verificar preços
-        </ContextMenuItem>
-        <ContextMenuItem
-          variant="destructive"
-          disabled={!budget.items.length}
-          onSelect={() => budget.clearAll()}
-        >
-          <FontAwesomeIcon icon={faTrashCan} className="size-4" /> Limpar fluxo
-        </ContextMenuItem>
+        {!readOnly ? (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              disabled={!budget.items.length || budget.priceLoading}
+              onSelect={() => budget.checkPrices()}
+            >
+              <FontAwesomeIcon icon={faSackDollar} className="size-4" /> Verificar preços
+            </ContextMenuItem>
+            <ContextMenuItem
+              variant="destructive"
+              disabled={!budget.items.length}
+              onSelect={() => budget.clearAll()}
+            >
+              <FontAwesomeIcon icon={faTrashCan} className="size-4" /> Limpar fluxo
+            </ContextMenuItem>
+          </>
+        ) : null}
       </ContextMenuContent>
     </ContextMenu>
 

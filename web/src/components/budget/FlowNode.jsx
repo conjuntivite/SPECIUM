@@ -65,6 +65,7 @@ export function FlowNode({ data, dragging, selected }) {
     item, onRemove, onQtyChange, hasCriticalGap, isLinked,
     isContainer, containerOpen, containerSize, childCount, childQuantityTotal, childValueTotal,
     containedIn, onToggleContainer, onRemoveFromContainer, onAddCategoryToContainer, onMoveToContainer, onResizeContainer, looseItems,
+    readOnly,
   } = data
   const unitValue = parseBRL(item.averagePrice)
   // Seleção (clique/shift/ctrl+clique, ou caixa de seleção) tem prioridade visual sobre o alerta de
@@ -86,9 +87,11 @@ export function FlowNode({ data, dragging, selected }) {
         <NodeHandles />
         <div className={`flex items-center justify-between gap-2 px-3 py-2 font-bold ${headerClass}`}>
           <NodeTitle item={item} />
-          <button type="button" className="nodrag flex size-5 shrink-0 items-center justify-center rounded-full bg-black/15 hover:bg-black/30" title="Remover" onClick={() => onRemove(item.id)}>
-            <FontAwesomeIcon icon={faXmark} className="size-3" />
-          </button>
+          {!readOnly ? (
+            <button type="button" className="nodrag flex size-5 shrink-0 items-center justify-center rounded-full bg-black/15 hover:bg-black/30" title="Remover" onClick={() => onRemove(item.id)}>
+              <FontAwesomeIcon icon={faXmark} className="size-3" />
+            </button>
+          ) : null}
         </div>
         <div className="flex flex-col gap-1 bg-card px-3 py-2 text-sm text-card-foreground">
           <span>{childCount} equipamento{childCount === 1 ? '' : 's'} interno{childCount === 1 ? '' : 's'}</span>
@@ -123,11 +126,13 @@ export function FlowNode({ data, dragging, selected }) {
         animate={{ scale: dragging ? 1.02 : 1, boxShadow: dragging ? draggingShadow : restShadow }}
         transition={{ type: 'spring', stiffness: 500, damping: 32, mass: 0.6 }}
       >
-        <NodeResizer
-          minWidth={minSize.width}
-          minHeight={minSize.height}
-          onResizeEnd={(_event, params) => onResizeContainer(item.id, Math.round(params.width), Math.round(params.height))}
-        />
+        {!readOnly ? (
+          <NodeResizer
+            minWidth={minSize.width}
+            minHeight={minSize.height}
+            onResizeEnd={(_event, params) => onResizeContainer(item.id, Math.round(params.width), Math.round(params.height))}
+          />
+        ) : null}
         <NodeHandles />
         <div className={`flex items-center justify-between gap-2 px-3 py-2 font-bold ${headerClass}`}>
           <NodeTitle item={item} />
@@ -135,18 +140,22 @@ export function FlowNode({ data, dragging, selected }) {
             <button type="button" className="flex size-5 items-center justify-center rounded-full bg-black/15 hover:bg-black/30" title="Fechar Container" onClick={() => onToggleContainer(item.id)}>
               <FontAwesomeIcon icon={faCompress} className="size-3" />
             </button>
-            <button type="button" className="flex size-5 items-center justify-center rounded-full bg-black/15 hover:bg-black/30" title="Remover" onClick={() => onRemove(item.id)}>
-              <FontAwesomeIcon icon={faXmark} className="size-3" />
-            </button>
+            {!readOnly ? (
+              <button type="button" className="flex size-5 items-center justify-center rounded-full bg-black/15 hover:bg-black/30" title="Remover" onClick={() => onRemove(item.id)}>
+                <FontAwesomeIcon icon={faXmark} className="size-3" />
+              </button>
+            ) : null}
           </span>
         </div>
         <div className="flex flex-col bg-card p-2" style={{ height: height - CONTAINER_GRID.originY }}>
           <div className="shrink-0" style={{ height: rows * CONTAINER_GRID.spacingY - 8 }} />
           {/* mt-auto: gruda o painel na borda de baixo do container — o espaço reservado pra grade
               (acima) fica fixo, sobra de altura ao arrastar os cantos vira gap aqui, não embaixo. */}
-          <div className="mt-auto shrink-0">
-            <ContainerAddPanel containerId={item.id} looseItems={looseItems || []} onAddCategory={onAddCategoryToContainer} onMoveToContainer={onMoveToContainer} />
-          </div>
+          {!readOnly ? (
+            <div className="mt-auto shrink-0">
+              <ContainerAddPanel containerId={item.id} looseItems={looseItems || []} onAddCategory={onAddCategoryToContainer} onMoveToContainer={onMoveToContainer} />
+            </div>
+          ) : null}
         </div>
       </motion.div>
     )
@@ -167,32 +176,37 @@ export function FlowNode({ data, dragging, selected }) {
 
       <div className={`flex items-center justify-between gap-2 px-3 py-2 font-bold ${headerClass}`}>
         <NodeTitle item={item} />
-        <span className="nodrag flex shrink-0 items-center gap-1">
-          {containedIn != null ? (
+        {!readOnly ? (
+          <span className="nodrag flex shrink-0 items-center gap-1">
+            {containedIn != null ? (
+              <button
+                type="button"
+                className="flex size-5 items-center justify-center rounded-full bg-black/15 hover:bg-black/30"
+                title="Remover do container"
+                onClick={() => onRemoveFromContainer(item.id)}
+              >
+                <FontAwesomeIcon icon={faArrowUpFromBracket} className="size-3" />
+              </button>
+            ) : null}
             <button
               type="button"
               className="flex size-5 items-center justify-center rounded-full bg-black/15 hover:bg-black/30"
-              title="Remover do container"
-              onClick={() => onRemoveFromContainer(item.id)}
+              title="Remover"
+              onClick={() => onRemove(item.id)}
             >
-              <FontAwesomeIcon icon={faArrowUpFromBracket} className="size-3" />
+              <FontAwesomeIcon icon={faXmark} className="size-3" />
             </button>
-          ) : null}
-          <button
-            type="button"
-            className="flex size-5 items-center justify-center rounded-full bg-black/15 hover:bg-black/30"
-            title="Remover"
-            onClick={() => onRemove(item.id)}
-          >
-            <FontAwesomeIcon icon={faXmark} className="size-3" />
-          </button>
-        </span>
+          </span>
+        ) : null}
       </div>
 
       <div className="bg-card py-2">
         <div className="flex items-center gap-2 px-3 py-1.5 text-sm">
           <span className="w-4 shrink-0 text-center text-[0.82rem] text-muted-foreground">#</span>
           <span className="flex-1 text-card-foreground">Quantidade</span>
+          {readOnly ? (
+            <span className="shrink-0 text-center font-mono text-[0.88rem] text-card-foreground">{item.quantity}</span>
+          ) : (
           <span className="nodrag flex shrink-0 items-center gap-1.5">
             <button
               type="button"
@@ -210,6 +224,7 @@ export function FlowNode({ data, dragging, selected }) {
               <FontAwesomeIcon icon={faPlus} className="size-2.5" />
             </button>
           </span>
+          )}
         </div>
 
         {item.averagePrice ? (

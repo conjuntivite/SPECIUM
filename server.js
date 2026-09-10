@@ -5,6 +5,9 @@ const {
   listCategories, createCategory, updateCategory, deleteCategory,
   listGroups, createGroup, deleteGroup,
   listResources, createResource, updateResource, deleteResource,
+  createUser, findUserByEmail,
+  createSession, findSessionUser, deleteSession,
+  createBudget, listBudgetsForUser, getBudgetForUser, updateBudgetForUser, setBudgetAddressForUser, deleteBudgetForUser,
   closeDb,
 } = require('./db');
 
@@ -19,11 +22,17 @@ const {
   extractFonteSpecs, extractCaboSpecs, extractMikrotikSpecs, extractRoteadorSpecs, extractAcabamentoSpecs,
 } = require('./lib/specs');
 const { computeCategoryMissingEssentials } = require('./lib/recipeEngine');
-const { sendJson, sendCsv, readJson, serveStatic } = require('./lib/http');
+const { sendJson, sendCsv, readJson, serveStatic, parseCookies } = require('./lib/http');
 const {
   validateSearchRequest, validateCompareRequest, validateRecipeItems, validateRecipePriceItems,
   validateProductRequest, validateCategoryRequest, validateResourceRequest,
+  validateAuthRequest, validateSetAddressRequest, validateBudgetSaveRequest,
 } = require('./lib/validators');
+const {
+  hashPassword, verifyPassword, generateSessionToken, SESSION_COOKIE_NAME, SESSION_TTL_MS,
+  serializeSessionCookie, serializeClearSessionCookie,
+} = require('./lib/auth');
+const { geocodeAddress } = require('./lib/providers/geocoding');
 const { buildProductTemplateCsv, parseProductImportCsv } = require('./lib/productImport');
 const { setShoppingFetcher } = require('./lib/providers/shoppingFetcher');
 const { excludePriceOutliers, selectTopDistinctStores, buildGoogleShoppingUrl } = require('./lib/providers/shared');
@@ -35,6 +44,10 @@ const { normalizeSerperShopping, searchSerperShopping } = require('./lib/provide
 const { normalizeSerpApiShopping, searchSerpApiShopping } = require('./lib/providers/serpapi');
 const { SEARCH_PROVIDERS, AGGREGATE_PROVIDER, DEFAULT_PROVIDER, searchAllProviders, fetchRecipeItemPrice } = require('./lib/providers');
 
+function getAuthenticatedUser(request) {
+  return findSessionUser(parseCookies(request)[SESSION_COOKIE_NAME]);
+}
+
 async function requestHandler(request, response) {
   if (request.method === 'OPTIONS') return sendJson(response, 204, {});
   const url = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
@@ -43,6 +56,31 @@ async function requestHandler(request, response) {
       const providers = Object.fromEntries(Object.entries(SEARCH_PROVIDERS).map(([key, provider]) => [key, provider.hasKey()]));
       providers[AGGREGATE_PROVIDER] = true;
       return sendJson(response, 200, { status: 'healthy', search_providers: providers });
+    }
+    if (request.method === 'POST' && url.pathname === '/api/auth/register') {
+      const { email, password } = validateAuthRequest(await readJson(request));
+      const user = await createUser({ email, passwordHash: hashPassword(password) });
+      const token = generateSessionToken();
+      await createSession(token, user.id, new Date(Date.now() + SESSION_TTL_MS));
+      return sendJson(response, 201, user, { 'Set-Cookie': serializeSessionCookie(token) });
+    }
+    if (request.method === 'POST' && url.pathname === '/api/auth/login') {
+      const { email, password } = validateAuthRequest(await readJson(request));
+      const userDoc = await findUserByEmail(email);
+      if (!userDoc || !verifyPassword(password, userDoc.passwordHash)) throw new Error('E-mail ou senha inválidos.');
+      const token = generateSessionToken();
+      await createSession(token, userDoc._id.toString(), new Date(Date.now() + SESSION_TTL_MS));
+      return sendJson(response, 200, { id: userDoc._id.toString(), email: userDoc.email }, { 'Set-Cookie': serializeSessionCookie(token) });
+    }
+    if (request.method === 'POST' && url.pathname === '/api/auth/logout') {
+      const token = parseCookies(request)[SESSION_COOKIE_NAME];
+      if (token) await deleteSession(token);
+      return sendJson(response, 200, { loggedOut: true }, { 'Set-Cookie': serializeClearSessionCookie() });
+    }
+    if (request.method === 'GET' && url.pathname === '/api/auth/me') {
+      const user = await getAuthenticatedUser(request);
+      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      return sendJson(response, 200, user);
     }
     if (request.method === 'POST' && url.pathname === '/api/search') {
       const body = await readJson(request);
@@ -157,6 +195,52 @@ async function requestHandler(request, response) {
     if (resourceIdMatch && request.method === 'DELETE') {
       const id = resourceIdMatch[1];
       if (!(await deleteResource(id))) return sendJson(response, 404, { detail: 'Recurso não encontrado.' });
+      return sendJson(response, 200, { deleted: true });
+    }
+    if (request.method === 'GET' && url.pathname === '/api/budgets') {
+      const user = await getAuthenticatedUser(request);
+      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      return sendJson(response, 200, { budgets: await listBudgetsForUser(user.id) });
+    }
+    if (request.method === 'POST' && url.pathname === '/api/budgets') {
+      const user = await getAuthenticatedUser(request);
+      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      return sendJson(response, 201, await createBudget(user.id));
+    }
+    const budgetAddressMatch = url.pathname.match(/^\/api\/budgets\/([a-f0-9]{24})\/address$/i);
+    if (budgetAddressMatch && request.method === 'POST') {
+      const user = await getAuthenticatedUser(request);
+      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      const { clientName, address, number } = validateSetAddressRequest(await readJson(request));
+      const { lat, lng } = await geocodeAddress(`${address}, ${number}`);
+      const budget = await setBudgetAddressForUser(budgetAddressMatch[1], user.id, { clientName, address, number, lat, lng });
+      if (!budget) return sendJson(response, 404, { detail: 'Orçamento não encontrado.' });
+      return sendJson(response, 200, budget);
+    }
+    const budgetIdMatch = url.pathname.match(/^\/api\/budgets\/([a-f0-9]{24})$/i);
+    if (budgetIdMatch && request.method === 'GET') {
+      const user = await getAuthenticatedUser(request);
+      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      const budget = await getBudgetForUser(budgetIdMatch[1], user.id);
+      if (!budget) return sendJson(response, 404, { detail: 'Orçamento não encontrado.' });
+      return sendJson(response, 200, budget);
+    }
+    if (budgetIdMatch && request.method === 'PATCH') {
+      const user = await getAuthenticatedUser(request);
+      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      const patch = validateBudgetSaveRequest(await readJson(request));
+      const budget = await updateBudgetForUser(budgetIdMatch[1], user.id, patch);
+      if (!budget) return sendJson(response, 404, { detail: 'Orçamento não encontrado.' });
+      return sendJson(response, 200, budget);
+    }
+    if (budgetIdMatch && request.method === 'DELETE') {
+      const user = await getAuthenticatedUser(request);
+      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      const result = await deleteBudgetForUser(budgetIdMatch[1], user.id);
+      if (!result.deleted) {
+        if (result.reason === 'not_found') return sendJson(response, 404, { detail: 'Orçamento não encontrado.' });
+        return sendJson(response, 400, { detail: 'Só é possível excluir orçamentos com status "aberto".' });
+      }
       return sendJson(response, 200, { deleted: true });
     }
     if (request.method === 'GET') return serveStatic(url.pathname, response);

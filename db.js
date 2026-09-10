@@ -403,6 +403,165 @@ async function deleteResource(id) {
   return deletedCount > 0;
 }
 
+async function getUsersCollection() {
+  const db = await getDb();
+  return db.collection('users');
+}
+
+function toPublicUser(doc) {
+  return { id: doc._id.toString(), email: doc.email };
+}
+
+async function createUser({ email, passwordHash }) {
+  const users = await getUsersCollection();
+  if (await users.findOne({ email })) throw new Error('Já existe uma conta com esse e-mail.');
+  const { insertedId } = await users.insertOne({ email, passwordHash, createdAt: new Date() });
+  return { id: insertedId.toString(), email };
+}
+
+// Devolve o doc cru (com passwordHash) — só pro fluxo de login conferir a senha.
+async function findUserByEmail(email) {
+  const users = await getUsersCollection();
+  return users.findOne({ email });
+}
+
+async function findUserById(id) {
+  if (!ObjectId.isValid(id)) return null;
+  const users = await getUsersCollection();
+  const doc = await users.findOne({ _id: new ObjectId(id) });
+  return doc ? toPublicUser(doc) : null;
+}
+
+async function getSessionsCollection() {
+  const db = await getDb();
+  return db.collection('sessions');
+}
+
+// _id é o próprio token (string aleatória gerada por lib/auth.js) — sessão não precisa de
+// ObjectId, é só um lookup direto por chave.
+async function createSession(token, userId, expiresAt) {
+  const sessions = await getSessionsCollection();
+  await sessions.insertOne({ _id: token, userId: new ObjectId(userId), expiresAt });
+}
+
+// Limpeza preguiçosa: uma sessão expirada encontrada aqui já é apagada na hora, em vez de um
+// job de limpeza separado — não há motivo pra rodar duas rotinas quando uma leitura já revela a expiração.
+async function findSessionUser(token) {
+  if (!token) return null;
+  const sessions = await getSessionsCollection();
+  const session = await sessions.findOne({ _id: token });
+  if (!session) return null;
+  if (session.expiresAt < new Date()) {
+    await sessions.deleteOne({ _id: token });
+    return null;
+  }
+  return findUserById(session.userId.toString());
+}
+
+async function deleteSession(token) {
+  const sessions = await getSessionsCollection();
+  await sessions.deleteOne({ _id: token });
+}
+
+async function getBudgetsCollection() {
+  const db = await getDb();
+  return db.collection('budgets');
+}
+
+function toBudget(doc) {
+  return {
+    id: doc._id.toString(),
+    status: doc.status,
+    clientName: doc.clientName || null,
+    address: doc.address || null,
+    number: doc.number || null,
+    lat: Number.isFinite(doc.lat) ? doc.lat : null,
+    lng: Number.isFinite(doc.lng) ? doc.lng : null,
+    items: doc.items || [],
+    positions: doc.positions || {},
+    connections: doc.connections || [],
+    mapLayout: doc.mapLayout || {},
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+  };
+}
+
+function toBudgetSummary(doc) {
+  return {
+    id: doc._id.toString(), clientName: doc.clientName || null, status: doc.status,
+    // Lista precisa saber se já dá pra abrir o mapa sem buscar o orçamento inteiro — não é mais
+    // sinônimo de "fechado" (mapa libera já na etapa "criado", bem antes do orçamento fechar).
+    hasAddress: Number.isFinite(doc.lat) && Number.isFinite(doc.lng),
+    createdAt: doc.createdAt, updatedAt: doc.updatedAt,
+  };
+}
+
+async function createBudget(userId) {
+  const budgets = await getBudgetsCollection();
+  const now = new Date();
+  const doc = {
+    userId: new ObjectId(userId), status: 'aberto', clientName: null, address: null, number: null, lat: null, lng: null,
+    items: [], positions: {}, connections: [], mapLayout: {}, createdAt: now, updatedAt: now,
+  };
+  const { insertedId } = await budgets.insertOne(doc);
+  return toBudget({ _id: insertedId, ...doc });
+}
+
+async function listBudgetsForUser(userId) {
+  const budgets = await getBudgetsCollection();
+  const docs = await budgets.find({ userId: new ObjectId(userId) }).sort({ updatedAt: -1 }).toArray();
+  return docs.map(toBudgetSummary);
+}
+
+async function getBudgetForUser(id, userId) {
+  if (!ObjectId.isValid(id)) return null;
+  const budgets = await getBudgetsCollection();
+  const doc = await budgets.findOne({ _id: new ObjectId(id), userId: new ObjectId(userId) });
+  return doc ? toBudget(doc) : null;
+}
+
+async function updateBudgetForUser(id, userId, patch) {
+  if (!ObjectId.isValid(id)) return null;
+  const budgets = await getBudgetsCollection();
+  // Orçamento fechado só pode ser visualizado — barra aqui pega tanto o PATCH genérico (itens/
+  // posições/conexões/status) quanto setBudgetAddressForUser (que delega pra cá), num lugar só.
+  // Exceção: a própria transição PARA "fechado" (finalize) chega aqui com o status ainda
+  // "negociação" no banco, então não esbarra nesta trava.
+  const current = await budgets.findOne({ _id: new ObjectId(id), userId: new ObjectId(userId) }, { projection: { status: 1 } });
+  if (!current) return null;
+  if (current.status === 'fechado') throw new Error('Orçamento fechado só pode ser visualizado — não é possível editar.');
+  // driver mongodb@7: findOneAndUpdate devolve o documento direto (ou null), não mais um envelope
+  // { value } como nas versões antigas — desestruturar { value } aqui sempre dava undefined e
+  // fazia a função devolver null (404 "Orçamento não encontrado") mesmo quando a escrita já tinha
+  // sido aplicada no banco.
+  const updated = await budgets.findOneAndUpdate(
+    { _id: current._id, userId: new ObjectId(userId) },
+    { $set: { ...patch, updatedAt: new Date() } },
+    { returnDocument: 'after' }
+  );
+  return updated ? toBudget(updated) : null;
+}
+
+// Só grava os dados do endereço/geocodificação — a etapa (status) do orçamento é uma decisão
+// separada do consultor (ver validateBudgetSaveRequest + PATCH genérico), não um efeito colateral
+// automático de informar o endereço.
+async function setBudgetAddressForUser(id, userId, { clientName, address, number, lat, lng }) {
+  return updateBudgetForUser(id, userId, { clientName, address, number, lat, lng });
+}
+
+// Exclusão só é permitida com o orçamento ainda "aberto" (rascunho não comprometido com endereço
+// nem negociação) — filtro por status já vai dentro do deleteOne, atômico, sem janela de corrida
+// entre checar e apagar.
+async function deleteBudgetForUser(id, userId) {
+  if (!ObjectId.isValid(id)) return { deleted: false, reason: 'not_found' };
+  const budgets = await getBudgetsCollection();
+  const current = await budgets.findOne({ _id: new ObjectId(id), userId: new ObjectId(userId) }, { projection: { status: 1 } });
+  if (!current) return { deleted: false, reason: 'not_found' };
+  if (current.status !== 'aberto') return { deleted: false, reason: 'not_aberto' };
+  const { deletedCount } = await budgets.deleteOne({ _id: current._id, userId: new ObjectId(userId), status: 'aberto' });
+  return { deleted: deletedCount > 0 };
+}
+
 async function closeDb() {
   if (!dbPromise) return;
   await dbPromise;
@@ -416,5 +575,8 @@ module.exports = {
   listCategories, createCategory, updateCategory, deleteCategory,
   listGroups, createGroup, deleteGroup,
   listResources, createResource, updateResource, deleteResource,
+  createUser, findUserByEmail, findUserById,
+  createSession, findSessionUser, deleteSession,
+  createBudget, listBudgetsForUser, getBudgetForUser, updateBudgetForUser, setBudgetAddressForUser, deleteBudgetForUser,
   closeDb,
 };

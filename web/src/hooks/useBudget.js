@@ -1,66 +1,51 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getCategories, getPrices, getSuggestions } from '@/lib/api'
+import { getCategories, getPrices, getSuggestions, getBudget, updateBudget } from '@/lib/api'
 import { parseBRL } from '@/lib/money'
 import { CONTAINER_GRID, containerNodeSize } from '@/components/budget/FlowNode'
 
-// Portado de static/app.js:403-823. Mesmas chaves de localStorage do app original — orçamentos
-// já salvos por usuários atuais sobrevivem à migração.
-const BUDGET_STORAGE_KEY = 'comprador-inviolavel:budget:v2'
-const POSITIONS_STORAGE_KEY = 'comprador-inviolavel:budget:positions'
-const CONNECTIONS_STORAGE_KEY = 'comprador-inviolavel:budget:connections'
 // Nó tem 220px de largura — 300px de passo deixa ~80px de vão entre eles.
 const NODE_SPACING_X = 300
+// Debounce do autosave — evita um PATCH por frame de arraste (onNodeDragStop chama updatePosition
+// a cada node solto do grupo movido).
+const SAVE_DEBOUNCE_MS = 500
 
 function clampQuantity(value) {
   const n = Math.trunc(Number(value))
   return Number.isFinite(n) && n > 0 ? Math.min(n, 999) : 1
 }
 
-function loadBudget() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(BUDGET_STORAGE_KEY) || '{}')
-    const items = Array.isArray(saved.items)
-      ? saved.items.filter((item) => item && typeof item.title === 'string' && item.title.trim() && Number.isFinite(item.id))
-      : []
-    const nextItemId = Number.isFinite(saved.nextItemId) ? saved.nextItemId : items.reduce((max, item) => Math.max(max, item.id), 0)
-    return {
-      items: items.map((item) => ({
-        id: item.id, title: item.title, quantity: clampQuantity(item.quantity), icon: item.icon || null,
-        containerId: Number.isFinite(item.containerId) ? item.containerId : null,
-        containerOpen: item.containerOpen !== false,
-        containerSize: item.containerSize && Number.isFinite(item.containerSize.width) && Number.isFinite(item.containerSize.height)
-          ? { width: item.containerSize.width, height: item.containerSize.height }
-          : null,
-        averagePrice: null, bestOffer: null,
-      })),
-      nextItemId,
-    }
-  } catch {
-    return { items: [], nextItemId: 0 }
-  }
+// Mesmo saneamento que a leitura do localStorage sempre fez — agora aplicado ao que vem da API,
+// que é uma fonte igualmente "não confiável" (documento pode ter sido salvo por uma versão antiga).
+function sanitizeItems(rawItems) {
+  const items = Array.isArray(rawItems)
+    ? rawItems.filter((item) => item && typeof item.title === 'string' && item.title.trim() && Number.isFinite(item.id))
+    : []
+  return items.map((item) => ({
+    id: item.id, title: item.title, quantity: clampQuantity(item.quantity), icon: item.icon || null,
+    containerId: Number.isFinite(item.containerId) ? item.containerId : null,
+    containerOpen: item.containerOpen !== false,
+    containerSize: item.containerSize && Number.isFinite(item.containerSize.width) && Number.isFinite(item.containerSize.height)
+      ? { width: item.containerSize.width, height: item.containerSize.height }
+      : null,
+    averagePrice: null, bestOffer: null,
+  }))
 }
 
-function loadPositions() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(POSITIONS_STORAGE_KEY) || '{}')
-    return saved && typeof saved === 'object' ? saved : {}
-  } catch {
-    return {}
-  }
+function sanitizePositions(rawPositions) {
+  return rawPositions && typeof rawPositions === 'object' && !Array.isArray(rawPositions) ? rawPositions : {}
 }
 
 // Ligações manuais que o próprio usuário desenha entre os cards (arrastando de um handle a outro),
 // separadas das arestas automáticas do motor de sugestões — sobrevivem independente do que o motor
 // recalcula a cada mudança nos itens.
-function loadConnections() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(CONNECTIONS_STORAGE_KEY) || '[]')
-    return Array.isArray(saved)
-      ? saved.filter((c) => c && typeof c.id === 'string' && typeof c.source === 'string' && typeof c.target === 'string')
-      : []
-  } catch {
-    return []
-  }
+function sanitizeConnections(rawConnections) {
+  return Array.isArray(rawConnections)
+    ? rawConnections.filter((c) => c && typeof c.id === 'string' && typeof c.source === 'string' && typeof c.target === 'string')
+    : []
+}
+
+function sanitizeMapLayout(rawMapLayout) {
+  return rawMapLayout && typeof rawMapLayout === 'object' && !Array.isArray(rawMapLayout) ? rawMapLayout : {}
 }
 
 export const itemFlowKey = (item) => `item-${item.id}`
@@ -97,13 +82,25 @@ function nearestVisibleAncestorId(itemId, itemsById) {
   return cursor.id
 }
 
-export function useBudget() {
-  const nextItemIdRef = useRef()
-  if (nextItemIdRef.current === undefined) nextItemIdRef.current = loadBudget().nextItemId
+export function useBudget(budgetId) {
+  const nextItemIdRef = useRef(0)
 
-  const [items, setItems] = useState(() => loadBudget().items)
-  const [positions, setPositions] = useState(() => loadPositions())
-  const [connections, setConnections] = useState(() => loadConnections())
+  const [items, setItems] = useState([])
+  const [positions, setPositions] = useState({})
+  const [connections, setConnections] = useState([])
+  const [mapLayout, setMapLayout] = useState({})
+  const [status, setStatus] = useState('aberto')
+  // Snapshot do que já está gravado no servidor — canvas (itens/posições/conexões/etapa) só
+  // persiste com um clique explícito em "Salvar" (ver `save`); "Cancelar" (`discard`) volta pra cá.
+  // Endereço e mapLayout continuam com vida própria (têm sua própria ação/autosave), fora deste
+  // snapshot.
+  const lastSavedRef = useRef({ items: [], positions: {}, connections: [], status: 'aberto' })
+  const [clientName, setClientName] = useState(null)
+  const [address, setAddress] = useState(null)
+  const [number, setNumber] = useState(null)
+  const [lat, setLat] = useState(null)
+  const [lng, setLng] = useState(null)
+  const [loaded, setLoaded] = useState(false)
   const [suggestionsData, setSuggestionsData] = useState({ requirements_by_category: {}, items: [] })
   const [priceLoading, setPriceLoading] = useState(false)
   const [priceError, setPriceError] = useState('')
@@ -115,22 +112,93 @@ export function useBudget() {
     getCategories().then((data) => setCategories(data.categories || [])).catch(() => {})
   }, [])
 
+  // Carrega o orçamento do backend uma vez por budgetId — troca a fonte de verdade de
+  // localStorage pra Mongo (Fase 2), mesma sanitização que a leitura do localStorage sempre fez.
   useEffect(() => {
-    try {
-      localStorage.setItem(BUDGET_STORAGE_KEY, JSON.stringify({
-        items: items.map(({ id, title, quantity, icon, containerId, containerOpen, containerSize }) => ({ id, title, quantity, icon, containerId, containerOpen, containerSize })),
-        nextItemId: nextItemIdRef.current,
-      }))
-    } catch { /* storage indisponível, segue sem persistir */ }
-  }, [items])
+    let cancelled = false
+    setLoaded(false)
+    getBudget(budgetId).then((data) => {
+      if (cancelled) return
+      const loadedItems = sanitizeItems(data.items)
+      nextItemIdRef.current = loadedItems.reduce((max, item) => Math.max(max, item.id), 0)
+      setItems(loadedItems)
+      setPositions(sanitizePositions(data.positions))
+      setConnections(sanitizeConnections(data.connections))
+      setMapLayout(sanitizeMapLayout(data.mapLayout))
+      const loadedStatus = data.status || 'aberto'
+      setStatus(loadedStatus)
+      lastSavedRef.current = {
+        items: loadedItems,
+        positions: sanitizePositions(data.positions),
+        connections: sanitizeConnections(data.connections),
+        status: loadedStatus,
+      }
+      setClientName(data.clientName || null)
+      setAddress(data.address || null)
+      setNumber(data.number || null)
+      setLat(Number.isFinite(data.lat) ? data.lat : null)
+      setLng(Number.isFinite(data.lng) ? data.lng : null)
+      setLoaded(true)
+    }).catch(() => { if (!cancelled) setLoaded(true) })
+    return () => { cancelled = true }
+  }, [budgetId])
 
-  useEffect(() => {
-    try { localStorage.setItem(POSITIONS_STORAGE_KEY, JSON.stringify(positions)) } catch { /* storage indisponível */ }
-  }, [positions])
+  // Chamado pelo BudgetView depois que POST /api/budgets/:id/address volta com sucesso — evita um
+  // segundo round-trip só pra reler o que a resposta já trouxe. Não mexe em status: definir/editar
+  // endereço é uma ação independente da etapa do orçamento.
+  const applyAddress = useCallback((updatedBudget) => {
+    setClientName(updatedBudget.clientName || null)
+    setAddress(updatedBudget.address || null)
+    setNumber(updatedBudget.number || null)
+    setLat(Number.isFinite(updatedBudget.lat) ? updatedBudget.lat : null)
+    setLng(Number.isFinite(updatedBudget.lng) ? updatedBudget.lng : null)
+  }, [])
 
+  // mapLayout continua com autosave automático (debounced) — é edição feita na tela do mapa, uma
+  // jornada separada da do canvas, sem botão Salvar/Cancelar próprio. Uma mudança de posição durante
+  // um arraste dispara isso a cada frame; sem o debounce seria um PATCH por frame.
+  const mapSaveTimeoutRef = useRef(null)
   useEffect(() => {
-    try { localStorage.setItem(CONNECTIONS_STORAGE_KEY, JSON.stringify(connections)) } catch { /* storage indisponível */ }
-  }, [connections])
+    if (!loaded) return
+    clearTimeout(mapSaveTimeoutRef.current)
+    mapSaveTimeoutRef.current = setTimeout(() => {
+      updateBudget(budgetId, { mapLayout }).catch(() => { /* autosave silencioso — próxima mudança tenta de novo */ })
+    }, SAVE_DEBOUNCE_MS)
+    return () => clearTimeout(mapSaveTimeoutRef.current)
+  }, [mapLayout, loaded, budgetId])
+
+  function itemsPayload(list) {
+    return list.map(({ id, title, quantity, icon, containerId, containerOpen, containerSize }) => ({ id, title, quantity, icon, containerId, containerOpen, containerSize }))
+  }
+
+  // Salvar do canvas (itens/posições/conexões) é explícito, não mais debounced — junto ele decide a
+  // etapa: sem endereço definido o orçamento fica/continua "aberto", com endereço vira "negociação".
+  // Uma vez "fechado" (ver `finalize`), salvar edições não reabre a etapa sozinho.
+  const save = useCallback(async () => {
+    const hasAddress = Number.isFinite(lat) && Number.isFinite(lng)
+    const nextStatus = status === 'fechado' ? 'fechado' : (hasAddress ? 'negociacao' : 'aberto')
+    await updateBudget(budgetId, { items: itemsPayload(items), positions, connections, status: nextStatus })
+    lastSavedRef.current = { items, positions, connections, status: nextStatus }
+    setStatus(nextStatus)
+  }, [budgetId, items, positions, connections, status, lat, lng])
+
+  // Cancelar descarta o que foi mexido no canvas desde o último Salvar (ou desde que o orçamento
+  // carregou) — volta pro snapshot, não mexe no que já está gravado no servidor.
+  const discard = useCallback(() => {
+    const snapshot = lastSavedRef.current
+    setItems(snapshot.items)
+    setPositions(snapshot.positions)
+    setConnections(snapshot.connections)
+    setStatus(snapshot.status)
+  }, [])
+
+  // Marca o orçamento como concluído — ação separada de Salvar, só disponível depois que a etapa já
+  // virou "negociação" (endereço definido).
+  const finalize = useCallback(async () => {
+    await updateBudget(budgetId, { status: 'fechado' })
+    lastSavedRef.current = { ...lastSavedRef.current, status: 'fechado' }
+    setStatus('fechado')
+  }, [budgetId])
 
   // Guarda de race condition: cada mudança em `items` dispara seu próprio fetch de sugestões — se
   // duas ficam "no ar" ao mesmo tempo, a resposta mais antiga não pode sobrescrever a mais nova.
@@ -193,6 +261,12 @@ export function useBudget() {
 
   const removeConnection = useCallback((id) => {
     setConnections((prev) => prev.filter((c) => c.id !== id))
+  }, [])
+
+  // Atribuir ícone na hora, direto do mapa — usado quando o item não veio de um produto cadastrado
+  // com ícone (cadastro em branco vira o box genérico até alguém escolher um aqui).
+  const setItemIcon = useCallback((itemId, icon) => {
+    setItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, icon: icon || null } : item)))
   }, [])
 
   const updateQuantity = useCallback((itemId, delta) => {
@@ -420,15 +494,29 @@ export function useBudget() {
   }, 0), [items])
 
   return {
+    loaded,
     items,
     nodes,
     edges,
     suggestions,
     total,
+    mapLayout,
+    setMapLayout,
+    status,
+    save,
+    discard,
+    finalize,
+    clientName,
+    address,
+    number,
+    lat,
+    lng,
+    applyAddress,
     priceLoading,
     priceError,
     addItem,
     removeItem,
+    setItemIcon,
     updateQuantity,
     updatePosition,
     addConnection,

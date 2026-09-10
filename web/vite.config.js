@@ -20,4 +20,8 @@ export default defineConfig({
   build: {
     outDir: 'dist',
   },
+  // Exigido pelo web worker interno do maplibre-gl (mapa da Fase 4, tiles do OpenFreeMap).
+  worker: {
+    format: 'es',
+  },
 })

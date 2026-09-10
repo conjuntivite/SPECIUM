@@ -82,6 +82,46 @@ export function deleteGroup(id) {
   return requestJson(`/api/groups/${id}`, { method: 'DELETE' })
 }
 
+export function register(email, password) {
+  return postJson('/api/auth/register', { email, password })
+}
+
+export function login(email, password) {
+  return postJson('/api/auth/login', { email, password })
+}
+
+export function logout() {
+  return postJson('/api/auth/logout', {})
+}
+
+export function getMe() {
+  return requestJson('/api/auth/me')
+}
+
+export function listBudgets() {
+  return requestJson('/api/budgets')
+}
+
+export function createBudget() {
+  return postJson('/api/budgets', {})
+}
+
+export function getBudget(id) {
+  return requestJson(`/api/budgets/${id}`)
+}
+
+export function updateBudget(id, patch) {
+  return requestJson(`/api/budgets/${id}`, { method: 'PATCH', body: patch })
+}
+
+export function setBudgetAddress(id, data) {
+  return postJson(`/api/budgets/${id}/address`, data)
+}
+
+export function deleteBudget(id) {
+  return requestJson(`/api/budgets/${id}`, { method: 'DELETE' })
+}
+
 export function getResources() {
   return requestJson('/api/resources')
 }

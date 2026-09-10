@@ -1,51 +1,127 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faBox, faMagnifyingGlass, faTag, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
+import { faBars, faBox, faEye, faFloppyDisk, faList, faLock, faLocationDot, faMagnifyingGlass, faMapLocationDot, faPenToSquare, faTag, faTriangleExclamation, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { ReactFlowProvider } from '@xyflow/react'
 import { useBudget } from '@/hooks/useBudget'
 import { formatBRL } from '@/lib/money'
 import { FlowLegend } from './FlowLegend'
 import { SuggestionsStrip } from './SuggestionsStrip'
 import { BudgetCanvas } from './BudgetCanvas'
+import { AddressDialog } from './AddressDialog'
+import { MapView } from '@/components/map/MapView'
+
+const PILL = 'flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur transition-colors hover:bg-secondary'
+const PILL_DISABLED = 'disabled:pointer-events-none disabled:opacity-50'
+
+const STATUS_LABEL = { aberto: 'Aberto', negociacao: 'Em negociação', fechado: 'Fechado' }
 
 // Canvas ocupa a janela inteira — controles de adicionar item, zoom, verificar preços e limpar
 // fluxo saíram da tela e viraram opções do menu de botão direito em cima do canvas (ver
 // BudgetCanvas). O que continua visível fica flutuando por cima do canvas: legenda + total,
 // listinha de sugestões e o botão pra voltar pra busca avançada.
-export function BudgetView({ onSwitchToSearch, onGoToProducts, onGoToCategories }) {
-  const budget = useBudget()
+//
+// Jornada do orçamento (status): aberto -> negociação -> fechado. "Salvar" é a única ação que grava
+// itens/posições/conexões no servidor (nada mais autosalva no canvas) — e decide a etapa sozinho:
+// sem endereço fica "aberto", com endereço vira "negociação". "Cancelar" descarta o que foi mexido
+// desde o último Salvar. "Finalizar orçamento" fecha, depois que já está em negociação.
+export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSearch, onGoToProducts, onGoToCategories }) {
+  const budget = useBudget(budgetId)
   // SuggestionsStrip é irmã de BudgetCanvas aqui embaixo — o ref é o jeito de mandar o clique no
   // "+" passar pelo mesmo seletor de produto cadastrado que o menu de botão direito usa.
   const canvasRef = useRef(null)
+  const [step, setStep] = useState(initialStep || 'canvas')
+  const [addressDialogOpen, setAddressDialogOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [navOpen, setNavOpen] = useState(false)
+
+  const hasAddress = Number.isFinite(budget.lat) && Number.isFinite(budget.lng)
+  // Fechado = só visualização (pedido explícito) — nada de mexer em endereço, itens, ligações ou
+  // etapa a partir daqui; o servidor também recusa (updateBudgetForUser/setBudgetAddressForUser),
+  // isto aqui só evita oferecer um botão que ia dar erro.
+  const readOnly = budget.status === 'fechado'
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      await budget.save()
+      onBackToList()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function handleCancel() {
+    budget.discard()
+    onBackToList()
+  }
+
+  if (step === 'map') {
+    return (
+      <MapView
+        budgetId={budgetId}
+        lat={budget.lat}
+        lng={budget.lng}
+        items={budget.items}
+        onSetItemIcon={budget.setItemIcon}
+        mapLayout={budget.mapLayout}
+        onChangeMapLayout={budget.setMapLayout}
+        onBackToCanvas={() => setStep('canvas')}
+      />
+    )
+  }
 
   return (
     <div className="fixed inset-0 z-40">
       <ReactFlowProvider>
-        <BudgetCanvas ref={canvasRef} budget={budget} onGoToProducts={onGoToProducts} />
+        <BudgetCanvas ref={canvasRef} budget={budget} onGoToProducts={onGoToProducts} readOnly={readOnly} />
+        <AddressDialog
+          budgetId={budgetId}
+          open={addressDialogOpen}
+          onOpenChange={setAddressDialogOpen}
+          isEditing={hasAddress}
+          initialClientName={budget.clientName}
+          initialAddress={budget.address}
+          initialNumber={budget.number}
+          onSaved={(updatedBudget) => {
+            budget.applyAddress(updatedBudget)
+            setAddressDialogOpen(false)
+            if (!hasAddress) setStep('map') // primeira vez que o endereço é definido já leva pro mapa; editar depois não navega sozinho
+          }}
+        />
 
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-center justify-between gap-3 p-4">
-          <div className="pointer-events-auto flex flex-wrap gap-2">
+        {/* pr-16 (bem além do p-4 padrão) — o botão de tema é fixed top-4 right-4 com z-50, por cima
+            de tudo; sem essa folga extra à direita, o grupo de ações (Salvar por último) encosta e
+            fica parcialmente escondido atrás dele. */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-center justify-between gap-3 p-4 pr-16">
+          <div className="pointer-events-auto relative">
             <button
               type="button"
-              onClick={onSwitchToSearch}
-              className="flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur transition-colors hover:bg-secondary"
+              onClick={() => setNavOpen((o) => !o)}
+              title={navOpen ? 'Fechar menu' : 'Abrir menu'}
+              className={PILL}
             >
-              <FontAwesomeIcon icon={faMagnifyingGlass} className="size-4" /> Busca avançada por item
+              <FontAwesomeIcon icon={navOpen ? faXmark : faBars} className="size-4" />
             </button>
-            <button
-              type="button"
-              onClick={onGoToProducts}
-              className="flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur transition-colors hover:bg-secondary"
+            {/* Retrátil: abre da esquerda pra direita por cima do resto da tela (position absolute,
+                não participa do flex da barra) — max-width animado + overflow-hidden. Fora do fluxo
+                de propósito: se entrasse no flex normal, abrir o menu empurraria a legenda e o grupo
+                de ações (endereço/mapa/salvar) pra uma segunda linha. */}
+            <div
+              className={`absolute left-full top-0 z-20 ml-2 flex items-center gap-2 overflow-hidden transition-[max-width,opacity] duration-300 ${navOpen ? 'max-w-[640px] opacity-100' : 'max-w-0 opacity-0'}`}
             >
-              <FontAwesomeIcon icon={faBox} className="size-4" /> Produtos
-            </button>
-            <button
-              type="button"
-              onClick={onGoToCategories}
-              className="flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur transition-colors hover:bg-secondary"
-            >
-              <FontAwesomeIcon icon={faTag} className="size-4" /> Categorias
-            </button>
+              <button type="button" onClick={onBackToList} className={`${PILL} whitespace-nowrap`}>
+                <FontAwesomeIcon icon={faList} className="size-4" /> Meus orçamentos
+              </button>
+              <button type="button" onClick={onSwitchToSearch} className={`${PILL} whitespace-nowrap`}>
+                <FontAwesomeIcon icon={faMagnifyingGlass} className="size-4" /> Busca avançada por item
+              </button>
+              <button type="button" onClick={onGoToProducts} className={`${PILL} whitespace-nowrap`}>
+                <FontAwesomeIcon icon={faBox} className="size-4" /> Produtos
+              </button>
+              <button type="button" onClick={onGoToCategories} className={`${PILL} whitespace-nowrap`}>
+                <FontAwesomeIcon icon={faTag} className="size-4" /> Categorias
+              </button>
+            </div>
           </div>
 
           <div className="pointer-events-auto flex flex-wrap items-center gap-4 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm text-muted-foreground backdrop-blur">
@@ -54,20 +130,87 @@ export function BudgetView({ onSwitchToSearch, onGoToProducts, onGoToCategories 
               <span className="font-mono font-bold text-flow-green">{formatBRL(budget.total)}</span>
             ) : null}
           </div>
-        </div>
 
-        {/* Coluna direita, abaixo da barra superior — era faixa horizontal em cima do canvas antes. */}
-        <div className="pointer-events-none absolute right-4 top-20 bottom-4 z-10">
-          <div className="pointer-events-auto h-full">
-            <SuggestionsStrip suggestions={budget.suggestions} onAdd={(req) => canvasRef.current?.addSuggestion(req)} />
+          <div className="pointer-events-auto flex flex-wrap items-center gap-2">
+            <span className={PILL}>{STATUS_LABEL[budget.status] || budget.status}</span>
+
+            {readOnly ? (
+              hasAddress ? (
+                <span className={`${PILL} max-w-[280px]`}>
+                  <FontAwesomeIcon icon={faLocationDot} className="size-4 shrink-0 text-destructive" />
+                  <span className="truncate">{budget.address}{budget.number ? `, ${budget.number}` : ''}</span>
+                </span>
+              ) : null
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAddressDialogOpen(true)}
+                title={hasAddress ? 'Editar endereço' : 'Definir endereço'}
+                className={`${PILL} max-w-[280px]`}
+              >
+                <FontAwesomeIcon icon={faLocationDot} className="size-4 shrink-0 text-destructive" />
+                {hasAddress ? (
+                  <span className="truncate">{budget.address}{budget.number ? `, ${budget.number}` : ''}</span>
+                ) : (
+                  <span>Definir endereço</span>
+                )}
+                <FontAwesomeIcon icon={faPenToSquare} className="size-3.5 shrink-0 text-muted-foreground" />
+              </button>
+            )}
+
+            {hasAddress ? (
+              <button type="button" onClick={() => setStep('map')} className={PILL}>
+                <FontAwesomeIcon icon={faMapLocationDot} className="size-4" /> Ver mapa
+              </button>
+            ) : null}
+
+            {readOnly ? (
+              <span className={PILL} title="Orçamento fechado — só visualização">
+                <FontAwesomeIcon icon={faEye} className="size-4" /> Somente visualização
+              </span>
+            ) : (
+              <>
+                {budget.status === 'negociacao' ? (
+                  <button type="button" onClick={() => budget.finalize()} className={PILL}>
+                    <FontAwesomeIcon icon={faLock} className="size-4" /> Finalizar orçamento
+                  </button>
+                ) : null}
+
+                <button type="button" onClick={handleCancel} className={`${PILL} text-destructive`}>
+                  <FontAwesomeIcon icon={faXmark} className="size-4" /> Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  disabled={!budget.items.length || saving}
+                  title={!budget.items.length ? 'Adicione ao menos um equipamento no fluxo antes' : undefined}
+                  onClick={handleSave}
+                  className={`${PILL} ${PILL_DISABLED} text-flow-green`}
+                >
+                  <FontAwesomeIcon icon={faFloppyDisk} className="size-4" /> {saving ? 'Salvando...' : 'Salvar'}
+                </button>
+              </>
+            )}
           </div>
         </div>
 
-        {!budget.items.length ? (
+        {/* Coluna direita, abaixo da barra superior — era faixa horizontal em cima do canvas antes.
+            Some no modo só-visualização: são sugestões de equipamento pra ADICIONAR, sem sentido
+            num orçamento fechado. */}
+        {!readOnly ? (
+          <div className="pointer-events-none absolute right-4 top-20 bottom-4 z-10">
+            <div className="pointer-events-auto h-full">
+              <SuggestionsStrip suggestions={budget.suggestions} onAdd={(req) => canvasRef.current?.addSuggestion(req)} />
+            </div>
+          </div>
+        ) : null}
+
+        {budget.loaded && !budget.items.length ? (
           <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
             <p className="max-w-sm rounded-xl border border-border bg-card/90 p-4 text-center text-sm text-muted-foreground backdrop-blur">
-              Nenhum item no fluxo ainda. Clique com o botão direito no canvas para adicionar o
-              primeiro equipamento (ex: Câmera IP).
+              {readOnly
+                ? 'Nenhum item neste orçamento.'
+                : 'Nenhum item no fluxo ainda. Clique com o botão direito no canvas para adicionar o primeiro equipamento (ex: Câmera IP).'}
             </p>
           </div>
         ) : null}
