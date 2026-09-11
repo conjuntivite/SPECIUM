@@ -171,16 +171,12 @@ export function useBudget(budgetId) {
     return list.map(({ id, title, quantity, icon, containerId, containerOpen, containerSize }) => ({ id, title, quantity, icon, containerId, containerOpen, containerSize }))
   }
 
-  // Salvar do canvas (itens/posições/conexões) é explícito, não mais debounced — junto ele decide a
-  // etapa: sem endereço definido o orçamento fica/continua "aberto", com endereço vira "negociação".
-  // Uma vez "fechado" (ver `finalize`), salvar edições não reabre a etapa sozinho.
+  // Salvar do canvas (itens/posições/conexões) é explícito, não mais debounced — não mexe em etapa,
+  // essa é decisão do consultor (ver `changeStatus`), nunca um efeito colateral de salvar.
   const save = useCallback(async () => {
-    const hasAddress = Number.isFinite(lat) && Number.isFinite(lng)
-    const nextStatus = status === 'fechado' ? 'fechado' : (hasAddress ? 'negociacao' : 'aberto')
-    await updateBudget(budgetId, { items: itemsPayload(items), positions, connections, status: nextStatus })
-    lastSavedRef.current = { items, positions, connections, status: nextStatus }
-    setStatus(nextStatus)
-  }, [budgetId, items, positions, connections, status, lat, lng])
+    await updateBudget(budgetId, { items: itemsPayload(items), positions, connections })
+    lastSavedRef.current = { ...lastSavedRef.current, items, positions, connections }
+  }, [budgetId, items, positions, connections])
 
   // Cancelar descarta o que foi mexido no canvas desde o último Salvar (ou desde que o orçamento
   // carregou) — volta pro snapshot, não mexe no que já está gravado no servidor.
@@ -192,12 +188,13 @@ export function useBudget(budgetId) {
     setStatus(snapshot.status)
   }, [])
 
-  // Marca o orçamento como concluído — ação separada de Salvar, só disponível depois que a etapa já
-  // virou "negociação" (endereço definido).
-  const finalize = useCallback(async () => {
-    await updateBudget(budgetId, { status: 'fechado' })
-    lastSavedRef.current = { ...lastSavedRef.current, status: 'fechado' }
-    setStatus('fechado')
+  // Troca de etapa é sempre uma ação explícita do consultor (seletor no canvas), nunca automática —
+  // grava na hora, independente de Salvar. "fechado" trava o orçamento pra só-leitura no servidor
+  // (updateBudgetForUser), então essa é a última troca possível por aqui.
+  const changeStatus = useCallback(async (nextStatus) => {
+    await updateBudget(budgetId, { status: nextStatus })
+    lastSavedRef.current = { ...lastSavedRef.current, status: nextStatus }
+    setStatus(nextStatus)
   }, [budgetId])
 
   // Guarda de race condition: cada mudança em `items` dispara seu próprio fetch de sugestões — se
@@ -505,7 +502,7 @@ export function useBudget(budgetId) {
     status,
     save,
     discard,
-    finalize,
+    changeStatus,
     clientName,
     address,
     number,

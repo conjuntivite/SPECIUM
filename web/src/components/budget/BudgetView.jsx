@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faBars, faBox, faEye, faFloppyDisk, faList, faLock, faLocationDot, faMagnifyingGlass, faMapLocationDot, faPenToSquare, faTag, faTriangleExclamation, faXmark } from '@fortawesome/free-solid-svg-icons'
+import { faBars, faBox, faEye, faFloppyDisk, faList, faLocationDot, faMagnifyingGlass, faMapLocationDot, faPenToSquare, faTag, faTriangleExclamation, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { ReactFlowProvider } from '@xyflow/react'
 import { useBudget } from '@/hooks/useBudget'
 import { formatBRL } from '@/lib/money'
@@ -14,16 +14,17 @@ const PILL = 'flex items-center gap-1.5 rounded-full border border-border bg-car
 const PILL_DISABLED = 'disabled:pointer-events-none disabled:opacity-50'
 
 const STATUS_LABEL = { aberto: 'Aberto', negociacao: 'Em negociação', fechado: 'Fechado' }
+const STATUS_OPTIONS = ['aberto', 'negociacao', 'fechado']
 
 // Canvas ocupa a janela inteira — controles de adicionar item, zoom, verificar preços e limpar
 // fluxo saíram da tela e viraram opções do menu de botão direito em cima do canvas (ver
 // BudgetCanvas). O que continua visível fica flutuando por cima do canvas: legenda + total,
 // listinha de sugestões e o botão pra voltar pra busca avançada.
 //
-// Jornada do orçamento (status): aberto -> negociação -> fechado. "Salvar" é a única ação que grava
-// itens/posições/conexões no servidor (nada mais autosalva no canvas) — e decide a etapa sozinho:
-// sem endereço fica "aberto", com endereço vira "negociação". "Cancelar" descarta o que foi mexido
-// desde o último Salvar. "Finalizar orçamento" fecha, depois que já está em negociação.
+// Jornada do orçamento (status): aberto / em negociação / fechado — o consultor escolhe a etapa
+// no seletor da barra superior, o sistema nunca decide sozinho. "Salvar" só grava itens/posições/
+// conexões (nada mais autosalva no canvas). "Cancelar" descarta o que foi mexido desde o último
+// Salvar. "fechado" trava o orçamento pra só-leitura (ver `readOnly`), não dá pra reabrir por aqui.
 export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSearch, onGoToProducts, onGoToCategories }) {
   const budget = useBudget(budgetId)
   // SuggestionsStrip é irmã de BudgetCanvas aqui embaixo — o ref é o jeito de mandar o clique no
@@ -132,7 +133,20 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
           </div>
 
           <div className="pointer-events-auto flex flex-wrap items-center gap-2">
-            <span className={PILL}>{STATUS_LABEL[budget.status] || budget.status}</span>
+            {readOnly ? (
+              <span className={PILL}>{STATUS_LABEL[budget.status] || budget.status}</span>
+            ) : (
+              <select
+                value={budget.status}
+                onChange={(event) => budget.changeStatus(event.target.value)}
+                title="Etapa do orçamento"
+                className={`${PILL} cursor-pointer`}
+              >
+                {STATUS_OPTIONS.map((value) => (
+                  <option key={value} value={value}>{STATUS_LABEL[value]}</option>
+                ))}
+              </select>
+            )}
 
             {readOnly ? (
               hasAddress ? (
@@ -170,12 +184,6 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
               </span>
             ) : (
               <>
-                {budget.status === 'negociacao' ? (
-                  <button type="button" onClick={() => budget.finalize()} className={PILL}>
-                    <FontAwesomeIcon icon={faLock} className="size-4" /> Finalizar orçamento
-                  </button>
-                ) : null}
-
                 <button type="button" onClick={handleCancel} className={`${PILL} text-destructive`}>
                   <FontAwesomeIcon icon={faXmark} className="size-4" /> Cancelar
                 </button>
