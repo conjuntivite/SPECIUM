@@ -458,6 +458,17 @@ async function findUserById(id) {
   return doc ? toPublicUser(doc) : null;
 }
 
+// Conta de recuperação (admin), semeada a cada boot a partir de DEV_EMAIL/DEV_PASSWORD no .env — se
+// esquecer a senha própria, trocar a senha do dev no .env e reiniciar já reseta a conta.
+async function seedDevAdmin({ email, passwordHash }) {
+  const users = await getUsersCollection();
+  await users.updateOne(
+    { email },
+    { $set: { email, passwordHash, role: 'admin' }, $setOnInsert: { name: 'Dev', createdAt: new Date() } },
+    { upsert: true }
+  );
+}
+
 async function getSessionsCollection() {
   const db = await getDb();
   return db.collection('sessions');
@@ -601,7 +612,7 @@ module.exports = {
   listCategories, createCategory, updateCategory, deleteCategory,
   listGroups, createGroup, deleteGroup,
   listResources, createResource, updateResource, deleteResource,
-  createUser, findUserByEmail, findUserById, listUsers, updateUser,
+  createUser, findUserByEmail, findUserById, listUsers, updateUser, seedDevAdmin,
   createSession, findSessionUser, deleteSession,
   createBudget, listBudgetsForUser, getBudgetForUser, updateBudgetForUser, setBudgetAddressForUser, deleteBudgetForUser,
   closeDb,

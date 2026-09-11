@@ -5,7 +5,7 @@ const {
   listCategories, createCategory, updateCategory, deleteCategory,
   listGroups, createGroup, deleteGroup,
   listResources, createResource, updateResource, deleteResource,
-  createUser, findUserByEmail, listUsers, updateUser,
+  createUser, findUserByEmail, listUsers, updateUser, seedDevAdmin,
   createSession, findSessionUser, deleteSession,
   createBudget, listBudgetsForUser, getBudgetForUser, updateBudgetForUser, setBudgetAddressForUser, deleteBudgetForUser,
   closeDb,
@@ -271,7 +271,14 @@ async function requestHandler(request, response) {
 
 function startServer() {
   const server = http.createServer(requestHandler);
-  server.listen(PORT, HOST, () => console.log(`Comprador Inviolável em http://localhost:${PORT}`));
+  server.listen(PORT, HOST, async () => {
+    const { DEV_EMAIL, DEV_PASSWORD } = process.env;
+    if (DEV_EMAIL && DEV_PASSWORD) {
+      await seedDevAdmin({ email: DEV_EMAIL, passwordHash: hashPassword(DEV_PASSWORD) });
+      console.log(`Usuário dev (admin) pronto: ${DEV_EMAIL}`);
+    }
+    console.log(`Comprador Inviolável em http://localhost:${PORT}`);
+  });
   return server;
 }
 
