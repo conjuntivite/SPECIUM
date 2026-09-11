@@ -27,6 +27,27 @@ function composeProductTitle(product) {
   return `${product.category} ${product.brand} ${product.model}`.trim()
 }
 
+// Quantos níveis de parentId até a raiz — usado pra desempatar containers aninhados que se
+// sobrepõem (um Rack com um DVR container dentro): o mais profundo (mais interno) é sempre o alvo
+// certo quando o ponto/node também está dentro do(s) mais externo(s).
+function nodeDepth(nodeId, nodesById) {
+  let depth = 0
+  let current = nodesById.get(nodeId)
+  while (current?.parentId) {
+    depth++
+    current = nodesById.get(current.parentId)
+  }
+  return depth
+}
+
+// Entre candidatos que se sobrepõem, pega o mais aninhado — sem isso, pegar o primeiro da lista
+// sempre resolve pro container mais externo (ele entra primeiro no array de nodes: pai antes do
+// filho), mesmo quando o clique/solto foi visualmente dentro do mais específico.
+function deepestContainer(candidates, nodesById) {
+  if (!candidates.length) return null
+  return candidates.reduce((deepest, cand) => (nodeDepth(cand.id, nodesById) > nodeDepth(deepest.id, nodesById) ? cand : deepest))
+}
+
 export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToProducts, readOnly }, ref) {
   const catalog = useCategories()
   // Uma sugestão de capacidade (ex.: "Conectividade Gigabit") pode ter mais de uma categoria
@@ -47,6 +68,7 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
   // drag (a cada frame) já entra nesse estado local, então o card acompanha o mouse em tempo
   // real; só ao soltar (onNodeDragStop) a posição final é persistida em budget.positions.
   const [nodes, setNodes] = useState([])
+  const nodesById = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes])
 
   const looseItems = useMemo(() => budget.items.filter((item) => item.containerId == null), [budget.items])
 
@@ -139,10 +161,11 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
     // também fica de fora (aninhar container dentro de container por arraste é além do pedido).
     moved.forEach((n) => {
       if (n.parentId || n.data?.isContainer) return
-      const target = getIntersectingNodes(n).find((cand) => cand.id !== n.id && cand.data?.isContainer && cand.data?.containerOpen)
+      const candidates = getIntersectingNodes(n).filter((cand) => cand.id !== n.id && cand.data?.isContainer && cand.data?.containerOpen)
+      const target = deepestContainer(candidates, nodesById)
       if (target) budget.moveToContainer(n.data.item.id, target.data.item.id)
     })
-  }, [budget, getIntersectingNodes])
+  }, [budget, getIntersectingNodes, nodesById])
 
   const handleNodesDelete = useCallback((deleted) => {
     deleted.forEach((node) => {
@@ -183,8 +206,9 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
   // nascer lá dentro, não solto no canvas atrás dele (mesmo teste de sobreposição do drag-and-drop
   // pra dentro de container, só que num ponto em vez de um node inteiro).
   function containerAtPosition(position) {
-    const hit = getIntersectingNodes({ x: position.x, y: position.y, width: 1, height: 1 })
-      .find((n) => n.data?.isContainer && n.data?.containerOpen)
+    const candidates = getIntersectingNodes({ x: position.x, y: position.y, width: 1, height: 1 })
+      .filter((n) => n.data?.isContainer && n.data?.containerOpen)
+    const hit = deepestContainer(candidates, nodesById)
     return hit ? hit.data.item.id : null
   }
 

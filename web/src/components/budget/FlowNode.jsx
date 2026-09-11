@@ -12,7 +12,10 @@ const handleClass = '!size-2.5 !border-2 !border-[#0a0d14] !bg-slate-300'
 // recurso-container.txt seção 7, "priorize usabilidade e simplicidade"). Única fonte de verdade,
 // usada tanto aqui (tamanho do próprio node) quanto em useBudget.js (posição relativa de cada
 // filho) — os dois têm que concordar, senão os filhos desalinham do espaço reservado no card.
-export const CONTAINER_GRID = { columns: 2, spacingX: 236, spacingY: 128, originX: 16, originY: 58 }
+// originY = cabeçalho (58) + a linha de Quantidade do próprio container (36) — o container também é
+// um item com quantidade própria (ex.: 2 Racks), então essa linha sempre aparece antes da grade de
+// filhos agora. Mudar o layout de qualquer uma das duas (QuantityRow, header) exige reajustar aqui.
+export const CONTAINER_GRID = { columns: 2, spacingX: 236, spacingY: 128, originX: 16, originY: 94 }
 // 72 = padding (16) + os dois selects do rodapé empilhados (28px cada + 6px de gap) quando há item
 // solto no canvas pra mover — com só 64 o segundo select ficava cortado pelo overflow-hidden do card.
 const CONTAINER_FOOTER_HEIGHT = 72
@@ -45,6 +48,39 @@ function NodeHandles() {
       <Handle id="bottom" type="source" position={Position.Bottom} className={handleClass} isConnectableStart isConnectableEnd />
       <Handle id="left" type="target" position={Position.Left} className={handleClass} isConnectableStart isConnectableEnd />
     </>
+  )
+}
+
+// Reaproveitado nas 3 variações do card (item solto, container fechado, container aberto) — um
+// container também é um item com quantidade própria (ex.: 2 Racks), independente de quantos
+// equipamentos tem guardado dentro.
+function QuantityRow({ item, onQtyChange, readOnly }) {
+  return (
+    <div className="flex items-center gap-2 px-3 py-1.5 text-sm">
+      <span className="w-4 shrink-0 text-center text-[0.82rem] text-muted-foreground">#</span>
+      <span className="flex-1 text-card-foreground">Quantidade</span>
+      {readOnly ? (
+        <span className="shrink-0 text-center font-mono text-[0.88rem] text-card-foreground">{item.quantity}</span>
+      ) : (
+        <span className="nodrag flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            className="flex size-[1.15rem] items-center justify-center rounded-[0.3rem] bg-foreground/8 text-card-foreground hover:bg-foreground/15"
+            onClick={() => onQtyChange(item.id, -1)}
+          >
+            <FontAwesomeIcon icon={faMinus} className="size-2.5" />
+          </button>
+          <span className="min-w-[1.4rem] text-center font-mono text-[0.88rem] text-card-foreground">{item.quantity}</span>
+          <button
+            type="button"
+            className="flex size-[1.15rem] items-center justify-center rounded-[0.3rem] bg-foreground/8 text-card-foreground hover:bg-foreground/15"
+            onClick={() => onQtyChange(item.id, 1)}
+          >
+            <FontAwesomeIcon icon={faPlus} className="size-2.5" />
+          </button>
+        </span>
+      )}
+    </div>
   )
 }
 
@@ -93,6 +129,7 @@ export function FlowNode({ data, dragging, selected }) {
             </button>
           ) : null}
         </div>
+        <QuantityRow item={item} onQtyChange={onQtyChange} readOnly={readOnly} />
         <div className="flex flex-col gap-1 bg-card px-3 py-2 text-sm text-card-foreground">
           <span>{childCount} equipamento{childCount === 1 ? '' : 's'} interno{childCount === 1 ? '' : 's'}</span>
           {childQuantityTotal > childCount ? <span className="text-xs text-muted-foreground">{childQuantityTotal} itens no total</span> : null}
@@ -147,6 +184,7 @@ export function FlowNode({ data, dragging, selected }) {
             ) : null}
           </span>
         </div>
+        <QuantityRow item={item} onQtyChange={onQtyChange} readOnly={readOnly} />
         <div className="flex flex-col bg-card p-2" style={{ height: height - CONTAINER_GRID.originY }}>
           <div className="shrink-0" style={{ height: rows * CONTAINER_GRID.spacingY - 8 }} />
           {/* mt-auto: gruda o painel na borda de baixo do container — o espaço reservado pra grade
@@ -201,31 +239,7 @@ export function FlowNode({ data, dragging, selected }) {
       </div>
 
       <div className="bg-card py-2">
-        <div className="flex items-center gap-2 px-3 py-1.5 text-sm">
-          <span className="w-4 shrink-0 text-center text-[0.82rem] text-muted-foreground">#</span>
-          <span className="flex-1 text-card-foreground">Quantidade</span>
-          {readOnly ? (
-            <span className="shrink-0 text-center font-mono text-[0.88rem] text-card-foreground">{item.quantity}</span>
-          ) : (
-          <span className="nodrag flex shrink-0 items-center gap-1.5">
-            <button
-              type="button"
-              className="flex size-[1.15rem] items-center justify-center rounded-[0.3rem] bg-foreground/8 text-card-foreground hover:bg-foreground/15"
-              onClick={() => onQtyChange(item.id, -1)}
-            >
-              <FontAwesomeIcon icon={faMinus} className="size-2.5" />
-            </button>
-            <span className="min-w-[1.4rem] text-center font-mono text-[0.88rem] text-card-foreground">{item.quantity}</span>
-            <button
-              type="button"
-              className="flex size-[1.15rem] items-center justify-center rounded-[0.3rem] bg-foreground/8 text-card-foreground hover:bg-foreground/15"
-              onClick={() => onQtyChange(item.id, 1)}
-            >
-              <FontAwesomeIcon icon={faPlus} className="size-2.5" />
-            </button>
-          </span>
-          )}
-        </div>
+        <QuantityRow item={item} onQtyChange={onQtyChange} readOnly={readOnly} />
 
         {item.averagePrice ? (
           <div className="flex items-center gap-2 px-3 py-1.5 text-sm">
