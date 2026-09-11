@@ -307,6 +307,12 @@ export function useBudget(budgetId) {
     setPositions((prev) => ({ ...prev, [flowKey]: pos }))
   }, [])
 
+  // Várias posições de uma vez (auto-ajuste ao abrir um container, ver BudgetCanvas.jsx) — um único
+  // merge em vez de N chamadas de updatePosition.
+  const updatePositions = useCallback((updates) => {
+    setPositions((prev) => ({ ...prev, ...updates }))
+  }, [])
+
   // Container: mover item pra dentro/fora, abrir/fechar. `moveToContainer(itemId, null)` equivale a
   // `removeFromContainer`. Bloqueia ciclo (Rack A dentro do Rack B dentro do Rack A) subindo a
   // cadeia containerId a partir do alvo — se ela chegar no próprio item sendo movido, recusa.
@@ -327,8 +333,41 @@ export function useBudget(budgetId) {
 
   const removeFromContainer = useCallback((itemId) => moveToContainer(itemId, null), [moveToContainer])
 
+  // Memória de undo do layout — não é state (não precisa re-renderizar nada sozinha, e não persiste
+  // no servidor, é só conveniência da sessão atual). Ao abrir um container guarda como o canvas
+  // estava; BudgetCanvas.jsx empurra os vizinhos que ficarem sobrepostos logo em seguida. Ao fechar,
+  // devolve exatamente esse retrato — sem isso o auto-ajuste do "abrir" seria uma via de mão única.
+  const containerLayoutSnapshotsRef = useRef(new Map())
+
   const toggleContainer = useCallback((itemId) => {
-    setItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, containerOpen: !item.containerOpen } : item)))
+    const current = items.find((i) => i.id === itemId)
+    if (!current) return
+    const opening = current.containerOpen === false
+    let restoredSizesById = null
+    if (opening) {
+      containerLayoutSnapshotsRef.current.set(itemId, {
+        positions,
+        containerSizesById: Object.fromEntries(items.filter((i) => i.containerSize).map((i) => [i.id, i.containerSize])),
+      })
+    } else {
+      const snapshot = containerLayoutSnapshotsRef.current.get(itemId)
+      if (snapshot) {
+        setPositions(snapshot.positions)
+        restoredSizesById = snapshot.containerSizesById
+        containerLayoutSnapshotsRef.current.delete(itemId)
+      }
+    }
+    setItems((prev) => prev.map((item) => {
+      if (item.id === itemId) return { ...item, containerOpen: !item.containerOpen }
+      if (restoredSizesById) return { ...item, containerSize: restoredSizesById[item.id] || null }
+      return item
+    }))
+  }, [items, positions])
+
+  // Aplica o tamanho auto-calculado (extensão real dos filhos) em vários containers de uma vez —
+  // abrir um container aninhado pode obrigar o pai, o avô etc. a crescer no mesmo gesto.
+  const setContainerSizes = useCallback((sizesById) => {
+    setItems((prev) => prev.map((item) => (sizesById[item.id] ? { ...item, containerSize: sizesById[item.id] } : item)))
   }, [])
 
   // Tamanho manual do container (arrastar os cantos, NodeResizer do React Flow). Arrastar qualquer
@@ -559,12 +598,14 @@ export function useBudget(budgetId) {
     setItemIcon,
     updateQuantity,
     updatePosition,
+    updatePositions,
     addConnection,
     removeConnection,
     moveToContainer,
     removeFromContainer,
     toggleContainer,
     resizeContainer,
+    setContainerSizes,
     clearAll,
     checkPrices,
   }

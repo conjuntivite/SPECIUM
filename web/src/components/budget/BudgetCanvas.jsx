@@ -14,7 +14,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
 import { useCategories } from '@/hooks/useCategories'
-import { FlowNode } from './FlowNode'
+import { FlowNode, CONTAINER_GRID, CONTAINER_FOOTER_HEIGHT } from './FlowNode'
 import { ProductPickerDialog } from './ProductPickerDialog'
 
 const nodeTypes = { confirmed: FlowNode }
@@ -48,6 +48,74 @@ function deepestContainer(candidates, nodesById) {
   return candidates.reduce((deepest, cand) => (nodeDepth(cand.id, nodesById) > nodeDepth(deepest.id, nodesById) ? cand : deepest))
 }
 
+// Espaço mínimo entre dois cards que ficaram um embaixo do outro depois do ajuste.
+const SIBLING_GAP = 24
+
+// Chamado (via rAF, depois que o DOM já pintou no tamanho novo) logo depois de abrir um container —
+// o card dele cresce e pode cobrir quem está embaixo, no mesmo nível (mesmo pai, ou solto no
+// canvas). Lê o tamanho JÁ RENDERIZADO de cada node (`measured`, o React Flow mede via
+// ResizeObserver) e calcula em memória: 1) empurra pra baixo quem ficou coberto (mesma faixa
+// horizontal), 2) cresce cada container ancestral até caber a extensão real dos filhos — processando
+// do nível mais aninhado pro mais raso, porque o tamanho certo do pai só dá pra saber depois que os
+// filhos dele já assentaram (empurrados ou não). Um pai aberto tem o tamanho igual ao `containerSize`
+// do estado (é isso que o style inline força), então usar `measured` uniformemente pra todo tipo de
+// node também funciona pra eles, sem precisar de um caminho especial.
+function resolveContainerOverlaps(allNodes) {
+  const nodesById = new Map(allNodes.map((n) => [n.id, n]))
+  const groups = new Map() // parentId (ou null pro nível solto) -> nodes desse nível
+  allNodes.forEach((n) => {
+    const key = n.parentId || null
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(n)
+  })
+
+  const positionUpdates = {} // flowKey -> {x, y}
+  const sizeUpdates = {} // item.id (numérico) -> {width, height}
+  const effectiveSize = (n) => sizeUpdates[n.data.item.id] || { width: n.measured?.width || 0, height: n.measured?.height || 0 }
+  const effectiveY = (n) => (positionUpdates[n.id] ? positionUpdates[n.id].y : n.position.y)
+  const effectiveX = (n) => (positionUpdates[n.id] ? positionUpdates[n.id].x : n.position.x)
+
+  const levels = [...groups.entries()].sort((a, b) => {
+    const depthA = a[0] ? nodeDepth(a[0], nodesById) : -1
+    const depthB = b[0] ? nodeDepth(b[0], nodesById) : -1
+    return depthB - depthA
+  })
+
+  levels.forEach(([parentId, siblings]) => {
+    const sorted = [...siblings].sort((a, b) => effectiveY(a) - effectiveY(b))
+    for (let i = 1; i < sorted.length; i++) {
+      const node = sorted[i]
+      for (let j = 0; j < i; j++) {
+        const above = sorted[j]
+        const ax = effectiveX(above)
+        const { width: aw, height: ah } = effectiveSize(above)
+        const nx = effectiveX(node)
+        const { width: nw } = effectiveSize(node)
+        const overlapsX = nx < ax + aw && ax < nx + nw
+        const requiredY = effectiveY(above) + ah + SIBLING_GAP
+        if (overlapsX && effectiveY(node) < requiredY) {
+          positionUpdates[node.id] = { x: nx, y: requiredY }
+        }
+      }
+    }
+
+    if (parentId) {
+      const parent = nodesById.get(parentId)
+      if (!parent) return
+      const maxRight = Math.max(...siblings.map((s) => effectiveX(s) + effectiveSize(s).width))
+      const maxBottom = Math.max(...siblings.map((s) => effectiveY(s) + effectiveSize(s).height))
+      const requiredWidth = maxRight + CONTAINER_GRID.originX
+      const requiredHeight = maxBottom + CONTAINER_FOOTER_HEIGHT
+      const current = effectiveSize(parent)
+      if (requiredWidth > current.width || requiredHeight > current.height) {
+        sizeUpdates[parent.data.item.id] = { width: Math.max(requiredWidth, current.width), height: Math.max(requiredHeight, current.height) }
+      }
+    }
+  })
+
+  return { positionUpdates, sizeUpdates }
+}
+
 export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToProducts, readOnly }, ref) {
   const catalog = useCategories()
   // Uma sugestão de capacidade (ex.: "Conectividade Gigabit") pode ter mais de uma categoria
@@ -57,7 +125,7 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
     () => Object.fromEntries(catalog.flatMap((group) => group.items.map((item) => [item.value, item.label]))),
     [catalog]
   )
-  const { screenToFlowPosition, zoomIn, zoomOut, fitView, getIntersectingNodes } = useReactFlow()
+  const { screenToFlowPosition, zoomIn, zoomOut, fitView, getIntersectingNodes, getNodes } = useReactFlow()
   // Posição do último clique com botão direito — usada como ponto de spawn ao adicionar item
   // pelo menu (equivalente ao ponto de solto do drag-and-drop da suggestions strip).
   const lastContextPosRef = useRef({ x: 0, y: 0 })
@@ -98,6 +166,25 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
     budget.removeItem(itemId)
   }, [budget])
 
+  // Abrir um container pode fazer o card dele crescer em cima de quem está do lado — dois rAF
+  // (o primeiro só garante que o commit do React já rodou, o segundo que o ResizeObserver do React
+  // Flow já mediu o DOM no tamanho novo) antes de ler `measured` e resolver a sobreposição. Fechar
+  // não passa por aqui — o retorno ao layout anterior é só o snapshot que budget.toggleContainer já
+  // devolve sozinho (ver useBudget.js).
+  const handleToggleContainer = useCallback((itemId) => {
+    const item = budget.items.find((i) => i.id === itemId)
+    const opening = item && item.containerOpen === false
+    budget.toggleContainer(itemId)
+    if (!opening) return
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const { positionUpdates, sizeUpdates } = resolveContainerOverlaps(getNodes())
+        if (Object.keys(positionUpdates).length) budget.updatePositions(positionUpdates)
+        if (Object.keys(sizeUpdates).length) budget.setContainerSizes(sizeUpdates)
+      })
+    })
+  }, [budget, getNodes])
+
   useEffect(() => {
     setNodes(budget.nodes.map((node) => ({
       ...node,
@@ -105,7 +192,7 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
         ...node.data,
         onRemove: () => handleNodeRemove(node.data.item.id, node.data.childCount),
         onQtyChange: budget.updateQuantity,
-        onToggleContainer: budget.toggleContainer,
+        onToggleContainer: handleToggleContainer,
         onRemoveFromContainer: budget.removeFromContainer,
         onMoveToContainer: budget.moveToContainer,
         onResizeContainer: budget.resizeContainer,
@@ -120,7 +207,7 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
         readOnly,
       },
     })))
-  }, [budget.nodes, handleNodeRemove, budget.updateQuantity, budget.toggleContainer, budget.removeFromContainer, budget.moveToContainer, budget.resizeContainer, handleAddCategoryToContainer, looseItems, readOnly])
+  }, [budget.nodes, handleNodeRemove, budget.updateQuantity, handleToggleContainer, budget.removeFromContainer, budget.moveToContainer, budget.resizeContainer, handleAddCategoryToContainer, looseItems, readOnly])
 
   const onNodesChange = useCallback((changes) => {
     setNodes((nds) => applyNodeChanges(changes, nds))

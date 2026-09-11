@@ -18,7 +18,9 @@ const handleClass = '!size-2.5 !border-2 !border-[#0a0d14] !bg-slate-300'
 export const CONTAINER_GRID = { columns: 2, spacingX: 236, spacingY: 128, originX: 16, originY: 94 }
 // 72 = padding (16) + os dois selects do rodapé empilhados (28px cada + 6px de gap) quando há item
 // solto no canvas pra mover — com só 64 o segundo select ficava cortado pelo overflow-hidden do card.
-const CONTAINER_FOOTER_HEIGHT = 72
+// Exportado: BudgetCanvas.jsx usa pra calcular o tamanho mínimo de um container a partir da extensão
+// real dos filhos (auto-ajuste ao abrir/fechar), não só da contagem.
+export const CONTAINER_FOOTER_HEIGHT = 72
 
 export function containerChildRows(childCount) {
   return Math.max(1, Math.ceil(childCount / CONTAINER_GRID.columns))
