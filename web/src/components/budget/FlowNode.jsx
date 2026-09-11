@@ -130,7 +130,7 @@ export function FlowNode({ data, dragging, selected }) {
           <NodeResizer
             minWidth={minSize.width}
             minHeight={minSize.height}
-            onResizeEnd={(_event, params) => onResizeContainer(item.id, Math.round(params.width), Math.round(params.height))}
+            onResizeEnd={(_event, params) => onResizeContainer(item.id, Math.round(params.width), Math.round(params.height), Math.round(params.x), Math.round(params.y))}
           />
         ) : null}
         <NodeHandles />

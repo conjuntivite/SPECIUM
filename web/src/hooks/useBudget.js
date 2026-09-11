@@ -331,10 +331,16 @@ export function useBudget(budgetId) {
     setItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, containerOpen: !item.containerOpen } : item)))
   }, [])
 
-  // Tamanho manual do container (arrastar os cantos, NodeResizer do React Flow) — null volta a usar
-  // o tamanho automático calculado a partir da quantidade de filhos (containerNodeSize).
-  const resizeContainer = useCallback((itemId, width, height) => {
+  // Tamanho manual do container (arrastar os cantos, NodeResizer do React Flow). Arrastar qualquer
+  // canto que não seja o inferior-direito faz o NodeResizer mover o node (x/y) pra manter o canto
+  // oposto fixo — sem gravar esse novo x/y aqui, o node volta pra posição antiga no próximo render
+  // (o efeito em BudgetCanvas.jsx recalcula `nodes` a partir de `positions` assim que `containerSize`
+  // muda), ficando maior mas "vazado" pro lado errado, com o filho aparentando ter sumido do card.
+  const resizeContainer = useCallback((itemId, width, height, x, y) => {
     setItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, containerSize: { width, height } } : item)))
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      setPositions((prev) => ({ ...prev, [itemFlowKey({ id: itemId })]: { x, y } }))
+    }
   }, [])
 
   const clearAll = useCallback(() => {
