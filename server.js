@@ -70,7 +70,7 @@ async function requestHandler(request, response) {
       if (!userDoc || !verifyPassword(password, userDoc.passwordHash)) throw new Error('E-mail ou senha inválidos.');
       const token = generateSessionToken();
       await createSession(token, userDoc._id.toString(), new Date(Date.now() + SESSION_TTL_MS));
-      const loggedInUser = { id: userDoc._id.toString(), email: userDoc.email, name: userDoc.name || null, role: userDoc.role || 'user' };
+      const loggedInUser = { id: userDoc._id.toString(), email: userDoc.email, name: userDoc.name || null, role: userDoc.role || 'user', unrestricted: userDoc.unrestricted === true };
       return sendJson(response, 200, loggedInUser, { 'Set-Cookie': serializeSessionCookie(token) });
     }
     if (request.method === 'POST' && url.pathname === '/api/auth/logout') {
@@ -219,7 +219,7 @@ async function requestHandler(request, response) {
     if (request.method === 'GET' && url.pathname === '/api/budgets') {
       const user = await getAuthenticatedUser(request);
       if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
-      return sendJson(response, 200, { budgets: await listBudgetsForUser(user.id) });
+      return sendJson(response, 200, { budgets: await listBudgetsForUser(user.id, user.unrestricted) });
     }
     if (request.method === 'POST' && url.pathname === '/api/budgets') {
       const user = await getAuthenticatedUser(request);
@@ -232,7 +232,7 @@ async function requestHandler(request, response) {
       if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
       const { clientName, address, number } = validateSetAddressRequest(await readJson(request));
       const { lat, lng } = await geocodeAddress(`${address}, ${number}`);
-      const budget = await setBudgetAddressForUser(budgetAddressMatch[1], user.id, { clientName, address, number, lat, lng });
+      const budget = await setBudgetAddressForUser(budgetAddressMatch[1], user.id, { clientName, address, number, lat, lng }, user.unrestricted);
       if (!budget) return sendJson(response, 404, { detail: 'Orçamento não encontrado.' });
       return sendJson(response, 200, budget);
     }
@@ -240,7 +240,7 @@ async function requestHandler(request, response) {
     if (budgetIdMatch && request.method === 'GET') {
       const user = await getAuthenticatedUser(request);
       if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
-      const budget = await getBudgetForUser(budgetIdMatch[1], user.id);
+      const budget = await getBudgetForUser(budgetIdMatch[1], user.id, user.unrestricted);
       if (!budget) return sendJson(response, 404, { detail: 'Orçamento não encontrado.' });
       return sendJson(response, 200, budget);
     }
@@ -248,14 +248,14 @@ async function requestHandler(request, response) {
       const user = await getAuthenticatedUser(request);
       if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
       const patch = validateBudgetSaveRequest(await readJson(request));
-      const budget = await updateBudgetForUser(budgetIdMatch[1], user.id, patch);
+      const budget = await updateBudgetForUser(budgetIdMatch[1], user.id, patch, user.unrestricted);
       if (!budget) return sendJson(response, 404, { detail: 'Orçamento não encontrado.' });
       return sendJson(response, 200, budget);
     }
     if (budgetIdMatch && request.method === 'DELETE') {
       const user = await getAuthenticatedUser(request);
       if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
-      const result = await deleteBudgetForUser(budgetIdMatch[1], user.id);
+      const result = await deleteBudgetForUser(budgetIdMatch[1], user.id, user.unrestricted);
       if (!result.deleted) {
         if (result.reason === 'not_found') return sendJson(response, 404, { detail: 'Orçamento não encontrado.' });
         return sendJson(response, 400, { detail: 'Só é possível excluir orçamentos com status "aberto".' });

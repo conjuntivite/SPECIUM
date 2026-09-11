@@ -409,7 +409,10 @@ async function getUsersCollection() {
 }
 
 function toPublicUser(doc) {
-  return { id: doc._id.toString(), email: doc.email, name: doc.name || null, role: doc.role || 'user', createdAt: doc.createdAt || null };
+  return {
+    id: doc._id.toString(), email: doc.email, name: doc.name || null, role: doc.role || 'user', createdAt: doc.createdAt || null,
+    unrestricted: doc.unrestricted === true,
+  };
 }
 
 async function createUser({ email, passwordHash, name = null }) {
@@ -424,7 +427,8 @@ async function createUser({ email, passwordHash, name = null }) {
 
 async function listUsers() {
   const users = await getUsersCollection();
-  const docs = await users.find({}).sort({ email: 1 }).toArray();
+  // Conta dev (hidden: true) some da tela de usuários — nem outros admins a veem ou editam por lá.
+  const docs = await users.find({ hidden: { $ne: true } }).sort({ email: 1 }).toArray();
   return docs.map(toPublicUser);
 }
 
@@ -460,11 +464,14 @@ async function findUserById(id) {
 
 // Conta de recuperação (admin), semeada a cada boot a partir de DEV_EMAIL/DEV_PASSWORD no .env — se
 // esquecer a senha própria, trocar a senha do dev no .env e reiniciar já reseta a conta.
+// hidden: some da tela de usuários (listUsers). unrestricted: enxerga/edita orçamento de qualquer
+// usuário, sem as travas de dono nem de status (ver budget* em db.js) — conta de suporte, não segue
+// as mesmas regras de um admin comum.
 async function seedDevAdmin({ email, passwordHash }) {
   const users = await getUsersCollection();
   await users.updateOne(
     { email },
-    { $set: { email, passwordHash, role: 'admin' }, $setOnInsert: { name: 'Dev', createdAt: new Date() } },
+    { $set: { email, passwordHash, role: 'admin', hidden: true, unrestricted: true }, $setOnInsert: { name: 'Dev', createdAt: new Date() } },
     { upsert: true }
   );
 }
@@ -544,27 +551,34 @@ async function createBudget(userId) {
   return toBudget({ _id: insertedId, ...doc });
 }
 
-async function listBudgetsForUser(userId) {
+// `unrestricted` (conta dev, ver seedDevAdmin) ignora o dono e enxerga/edita orçamento de qualquer
+// usuário — as travas de status (fechado só leitura, exclusão só se aberto) continuam valendo, são
+// regra de integridade do dado, não de dono.
+function ownerFilter(userId, unrestricted) {
+  return unrestricted ? {} : { userId: new ObjectId(userId) };
+}
+
+async function listBudgetsForUser(userId, unrestricted = false) {
   const budgets = await getBudgetsCollection();
-  const docs = await budgets.find({ userId: new ObjectId(userId) }).sort({ updatedAt: -1 }).toArray();
+  const docs = await budgets.find(ownerFilter(userId, unrestricted)).sort({ updatedAt: -1 }).toArray();
   return docs.map(toBudgetSummary);
 }
 
-async function getBudgetForUser(id, userId) {
+async function getBudgetForUser(id, userId, unrestricted = false) {
   if (!ObjectId.isValid(id)) return null;
   const budgets = await getBudgetsCollection();
-  const doc = await budgets.findOne({ _id: new ObjectId(id), userId: new ObjectId(userId) });
+  const doc = await budgets.findOne({ _id: new ObjectId(id), ...ownerFilter(userId, unrestricted) });
   return doc ? toBudget(doc) : null;
 }
 
-async function updateBudgetForUser(id, userId, patch) {
+async function updateBudgetForUser(id, userId, patch, unrestricted = false) {
   if (!ObjectId.isValid(id)) return null;
   const budgets = await getBudgetsCollection();
   // Orçamento fechado só pode ser visualizado — barra aqui pega tanto o PATCH genérico (itens/
   // posições/conexões/status) quanto setBudgetAddressForUser (que delega pra cá), num lugar só.
   // Exceção: a própria transição PARA "fechado" (finalize) chega aqui com o status ainda
   // "negociação" no banco, então não esbarra nesta trava.
-  const current = await budgets.findOne({ _id: new ObjectId(id), userId: new ObjectId(userId) }, { projection: { status: 1 } });
+  const current = await budgets.findOne({ _id: new ObjectId(id), ...ownerFilter(userId, unrestricted) }, { projection: { status: 1 } });
   if (!current) return null;
   if (current.status === 'fechado') throw new Error('Orçamento fechado só pode ser visualizado — não é possível editar.');
   // driver mongodb@7: findOneAndUpdate devolve o documento direto (ou null), não mais um envelope
@@ -572,7 +586,7 @@ async function updateBudgetForUser(id, userId, patch) {
   // fazia a função devolver null (404 "Orçamento não encontrado") mesmo quando a escrita já tinha
   // sido aplicada no banco.
   const updated = await budgets.findOneAndUpdate(
-    { _id: current._id, userId: new ObjectId(userId) },
+    { _id: current._id },
     { $set: { ...patch, updatedAt: new Date() } },
     { returnDocument: 'after' }
   );
@@ -582,20 +596,20 @@ async function updateBudgetForUser(id, userId, patch) {
 // Só grava os dados do endereço/geocodificação — a etapa (status) do orçamento é uma decisão
 // separada do consultor (ver validateBudgetSaveRequest + PATCH genérico), não um efeito colateral
 // automático de informar o endereço.
-async function setBudgetAddressForUser(id, userId, { clientName, address, number, lat, lng }) {
-  return updateBudgetForUser(id, userId, { clientName, address, number, lat, lng });
+async function setBudgetAddressForUser(id, userId, { clientName, address, number, lat, lng }, unrestricted = false) {
+  return updateBudgetForUser(id, userId, { clientName, address, number, lat, lng }, unrestricted);
 }
 
 // Exclusão só é permitida com o orçamento ainda "aberto" (rascunho não comprometido com endereço
 // nem negociação) — filtro por status já vai dentro do deleteOne, atômico, sem janela de corrida
 // entre checar e apagar.
-async function deleteBudgetForUser(id, userId) {
+async function deleteBudgetForUser(id, userId, unrestricted = false) {
   if (!ObjectId.isValid(id)) return { deleted: false, reason: 'not_found' };
   const budgets = await getBudgetsCollection();
-  const current = await budgets.findOne({ _id: new ObjectId(id), userId: new ObjectId(userId) }, { projection: { status: 1 } });
+  const current = await budgets.findOne({ _id: new ObjectId(id), ...ownerFilter(userId, unrestricted) }, { projection: { status: 1 } });
   if (!current) return { deleted: false, reason: 'not_found' };
   if (current.status !== 'aberto') return { deleted: false, reason: 'not_aberto' };
-  const { deletedCount } = await budgets.deleteOne({ _id: current._id, userId: new ObjectId(userId), status: 'aberto' });
+  const { deletedCount } = await budgets.deleteOne({ _id: current._id, status: 'aberto' });
   return { deleted: deletedCount > 0 };
 }
 
