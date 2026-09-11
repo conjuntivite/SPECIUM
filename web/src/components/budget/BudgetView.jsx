@@ -103,12 +103,11 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
             >
               <FontAwesomeIcon icon={navOpen ? faXmark : faBars} className="size-4" />
             </button>
-            {/* Retrátil: abre da esquerda pra direita por cima do resto da tela (position absolute,
-                não participa do flex da barra) — max-width animado + overflow-hidden. Fora do fluxo
-                de propósito: se entrasse no flex normal, abrir o menu empurraria a legenda e o grupo
-                de ações (endereço/mapa/salvar) pra uma segunda linha. */}
+            {/* Retrátil: abre de cima pra baixo por cima do resto da tela (position absolute, não
+                participa do flex da barra) — max-height animado + overflow-hidden. Fora do fluxo de
+                propósito: se entrasse no flex normal, abrir o menu empurraria o resto da barra. */}
             <div
-              className={`absolute left-full top-0 z-20 ml-2 flex items-center gap-2 overflow-hidden transition-[max-width,opacity] duration-300 ${navOpen ? 'max-w-[640px] opacity-100' : 'max-w-0 opacity-0'}`}
+              className={`absolute left-0 top-full z-20 mt-2 flex flex-col items-start gap-2 overflow-hidden transition-[max-height,opacity] duration-300 ${navOpen ? 'max-h-[320px] opacity-100' : 'max-h-0 opacity-0'}`}
             >
               <button type="button" onClick={onBackToList} className={`${PILL} whitespace-nowrap`}>
                 <FontAwesomeIcon icon={faList} className="size-4" /> Meus orçamentos
