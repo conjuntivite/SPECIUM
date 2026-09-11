@@ -6,6 +6,9 @@
 # Dependências
 node_modules/
 
+# Uploads de usuário (planta baixa) — dados de runtime, não código-fonte
+uploads/
+
 # Logs e artefatos de teste
 npm-debug.log*
 coverage/

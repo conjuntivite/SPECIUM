@@ -525,6 +525,8 @@ function toBudget(doc) {
     positions: doc.positions || {},
     connections: doc.connections || [],
     mapLayout: doc.mapLayout || {},
+    floorPlan: doc.floorPlan || null,
+    floorPlanLayout: doc.floorPlanLayout || {},
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };
@@ -545,7 +547,7 @@ async function createBudget(userId) {
   const now = new Date();
   const doc = {
     userId: new ObjectId(userId), status: 'aberto', clientName: null, address: null, number: null, lat: null, lng: null,
-    items: [], positions: {}, connections: [], mapLayout: {}, createdAt: now, updatedAt: now,
+    items: [], positions: {}, connections: [], mapLayout: {}, floorPlan: null, floorPlanLayout: {}, createdAt: now, updatedAt: now,
   };
   const { insertedId } = await budgets.insertOne(doc);
   return toBudget({ _id: insertedId, ...doc });

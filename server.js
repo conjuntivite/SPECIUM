@@ -14,15 +14,16 @@ const {
 // server.js é só a composição: boot de ambiente, o router HTTP puro e o start do processo. Toda
 // regra de negócio (extração de specs, motor de recursos/capacidade, provedores de busca,
 // validação) mora em lib/ — ver lib/ para o detalhamento por módulo.
-const { PORT, HOST } = require('./lib/env');
+const { PORT, HOST, UPLOADS_DIRECTORY } = require('./lib/env');
 const { normalize } = require('./lib/text');
+const { FLOORPLAN_EXTENSIONS, FLOORPLAN_MAX_BYTES, saveFloorPlanFile, deleteFloorPlanFile } = require('./lib/floorPlan');
 const {
   detectSecurityCategory, detectExactCategory, matchesRequestedModel, isStandaloneProductOffer,
   extractDvrNvrSpecs, extractCameraSpecs, extractFacialSpecs, extractPorteiroSpecs, extractSwitchSpecs,
   extractFonteSpecs, extractCaboSpecs, extractMikrotikSpecs, extractRoteadorSpecs, extractAcabamentoSpecs,
 } = require('./lib/specs');
 const { computeCategoryMissingEssentials } = require('./lib/recipeEngine');
-const { sendJson, sendCsv, readJson, serveStatic, parseCookies } = require('./lib/http');
+const { sendJson, sendCsv, readJson, readBinary, serveStatic, serveFromDirectory, parseCookies } = require('./lib/http');
 const {
   validateSearchRequest, validateCompareRequest, validateRecipeItems, validateRecipePriceItems,
   validateProductRequest, validateCategoryRequest, validateResourceRequest,
@@ -236,6 +237,29 @@ async function requestHandler(request, response) {
       if (!budget) return sendJson(response, 404, { detail: 'Orçamento não encontrado.' });
       return sendJson(response, 200, budget);
     }
+    // Alternativa ao mapa (endereço geocodificado): consultor envia uma imagem da planta baixa e
+    // posiciona os itens em cima dela, mesma interação do mapa (ver FloorPlanCanvas). Corpo cru
+    // (o arquivo em bytes), não JSON — filename/width/height chegam na query string porque o
+    // navegador já sabe as dimensões da imagem antes de mandar (lido com createImageBitmap).
+    const floorPlanMatch = url.pathname.match(/^\/api\/budgets\/([a-f0-9]{24})\/floorplan$/i);
+    if (floorPlanMatch && request.method === 'POST') {
+      const user = await getAuthenticatedUser(request);
+      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      const existing = await getBudgetForUser(floorPlanMatch[1], user.id, user.unrestricted);
+      if (!existing) return sendJson(response, 404, { detail: 'Orçamento não encontrado.' });
+      if (existing.status === 'fechado') return sendJson(response, 400, { detail: 'Orçamento fechado só pode ser visualizado — não é possível editar.' });
+      const filename = normalize(url.searchParams.get('filename'));
+      const ext = (filename.split('.').pop() || '').toLowerCase();
+      if (!FLOORPLAN_EXTENSIONS.includes(ext)) return sendJson(response, 400, { detail: 'Envie uma imagem PNG ou JPG.' });
+      const width = Number(url.searchParams.get('width'));
+      const height = Number(url.searchParams.get('height'));
+      if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return sendJson(response, 400, { detail: 'Dimensões da imagem inválidas.' });
+      const buffer = await readBinary(request, FLOORPLAN_MAX_BYTES);
+      const floorPlanPath = await saveFloorPlanFile(floorPlanMatch[1], buffer, ext);
+      // Planta nova invalida as posições da anterior (imagem diferente) — reseta o layout junto.
+      const budget = await updateBudgetForUser(floorPlanMatch[1], user.id, { floorPlan: { path: floorPlanPath, width, height }, floorPlanLayout: {} }, user.unrestricted);
+      return sendJson(response, 200, budget);
+    }
     const budgetIdMatch = url.pathname.match(/^\/api\/budgets\/([a-f0-9]{24})$/i);
     if (budgetIdMatch && request.method === 'GET') {
       const user = await getAuthenticatedUser(request);
@@ -260,8 +284,11 @@ async function requestHandler(request, response) {
         if (result.reason === 'not_found') return sendJson(response, 404, { detail: 'Orçamento não encontrado.' });
         return sendJson(response, 400, { detail: 'Só é possível excluir orçamentos com status "aberto".' });
       }
+      await deleteFloorPlanFile(budgetIdMatch[1]).catch(() => {}); // órfão no disco não impede a exclusão do orçamento
       return sendJson(response, 200, { deleted: true });
     }
+    const floorPlanFileMatch = url.pathname.match(/^\/uploads\/floorplans\/([a-zA-Z0-9_.-]+)$/);
+    if (floorPlanFileMatch && request.method === 'GET') return serveFromDirectory(UPLOADS_DIRECTORY, floorPlanFileMatch[1], response);
     if (request.method === 'GET') return serveStatic(url.pathname, response);
     return sendJson(response, 404, { detail: 'Rota não encontrada.' });
   } catch (error) {

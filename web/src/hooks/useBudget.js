@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getCategories, getPrices, getSuggestions, getBudget, updateBudget } from '@/lib/api'
+import { getCategories, getPrices, getSuggestions, getBudget, updateBudget, uploadFloorPlan as uploadFloorPlanFile } from '@/lib/api'
 import { parseBRL } from '@/lib/money'
 import { CONTAINER_GRID, containerNodeSize } from '@/components/budget/FlowNode'
 
@@ -44,8 +44,10 @@ function sanitizeConnections(rawConnections) {
     : []
 }
 
-function sanitizeMapLayout(rawMapLayout) {
-  return rawMapLayout && typeof rawMapLayout === 'object' && !Array.isArray(rawMapLayout) ? rawMapLayout : {}
+// Mesma checagem de forma serve pro mapLayout (lat/lng geográfico) e pro floorPlanLayout (pixel da
+// imagem enviada) — ambos são só { markers, lines }, a diferença está no espaço de coordenadas.
+function sanitizeLayout(rawLayout) {
+  return rawLayout && typeof rawLayout === 'object' && !Array.isArray(rawLayout) ? rawLayout : {}
 }
 
 export const itemFlowKey = (item) => `item-${item.id}`
@@ -89,6 +91,11 @@ export function useBudget(budgetId) {
   const [positions, setPositions] = useState({})
   const [connections, setConnections] = useState([])
   const [mapLayout, setMapLayout] = useState({})
+  // Alternativa ao mapa: mesma forma (markers/lines), mas em coordenadas de pixel da imagem
+  // enviada, não lat/lng geográfico — ver FloorPlanCanvas. `floorPlan` é null até o consultor
+  // enviar uma imagem (`uploadFloorPlan`); a partir daí carrega { path, width, height }.
+  const [floorPlan, setFloorPlan] = useState(null)
+  const [floorPlanLayout, setFloorPlanLayout] = useState({})
   const [status, setStatus] = useState('aberto')
   // Snapshot do que já está gravado no servidor — canvas (itens/posições/conexões/etapa) só
   // persiste com um clique explícito em "Salvar" (ver `save`); "Cancelar" (`discard`) volta pra cá.
@@ -124,7 +131,9 @@ export function useBudget(budgetId) {
       setItems(loadedItems)
       setPositions(sanitizePositions(data.positions))
       setConnections(sanitizeConnections(data.connections))
-      setMapLayout(sanitizeMapLayout(data.mapLayout))
+      setMapLayout(sanitizeLayout(data.mapLayout))
+      setFloorPlan(data.floorPlan || null)
+      setFloorPlanLayout(sanitizeLayout(data.floorPlanLayout))
       const loadedStatus = data.status || 'aberto'
       setStatus(loadedStatus)
       lastSavedRef.current = {
@@ -166,6 +175,30 @@ export function useBudget(budgetId) {
     }, SAVE_DEBOUNCE_MS)
     return () => clearTimeout(mapSaveTimeoutRef.current)
   }, [mapLayout, loaded, budgetId])
+
+  // Mesmo autosave debounced do mapLayout, agora pro layout da planta baixa (posições em pixel da
+  // imagem enviada) — telas irmãs, mesmo padrão de persistência.
+  const floorPlanSaveTimeoutRef = useRef(null)
+  useEffect(() => {
+    if (!loaded) return
+    clearTimeout(floorPlanSaveTimeoutRef.current)
+    floorPlanSaveTimeoutRef.current = setTimeout(() => {
+      updateBudget(budgetId, { floorPlanLayout }).catch(() => { /* autosave silencioso — próxima mudança tenta de novo */ })
+    }, SAVE_DEBOUNCE_MS)
+    return () => clearTimeout(floorPlanSaveTimeoutRef.current)
+  }, [floorPlanLayout, loaded, budgetId])
+
+  // Lê as dimensões reais do arquivo antes de enviar — o servidor não abre a imagem, só precisa
+  // saber o tamanho pra montar os limites do canvas (ver FloorPlanCanvas: L.CRS.Simple).
+  // createImageBitmap é nativo do navegador, sem depender de <img> escondida nem lib nova.
+  const uploadFloorPlan = useCallback(async (file) => {
+    const bitmap = await createImageBitmap(file)
+    const { width, height } = bitmap
+    bitmap.close()
+    const updated = await uploadFloorPlanFile(budgetId, file, width, height)
+    setFloorPlan(updated.floorPlan)
+    setFloorPlanLayout(sanitizeLayout(updated.floorPlanLayout))
+  }, [budgetId])
 
   function itemsPayload(list) {
     return list.map(({ id, title, quantity, icon, containerId, containerOpen, containerSize }) => ({ id, title, quantity, icon, containerId, containerOpen, containerSize }))
@@ -499,6 +532,10 @@ export function useBudget(budgetId) {
     total,
     mapLayout,
     setMapLayout,
+    floorPlan,
+    floorPlanLayout,
+    setFloorPlanLayout,
+    uploadFloorPlan,
     status,
     save,
     discard,

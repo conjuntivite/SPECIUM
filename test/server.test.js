@@ -2,6 +2,7 @@ const test = require('node:test');
 const { after } = test;
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const { MongoClient } = require('mongodb');
 
 const {
   buildGoogleShoppingUrl,
@@ -956,5 +957,74 @@ test('CRUD de /api/resources: lista os 4 recursos semeados, cadastra, recusa cha
 
   const allowed = await fetch(`${baseUrl}/api/resources/${resource.id}`, { method: 'DELETE' });
   assert.equal(allowed.status, 200);
+});
+
+// PNG 1x1 branco mínimo (67 bytes) — só pra exercitar o pipeline binário de verdade, sem depender de
+// um arquivo de fixture no repo.
+const TINY_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+
+test('POST /api/budgets/:id/floorplan grava a imagem em disco, serve de volta, recusa extensão fora da lista e limpa o arquivo quando o orçamento é excluído', async (t) => {
+  const server = http.createServer(requestHandler);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const email = `__teste__floorplan-${Date.now()}@example.com`;
+
+  const registered = await fetch(`${baseUrl}/api/auth/register`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: 'senha12345' }),
+  });
+  assert.equal(registered.status, 201);
+  const cookie = registered.headers.getSetCookie()[0].split(';')[0];
+
+  // Sem endpoint de exclusão de usuário no app — limpeza direta no Mongo só pro teste não deixar
+  // conta órfã na base real (mesma base que o app usa localmente, sem banco de teste separado).
+  t.after(async () => {
+    const client = await MongoClient.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017');
+    await client.db(process.env.MONGODB_DB || 'comprador_inviolavel').collection('users').deleteOne({ email });
+    await client.close();
+  });
+
+  const budget = await (await fetch(`${baseUrl}/api/budgets`, { method: 'POST', headers: { Cookie: cookie } })).json();
+
+  const rejected = await fetch(`${baseUrl}/api/budgets/${budget.id}/floorplan?filename=planta.dwg&width=1&height=1`, {
+    method: 'POST', headers: { Cookie: cookie }, body: TINY_PNG,
+  });
+  assert.equal(rejected.status, 400);
+
+  const uploaded = await fetch(`${baseUrl}/api/budgets/${budget.id}/floorplan?filename=planta.png&width=1&height=1`, {
+    method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'image/png' }, body: TINY_PNG,
+  });
+  assert.equal(uploaded.status, 200);
+  const updated = await uploaded.json();
+  assert.match(updated.floorPlan.path, /^\/uploads\/floorplans\/[a-f0-9]{24}\.png$/);
+  assert.equal(updated.floorPlan.width, 1);
+  assert.equal(updated.floorPlan.height, 1);
+  assert.deepEqual(updated.floorPlanLayout, {});
+
+  const served = await fetch(`${baseUrl}${updated.floorPlan.path}`);
+  assert.equal(served.status, 200);
+  assert.equal(served.headers.get('content-type'), 'image/png');
+  assert.ok(Buffer.from(await served.arrayBuffer()).equals(TINY_PNG));
+
+  const otherUser = `__teste__floorplan-outro-${Date.now()}@example.com`;
+  const otherRegistered = await fetch(`${baseUrl}/api/auth/register`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: otherUser, password: 'senha12345' }),
+  });
+  const otherCookie = otherRegistered.headers.getSetCookie()[0].split(';')[0];
+  t.after(async () => {
+    const client = await MongoClient.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017');
+    await client.db(process.env.MONGODB_DB || 'comprador_inviolavel').collection('users').deleteOne({ email: otherUser });
+    await client.close();
+  });
+  const forbidden = await fetch(`${baseUrl}/api/budgets/${budget.id}/floorplan?filename=planta.png&width=1&height=1`, {
+    method: 'POST', headers: { Cookie: otherCookie, 'Content-Type': 'image/png' }, body: TINY_PNG,
+  });
+  assert.equal(forbidden.status, 404);
+
+  const deleted = await fetch(`${baseUrl}/api/budgets/${budget.id}`, { method: 'DELETE', headers: { Cookie: cookie } });
+  assert.equal(deleted.status, 200);
+
+  const afterDelete = await fetch(`${baseUrl}${updated.floorPlan.path}`);
+  assert.equal(afterDelete.status, 404);
 });
 

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faBars, faBox, faEye, faFloppyDisk, faList, faLocationDot, faMagnifyingGlass, faMapLocationDot, faPenToSquare, faTag, faTriangleExclamation, faXmark } from '@fortawesome/free-solid-svg-icons'
+import { faBars, faBox, faEye, faFloppyDisk, faList, faLocationDot, faMagnifyingGlass, faMapLocationDot, faMap, faPenToSquare, faTag, faTriangleExclamation, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { ReactFlowProvider } from '@xyflow/react'
 import { useBudget } from '@/hooks/useBudget'
 import { formatBRL } from '@/lib/money'
@@ -9,6 +9,7 @@ import { SuggestionsStrip } from './SuggestionsStrip'
 import { BudgetCanvas } from './BudgetCanvas'
 import { AddressDialog } from './AddressDialog'
 import { MapView } from '@/components/map/MapView'
+import { FloorPlanView } from '@/components/floorplan/FloorPlanView'
 
 const PILL = 'flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur transition-colors hover:bg-secondary'
 const PILL_DISABLED = 'disabled:pointer-events-none disabled:opacity-50'
@@ -66,6 +67,21 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
         onSetItemIcon={budget.setItemIcon}
         mapLayout={budget.mapLayout}
         onChangeMapLayout={budget.setMapLayout}
+        onBackToCanvas={() => setStep('canvas')}
+      />
+    )
+  }
+
+  if (step === 'floorplan') {
+    return (
+      <FloorPlanView
+        budgetId={budgetId}
+        floorPlan={budget.floorPlan}
+        items={budget.items}
+        onSetItemIcon={budget.setItemIcon}
+        floorPlanLayout={budget.floorPlanLayout}
+        onChangeFloorPlanLayout={budget.setFloorPlanLayout}
+        onUpload={budget.uploadFloorPlan}
         onBackToCanvas={() => setStep('canvas')}
       />
     )
@@ -176,6 +192,12 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
                 <FontAwesomeIcon icon={faMapLocationDot} className="size-4" /> Ver mapa
               </button>
             ) : null}
+
+            {/* Alternativa ao mapa — não depende de endereço, o consultor pode montar a planta
+                baixa a qualquer momento. */}
+            <button type="button" onClick={() => setStep('floorplan')} className={PILL}>
+              <FontAwesomeIcon icon={faMap} className="size-4" /> Planta baixa
+            </button>
 
             {readOnly ? (
               <span className={PILL} title="Orçamento fechado — só visualização">

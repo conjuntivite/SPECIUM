@@ -130,6 +130,22 @@ export function deleteBudget(id) {
   return requestJson(`/api/budgets/${id}`, { method: 'DELETE' })
 }
 
+// Corpo cru (o File direto, sem multipart nem base64) — filename/width/height vão na query string
+// porque o navegador já sabe as dimensões da imagem antes de enviar (ver readImageDimensions).
+export async function uploadFloorPlan(id, file, width, height) {
+  const qs = new URLSearchParams({ filename: file.name, width: String(width), height: String(height) })
+  const response = await fetch(`/api/budgets/${id}/floorplan?${qs}`, {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  })
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}))
+    throw new Error(errData.detail || 'Não foi possível enviar a planta baixa.')
+  }
+  return response.json()
+}
+
 export function getResources() {
   return requestJson('/api/resources')
 }
