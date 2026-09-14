@@ -11,6 +11,11 @@ import { useCategories } from '@/hooks/useCategories'
 import { ProductFormDialog } from './ProductFormDialog'
 import { ImportProductsDialog } from './ImportProductsDialog'
 
+// ponytail: renderizar a tabela inteira sem paginação trava a aba com poucos milhares de produtos
+// (medido: >30s de UI travada com ~6000 linhas). Paginação simples client-side resolve — o fetch já
+// é rápido (a API não pagina), o gargalo era só o DOM de milhares de <tr>.
+const PAGE_SIZE = 50
+
 export function ProductsView() {
   const catalog = useCategories()
   const categoryLabels = useMemo(
@@ -28,6 +33,7 @@ export function ProductsView() {
   const [importOpen, setImportOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState(null)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
 
   const filteredProducts = useMemo(() => {
     const q = normalizeSearch(search.trim())
@@ -38,6 +44,15 @@ export function ProductsView() {
       normalizeSearch(p.model).includes(q)
     )
   }, [products, categoryLabels, search])
+
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages)
+  const pagedProducts = filteredProducts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+
+  function handleSearchChange(value) {
+    setSearch(value)
+    setPage(1)
+  }
 
   const reload = useCallback(() => {
     setLoading(true)
@@ -97,7 +112,7 @@ export function ProductsView() {
           <FontAwesomeIcon icon={faMagnifyingGlass} className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Buscar por categoria, marca ou modelo..."
             className="pl-8"
           />
@@ -116,7 +131,7 @@ export function ProductsView() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredProducts.map((product) => (
+            {pagedProducts.map((product) => (
               <TableRow key={product.id}>
                 <TableCell><ProductIcon icon={product.icon} className="size-4 text-muted-foreground" /></TableCell>
                 <TableCell>{categoryLabels[product.category] || product.category}</TableCell>
@@ -130,6 +145,23 @@ export function ProductsView() {
             ))}
           </TableBody>
         </Table>
+      ) : null}
+
+      {filteredProducts.length > PAGE_SIZE ? (
+        <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
+          <span>
+            {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredProducts.length)} de {filteredProducts.length}
+          </span>
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" size="sm" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>
+              Anterior
+            </Button>
+            <span className="self-center">Página {currentPage} de {totalPages}</span>
+            <Button type="button" variant="secondary" size="sm" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>
+              Próxima
+            </Button>
+          </div>
+        </div>
       ) : null}
 
       {products.length && !filteredProducts.length ? (

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -9,8 +10,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { getProducts } from '@/lib/api'
+import { normalizeSearch } from '@/lib/utils'
 import { useCategories } from '@/hooks/useCategories'
 import { ProductIcon } from '@/components/ui/product-icon'
+
+// ponytail: uma categoria popular pode acumular milhares de produtos com o tempo — renderizar um
+// botão por produto sem limite trava o diálogo (medido: >10s de UI travada com 2000 produtos numa
+// categoria só). Corta a lista renderizada e deixa a busca reduzir o restante.
+const MAX_RENDERED = 50
 
 // Toda entrada no orçamento — item de categoria do menu, ou sugestão da listinha lateral (clicada ou
 // arrastada) — passa por aqui antes de virar nó no quadro. `prompt.categories` pode ter mais de um
@@ -25,9 +32,11 @@ export function ProductPickerDialog({ prompt, onPick, onSkip, onOpenChange, onGo
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     if (!prompt) return
+    setSearch('')
     setLoading(true)
     setError('')
     getProducts()
@@ -37,6 +46,19 @@ export function ProductPickerDialog({ prompt, onPick, onSkip, onOpenChange, onGo
   }, [prompt])
 
   const showCategoryPerRow = (prompt?.categories.length || 0) > 1
+
+  const filteredProducts = useMemo(() => {
+    const q = normalizeSearch(search.trim())
+    if (!q) return products
+    return products.filter((p) =>
+      normalizeSearch(categoryLabels[p.category] || p.category).includes(q) ||
+      normalizeSearch(p.brand).includes(q) ||
+      normalizeSearch(p.model).includes(q)
+    )
+  }, [products, categoryLabels, search])
+
+  const visibleProducts = filteredProducts.slice(0, MAX_RENDERED)
+  const hiddenCount = filteredProducts.length - visibleProducts.length
 
   return (
     <Dialog open={!!prompt} onOpenChange={onOpenChange}>
@@ -60,9 +82,18 @@ export function ProductPickerDialog({ prompt, onPick, onSkip, onOpenChange, onGo
           </div>
         ) : null}
 
+        {products.length > MAX_RENDERED ? (
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por marca ou modelo..."
+            autoFocus
+          />
+        ) : null}
+
         {products.length ? (
           <div className="flex max-h-72 flex-col gap-2 overflow-y-auto">
-            {products.map((product) => (
+            {visibleProducts.map((product) => (
               <Button
                 key={product.id}
                 type="button"
@@ -75,6 +106,11 @@ export function ProductPickerDialog({ prompt, onPick, onSkip, onOpenChange, onGo
                 {product.brand} — {product.model}
               </Button>
             ))}
+            {hiddenCount > 0 ? (
+              <p className="text-center text-xs text-muted-foreground">
+                +{hiddenCount} produto(s) — refine a busca pra ver mais
+              </p>
+            ) : null}
           </div>
         ) : null}
 
