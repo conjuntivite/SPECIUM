@@ -27,7 +27,7 @@ async function getProductsCollection() {
 }
 
 function toProduct(doc) {
-  return { id: doc._id.toString(), category: doc.category, brand: doc.brand, model: doc.model, icon: doc.icon || '' };
+  return { id: doc._id.toString(), category: doc.category, brand: doc.brand, model: doc.model };
 }
 
 async function listProducts(category) {
@@ -37,16 +37,16 @@ async function listProducts(category) {
   return docs.map(toProduct);
 }
 
-async function createProduct({ category, brand, model, icon }) {
+async function createProduct({ category, brand, model }) {
   const products = await getProductsCollection();
-  const { insertedId } = await products.insertOne({ category, brand, model, icon: icon || '', createdAt: new Date() });
-  return { id: insertedId.toString(), category, brand, model, icon: icon || '' };
+  const { insertedId } = await products.insertOne({ category, brand, model, createdAt: new Date() });
+  return { id: insertedId.toString(), category, brand, model };
 }
 
-async function updateProduct(id, { category, brand, model, icon }) {
+async function updateProduct(id, { category, brand, model }) {
   if (!ObjectId.isValid(id)) return false;
   const products = await getProductsCollection();
-  const { matchedCount } = await products.updateOne({ _id: new ObjectId(id) }, { $set: { category, brand, model, icon: icon || '' } });
+  const { matchedCount } = await products.updateOne({ _id: new ObjectId(id) }, { $set: { category, brand, model } });
   return matchedCount > 0;
 }
 
@@ -62,7 +62,7 @@ async function importProducts(items) {
     const key = `${item.category}|${item.brand}|${item.model}`.toLowerCase();
     if (seen.has(key)) { skipped++; continue; }
     seen.add(key);
-    toInsert.push({ category: item.category, brand: item.brand, model: item.model, icon: item.icon || '', createdAt: new Date() });
+    toInsert.push({ category: item.category, brand: item.brand, model: item.model, createdAt: new Date() });
   }
   if (toInsert.length) await products.insertMany(toInsert);
   return { imported: toInsert.length, skipped };
@@ -122,6 +122,7 @@ function toCategory(doc) {
   return {
     id: doc._id.toString(), group: doc.group, value: doc.value, label: doc.label,
     capacity: Number.isFinite(doc.capacity) ? doc.capacity : null,
+    icon: doc.icon || '',
     provides: doc.provides || [],
     requirements: doc.requirements || [],
     canBeContainer: !!doc.canBeContainer,
@@ -207,7 +208,7 @@ async function listCategories() {
 // "value" (usado em products.category, requirements.candidates e provides.resource em toda a
 // base) sai direto do label e nunca muda depois — duas categorias com o mesmo nome colidiriam nessa
 // chave e uma ficaria inacessível pro motor de sugestões. Mesma checagem de duplicata do createGroup.
-async function createCategory({ group, label, capacity, provides, requirements, canBeContainer }) {
+async function createCategory({ group, label, capacity, icon, provides, requirements, canBeContainer }) {
   const categories = await getCategoriesCollection();
   const value = label;
   const all = await categories.find({}, { projection: { value: 1 } }).toArray();
@@ -215,14 +216,15 @@ async function createCategory({ group, label, capacity, provides, requirements, 
     throw new Error('Já existe uma categoria com esse nome.');
   }
   const cleanCapacity = sanitizeCapacity(capacity);
+  const cleanIcon = icon || '';
   const cleanProvides = sanitizeProvides(provides);
   const cleanRequirements = sanitizeRequirements(requirements);
   const cleanCanBeContainer = !!canBeContainer;
   const { insertedId } = await categories.insertOne({
-    group, value, label, capacity: cleanCapacity,
+    group, value, label, capacity: cleanCapacity, icon: cleanIcon,
     provides: cleanProvides, requirements: cleanRequirements, canBeContainer: cleanCanBeContainer, createdAt: new Date(),
   });
-  return { id: insertedId.toString(), group, value, label, capacity: cleanCapacity, provides: cleanProvides, requirements: cleanRequirements, canBeContainer: cleanCanBeContainer };
+  return { id: insertedId.toString(), group, value, label, capacity: cleanCapacity, icon: cleanIcon, provides: cleanProvides, requirements: cleanRequirements, canBeContainer: cleanCanBeContainer };
 }
 
 // "value" não é editável: é a chave que já pode estar gravada em products.category e nas
@@ -230,13 +232,13 @@ async function createCategory({ group, label, capacity, provides, requirements, 
 // essas referências. provides/requirements só entram no $set quando o chamador realmente os envia
 // (undefined = não mexe), pra uma edição comum (grupo, nome, capacidade) não apagar o que já estava
 // cadastrado ali.
-async function updateCategory(id, { group, label, capacity, provides, requirements, canBeContainer }) {
+async function updateCategory(id, { group, label, capacity, icon, provides, requirements, canBeContainer }) {
   if (!ObjectId.isValid(id)) return false;
   const categories = await getCategoriesCollection();
   const existing = await categories.findOne({ _id: new ObjectId(id) });
   if (!existing) return false;
   const cleanCapacity = sanitizeCapacity(capacity);
-  const update = { group, label, capacity: cleanCapacity, canBeContainer: !!canBeContainer };
+  const update = { group, label, capacity: cleanCapacity, icon: icon || '', canBeContainer: !!canBeContainer };
   if (provides !== undefined) update.provides = sanitizeProvides(provides);
   if (requirements !== undefined) update.requirements = sanitizeRequirements(requirements);
   const { matchedCount } = await categories.updateOne({ _id: new ObjectId(id) }, { $set: update });

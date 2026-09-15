@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { GroupCombobox } from './GroupCombobox'
 import { ProvidesEditor, RequirementsEditor } from './RequirementsEditor'
 import { InfoHint } from '@/components/ui/info-hint'
+import { IconPicker } from '@/components/ui/icon-picker'
 import {
   Dialog,
   DialogContent,
@@ -21,7 +22,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select'
 
-const emptyForm = { group: '', label: '', capacity: '', capacityTouched: false, canBeContainer: false }
+const emptyForm = { group: '', label: '', capacity: '', capacityTouched: false, canBeContainer: false, icon: '' }
 
 // Mesmo padrão do inferSeedCapacity em db.js: o número já está no nome ("Switch Giga 8 Portas",
 // "DVR 16 Canais"), então preenchemos sozinhos em vez de pedir pra digitar de novo. Categorias sem
@@ -97,7 +98,7 @@ export function CategoryFormDialog({
     if (open) {
       setForm(
         category
-          ? { group: category.group, label: category.label, capacity: category.capacity ?? '', capacityTouched: category.capacity != null, canBeContainer: !!category.canBeContainer }
+          ? { group: category.group, label: category.label, capacity: category.capacity ?? '', capacityTouched: category.capacity != null, canBeContainer: !!category.canBeContainer, icon: category.icon || '' }
           : emptyForm
       )
       setProvides((category?.provides || []).map((p) => ({ ...p })))
@@ -113,6 +114,7 @@ export function CategoryFormDialog({
     setCopyFromValue(value)
     const source = categories.find((c) => c.value === value)
     if (!source) return
+    if (source.icon) setForm((f) => ({ ...f, icon: source.icon }))
     setProvides((source.provides || []).map((p) => ({ ...p })))
     setRequirements(
       (source.requirements || []).map((r) => (r.type === 'anyOf' ? { ...r, options: r.options.map((o) => ({ ...o })) } : { ...r }))
@@ -130,7 +132,7 @@ export function CategoryFormDialog({
     try {
       const capacity = form.capacity === '' ? null : Math.max(1, Math.trunc(Number(form.capacity)) || 1)
       await onSubmit({
-        group: form.group, label: form.label, capacity, canBeContainer: form.canBeContainer,
+        group: form.group, label: form.label, capacity, canBeContainer: form.canBeContainer, icon: form.icon,
         provides: cleanProvides(provides), requirements: cleanRequirements(requirements),
       })
     } catch (err) {
@@ -165,17 +167,20 @@ export function CategoryFormDialog({
 
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">Categoria</label>
-              <Input
-                value={form.label}
-                onChange={(e) => {
-                  const label = e.target.value
-                  setForm((f) => {
-                    if (f.capacityTouched) return { ...f, label }
-                    return { ...f, label, capacity: inferCapacityFromLabel(label) }
-                  })
-                }}
-                placeholder="Ex: Câmera IP PoE"
-              />
+              <div className="flex items-center gap-2">
+                <IconPicker value={form.icon} onChange={(icon) => setForm((f) => ({ ...f, icon }))} />
+                <Input
+                  value={form.label}
+                  onChange={(e) => {
+                    const label = e.target.value
+                    setForm((f) => {
+                      if (f.capacityTouched) return { ...f, label }
+                      return { ...f, label, capacity: inferCapacityFromLabel(label) }
+                    })
+                  }}
+                  placeholder="Ex: Câmera IP PoE"
+                />
+              </div>
             </div>
 
             <div className="flex items-center gap-1.5">

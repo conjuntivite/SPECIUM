@@ -80,8 +80,8 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }) {
             <p className="mb-2 text-muted-foreground">
               O modelo já vem com a lista de categorias cadastradas numerada, do lado das colunas de
               preenchimento. Colunas: <strong>Categoria</strong> (o número dessa lista — evita erro de
-              digitação, mas também aceita o nome exato), <strong>Marca</strong>, <strong>Modelo</strong>{' '}
-              e <strong>Ícone</strong> (opcional, deixe em branco se não souber). Abre e salva normalmente
+              digitação, mas também aceita o nome exato), <strong>Marca</strong> e <strong>Modelo</strong>.
+              O ícone é definido uma vez na categoria, não por produto. Abre e salva normalmente
               pelo Excel — só não troque o separador ";" da planilha.
             </p>
             <a href="/api/products/template" download>

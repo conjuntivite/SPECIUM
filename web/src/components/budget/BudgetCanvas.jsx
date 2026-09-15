@@ -125,6 +125,12 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
     () => Object.fromEntries(catalog.flatMap((group) => group.items.map((item) => [item.value, item.label]))),
     [catalog]
   )
+  // Ícone vem da categoria, não do produto escolhido (dois produtos da mesma categoria — ex.: marcas
+  // diferentes de Switch Giga — sempre mostram o mesmo ícone).
+  const categoryIconByValue = useMemo(
+    () => Object.fromEntries(catalog.flatMap((group) => group.items.map((item) => [item.value, item.icon]))),
+    [catalog]
+  )
   const { screenToFlowPosition, zoomIn, zoomOut, fitView, getIntersectingNodes, getNodes } = useReactFlow()
   // Posição do último clique com botão direito — usada como ponto de spawn ao adicionar item
   // pelo menu (equivalente ao ponto de solto do drag-and-drop da suggestions strip).
@@ -305,12 +311,12 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
   }
 
   function handleProductPick(product) {
-    if (productPrompt) budget.addItem(composeProductTitle(product), 1, productPrompt.position, product.icon, productPrompt.containerId ?? null)
+    if (productPrompt) budget.addItem(composeProductTitle(product), 1, productPrompt.position, categoryIconByValue[product.category], productPrompt.containerId ?? null)
     setProductPrompt(null)
   }
 
   function handleProductSkip() {
-    if (productPrompt) budget.addItem(productPrompt.fallbackTitle, 1, productPrompt.position, null, productPrompt.containerId ?? null)
+    if (productPrompt) budget.addItem(productPrompt.fallbackTitle, 1, productPrompt.position, categoryIconByValue[productPrompt.categories[0]], productPrompt.containerId ?? null)
     setProductPrompt(null)
   }
 

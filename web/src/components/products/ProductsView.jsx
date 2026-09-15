@@ -22,6 +22,10 @@ export function ProductsView() {
     () => Object.fromEntries(catalog.flatMap((group) => group.items.map((item) => [item.value, item.label]))),
     [catalog]
   )
+  const categoryIcons = useMemo(
+    () => Object.fromEntries(catalog.flatMap((group) => group.items.map((item) => [item.value, item.icon]))),
+    [catalog]
+  )
   const [products, setProducts] = useState([])
   const brands = useMemo(
     () => [...new Set(products.map((p) => p.brand).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
@@ -133,7 +137,7 @@ export function ProductsView() {
           <TableBody>
             {pagedProducts.map((product) => (
               <TableRow key={product.id}>
-                <TableCell><ProductIcon icon={product.icon} className="size-4 text-muted-foreground" /></TableCell>
+                <TableCell><ProductIcon icon={categoryIcons[product.category]} className="size-4 text-muted-foreground" /></TableCell>
                 <TableCell>{categoryLabels[product.category] || product.category}</TableCell>
                 <TableCell>{product.brand}</TableCell>
                 <TableCell>{product.model}</TableCell>

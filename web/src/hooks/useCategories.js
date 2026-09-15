@@ -5,14 +5,14 @@ import staticCatalog from '@/data/catalog.json'
 function groupByCategory(categories) {
   const groups = []
   const byGroup = new Map()
-  for (const { group, value, label } of categories) {
+  for (const { group, value, label, icon } of categories) {
     let bucket = byGroup.get(group)
     if (!bucket) {
       bucket = { group, items: [] }
       byGroup.set(group, bucket)
       groups.push(bucket)
     }
-    bucket.items.push({ value, label })
+    bucket.items.push({ value, label, icon })
   }
   return groups
 }

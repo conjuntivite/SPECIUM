@@ -29,6 +29,10 @@ export function ProductPickerDialog({ prompt, onPick, onSkip, onOpenChange, onGo
     () => Object.fromEntries(catalog.flatMap((group) => group.items.map((item) => [item.value, item.label]))),
     [catalog]
   )
+  const categoryIcons = useMemo(
+    () => Object.fromEntries(catalog.flatMap((group) => group.items.map((item) => [item.value, item.icon]))),
+    [catalog]
+  )
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -101,7 +105,7 @@ export function ProductPickerDialog({ prompt, onPick, onSkip, onOpenChange, onGo
                 className="h-auto justify-start whitespace-normal text-left"
                 onClick={() => onPick(product)}
               >
-                <ProductIcon icon={product.icon} className="size-4 shrink-0" />
+                <ProductIcon icon={categoryIcons[product.category]} className="size-4 shrink-0" />
                 {showCategoryPerRow ? `${categoryLabels[product.category] || product.category} — ` : ''}
                 {product.brand} — {product.model}
               </Button>

@@ -4,6 +4,7 @@ import { faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+import { ProductIcon } from '@/components/ui/product-icon'
 import { normalizeSearch } from '@/lib/utils'
 import {
   createCategory, deleteCategory, getCategories, updateCategory,
@@ -127,6 +128,7 @@ export function CategoriesView() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10"></TableHead>
               <TableHead>Grupo</TableHead>
               <TableHead>Categoria</TableHead>
               <TableHead>Capacidade</TableHead>
@@ -137,6 +139,7 @@ export function CategoriesView() {
           <TableBody>
             {filteredCategories.map((category) => (
               <TableRow key={category.id}>
+                <TableCell><ProductIcon icon={category.icon} className="size-4 text-muted-foreground" /></TableCell>
                 <TableCell>{category.group}</TableCell>
                 <TableCell>{category.label}</TableCell>
                 <TableCell className="text-muted-foreground">{category.capacity ?? '—'}</TableCell>
