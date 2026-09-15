@@ -62,7 +62,7 @@ export function ProductPickerDialog({ prompt, onPick, onSkip, onOpenChange, onGo
 
   return (
     <Dialog open={!!prompt} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Qual produto?</DialogTitle>
           <DialogDescription>
@@ -98,7 +98,7 @@ export function ProductPickerDialog({ prompt, onPick, onSkip, onOpenChange, onGo
                 key={product.id}
                 type="button"
                 variant="secondary"
-                className="justify-start"
+                className="h-auto justify-start whitespace-normal text-left"
                 onClick={() => onPick(product)}
               >
                 <ProductIcon icon={product.icon} className="size-4 shrink-0" />
