@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faCircleExclamation, faAsterisk, faArrowRightArrowLeft, faLightbulb,
@@ -6,7 +6,8 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { auditQuotePdf } from '@/lib/api'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { auditQuotePdf, getCategories, getResources } from '@/lib/api'
 import { useCategories } from '@/hooks/useCategories'
 import { dedupeUnsatisfiedSuggestions } from '@/lib/suggestions'
 
@@ -24,15 +25,147 @@ function suggestionStyle(req) {
   return SEVERITY_STYLES.recommended
 }
 
-function EngineFindingRow({ req }) {
+function EngineFindingRow({ req, onSelect }) {
   const style = suggestionStyle(req)
   return (
-    <li className={`rounded-md border-l-2 bg-white/4 px-3 py-2 ${style.border}`}>
-      <span className="mb-0.5 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-        <FontAwesomeIcon icon={style.icon} className="size-3" /> {style.kind}
-      </span>
-      <p className="text-sm">{req.reason || req.label}</p>
+    <li>
+      <button
+        type="button"
+        onClick={() => onSelect(req)}
+        className={`w-full rounded-md border-l-2 bg-white/4 px-3 py-2 text-left transition-colors hover:bg-white/8 ${style.border}`}
+      >
+        <span className="mb-0.5 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+          <FontAwesomeIcon icon={style.icon} className="size-3" /> {style.kind}
+        </span>
+        <p className="text-sm">{req.reason || req.label}</p>
+      </button>
     </li>
+  )
+}
+
+// Formata o `provides`/`requirements` cru da categoria (mesmo formato de categoryResourceSeed.js)
+// pra prosa curta no detalhe do achado — resourceLabelByKey traduz a chave técnica (network.gigabit_port)
+// pro rótulo da aba Recursos.
+function formatProvides(category, resourceLabelByKey) {
+  if (!category?.provides?.length) return 'Nada.'
+  return category.provides.map((p) => `${p.amount}× ${resourceLabelByKey.get(p.resource) || p.resource}`).join(', ')
+}
+
+function formatRequirement(req, resourceLabelByKey) {
+  if (req.type === 'presence') return req.label
+  if (req.type === 'capacity') return `${req.label} (${req.unitsPerItem}/un.)`
+  return `${req.label}: ${req.options.map((o) => o.type === 'presence' ? o.candidates.join(' ou ') : (resourceLabelByKey.get(o.resource) || o.resource)).join(' ou ')}`
+}
+
+function formatRequirements(category, resourceLabelByKey) {
+  if (!category?.requirements?.length) return 'Nada.'
+  return category.requirements.map((r) => formatRequirement(r, resourceLabelByKey)).join('; ')
+}
+
+// Linha "Fulano de tal × 3 = 3" (presença) ou "× 3 un × 1/un = 3" (capacidade) — as duas seções do
+// dialog de detalhe (demanda e oferta) usam o mesmo formato, só troca o rótulo do multiplicador.
+// Quando `items` vem preenchido (só na seção "Quem exige"), a linha vira botão: clicar expande os
+// itens do PDF que bateram com essa categoria — pedido pra não ficar só no total agregado ("Controladora
+// de Acesso × 7" sem saber quais 7 itens do orçamento original são esses).
+function BreakdownRow({ entry, items, expanded, onToggle }) {
+  const perUnit = entry.unitsPerItem ?? entry.amount
+  const matches = items ? items.filter((i) => i.category === entry.category) : []
+  const row = (
+    <span className="flex w-full items-baseline justify-between gap-2">
+      <span>{entry.label} <span className="text-muted-foreground">× {entry.quantity}</span></span>
+      <span className="text-muted-foreground">
+        {perUnit != null ? `${perUnit}/un. = ${entry.subtotal}` : entry.quantity}
+      </span>
+    </span>
+  )
+  return (
+    <li className="text-xs">
+      {items ? (
+        <button type="button" onClick={() => onToggle(entry.category)} className="w-full rounded px-1 py-0.5 text-left transition-colors hover:bg-white/8">
+          {row}
+        </button>
+      ) : <div className="px-1 py-0.5">{row}</div>}
+      {expanded ? (
+        <ul className="ml-2 mt-1 flex flex-col gap-0.5 border-l border-white/10 pl-2 text-muted-foreground">
+          {matches.length
+            ? matches.map((m, i) => (<li key={i}>{m.quantity}x {m.name}</li>))
+            : <li>Nenhum item do PDF bateu com essa categoria (nome não reconhecido).</li>}
+        </ul>
+      ) : null}
+    </li>
+  )
+}
+
+function RequirementDetailDialog({ req, onClose, categoriesByValue, resourceLabelByKey, items }) {
+  const [expandedCategory, setExpandedCategory] = useState(null)
+  useEffect(() => { setExpandedCategory(null) }, [req])
+
+  const equipmentValues = useMemo(() => {
+    if (!req) return []
+    const values = new Set([
+      ...(req.demandBreakdown || []).map((e) => e.category),
+      ...(req.supplyBreakdown || []).map((e) => e.category),
+    ])
+    return [...values]
+  }, [req])
+
+  return (
+    <Dialog open={!!req} onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="max-w-md sm:max-w-md">
+        {req ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>{req.label}</DialogTitle>
+              <DialogDescription>{req.reason}</DialogDescription>
+            </DialogHeader>
+
+            <div className="flex max-h-[65vh] flex-col gap-3 overflow-y-auto pr-1">
+              <div>
+                <h4 className="mb-1 text-xs font-semibold text-muted-foreground">Quem exige (demanda: {req.need ?? '—'})</h4>
+                {req.demandBreakdown?.length ? (
+                  <ul className="flex flex-col gap-1 rounded-md bg-white/4 p-2">
+                    {req.demandBreakdown.map((e, i) => (
+                      <BreakdownRow
+                        key={i} entry={e} items={items}
+                        expanded={expandedCategory === e.category}
+                        onToggle={(c) => setExpandedCategory((current) => (current === c ? null : c))}
+                      />
+                    ))}
+                  </ul>
+                ) : <p className="text-xs text-muted-foreground">Nenhum item do orçamento gera essa demanda.</p>}
+              </div>
+
+              <div>
+                <h4 className="mb-1 text-xs font-semibold text-muted-foreground">O que já tenho instalado (oferta: {req.have ?? '—'})</h4>
+                {req.supplyBreakdown?.length ? (
+                  <ul className="flex flex-col gap-1 rounded-md bg-white/4 p-2">
+                    {req.supplyBreakdown.map((e, i) => (<BreakdownRow key={i} entry={e} />))}
+                  </ul>
+                ) : <p className="text-xs text-muted-foreground">Nenhum equipamento do orçamento fornece isso hoje.</p>}
+              </div>
+
+              {equipmentValues.length ? (
+                <div>
+                  <h4 className="mb-1 text-xs font-semibold text-muted-foreground">Ficha de cada equipamento envolvido</h4>
+                  <ul className="flex flex-col gap-2">
+                    {equipmentValues.map((value) => {
+                      const category = categoriesByValue.get(value)
+                      return (
+                        <li key={value} className="rounded-md bg-white/4 p-2 text-xs">
+                          <p className="mb-1 font-semibold">{category?.label || value}</p>
+                          <p><span className="text-muted-foreground">Fornece:</span> {formatProvides(category, resourceLabelByKey)}</p>
+                          <p><span className="text-muted-foreground">Exige:</span> {formatRequirements(category, resourceLabelByKey)}</p>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          </>
+        ) : null}
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -42,6 +175,16 @@ export function QuotePdfAuditView() {
     () => Object.fromEntries(catalog.flatMap((group) => group.items.map((item) => [item.value, item.label]))),
     [catalog]
   )
+  // Cópia crua (com provides[]/requirements[]) só pra montar a ficha do detalhe do achado — a
+  // useCategories() acima já existe pra rotular itens não reconhecidos, mas descarta esses campos.
+  const [categoriesByValue, setCategoriesByValue] = useState(new Map())
+  const [resourceLabelByKey, setResourceLabelByKey] = useState(new Map())
+  useEffect(() => {
+    getCategories().then((data) => setCategoriesByValue(new Map((data.categories || []).map((c) => [c.value, c])))).catch(() => {})
+    getResources().then((data) => setResourceLabelByKey(new Map((data.resources || []).map((r) => [r.key, r.label])))).catch(() => {})
+  }, [])
+  const [selectedFinding, setSelectedFinding] = useState(null)
+
   const fileInputRef = useRef(null)
   const [fileName, setFileName] = useState('')
   const [file, setFile] = useState(null)
@@ -119,7 +262,7 @@ export function QuotePdfAuditView() {
             </h3>
             {engineFindings.length ? (
               <ul className="flex flex-col gap-1.5">
-                {engineFindings.map((req) => (<EngineFindingRow key={req.key} req={req} />))}
+                {engineFindings.map((req) => (<EngineFindingRow key={req.key} req={req} onSelect={setSelectedFinding} />))}
               </ul>
             ) : (
               <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -159,6 +302,14 @@ export function QuotePdfAuditView() {
           </details>
         </div>
       ) : null}
+
+      <RequirementDetailDialog
+        req={selectedFinding}
+        onClose={() => setSelectedFinding(null)}
+        items={result?.items || []}
+        categoriesByValue={categoriesByValue}
+        resourceLabelByKey={resourceLabelByKey}
+      />
     </div>
   )
 }
