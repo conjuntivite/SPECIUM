@@ -1,8 +1,10 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faClipboardList, faBox, faMagnifyingGlass, faTag, faUsers } from '@fortawesome/free-solid-svg-icons'
+import { faClipboardList, faBox, faMagnifyingGlass, faTag, faUsers, faFileShield } from '@fortawesome/free-solid-svg-icons'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
-export function ViewTabs({ value, onValueChange, budgetPanel, searchPanel, productsPanel, categoriesPanel, usersPanel, showUsersTab }) {
+export function ViewTabs({
+  value, onValueChange, budgetPanel, searchPanel, productsPanel, categoriesPanel, quoteAuditPanel, usersPanel, showUsersTab,
+}) {
   return (
     <Tabs value={value} onValueChange={onValueChange} className="gap-6">
       <TabsList className="mx-auto">
@@ -10,6 +12,7 @@ export function ViewTabs({ value, onValueChange, budgetPanel, searchPanel, produ
         <TabsTrigger value="search"><FontAwesomeIcon icon={faMagnifyingGlass} className="size-4" /> Busca avançada por item</TabsTrigger>
         <TabsTrigger value="products"><FontAwesomeIcon icon={faBox} className="size-4" /> Produtos</TabsTrigger>
         <TabsTrigger value="categories"><FontAwesomeIcon icon={faTag} className="size-4" /> Categorias</TabsTrigger>
+        <TabsTrigger value="quote-audit"><FontAwesomeIcon icon={faFileShield} className="size-4" /> Validar orçamento (PDF)</TabsTrigger>
         {showUsersTab ? (
           <TabsTrigger value="users"><FontAwesomeIcon icon={faUsers} className="size-4" /> Usuários</TabsTrigger>
         ) : null}
@@ -18,6 +21,7 @@ export function ViewTabs({ value, onValueChange, budgetPanel, searchPanel, produ
       <TabsContent value="search">{searchPanel}</TabsContent>
       <TabsContent value="products">{productsPanel}</TabsContent>
       <TabsContent value="categories">{categoriesPanel}</TabsContent>
+      <TabsContent value="quote-audit">{quoteAuditPanel}</TabsContent>
       {showUsersTab ? <TabsContent value="users">{usersPanel}</TabsContent> : null}
     </Tabs>
   )

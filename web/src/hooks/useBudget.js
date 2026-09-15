@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getCategories, getPrices, getSuggestions, getBudget, updateBudget, uploadFloorPlan as uploadFloorPlanFile } from '@/lib/api'
 import { parseBRL } from '@/lib/money'
 import { CONTAINER_GRID, containerNodeSize } from '@/components/budget/FlowNode'
+import { dedupeUnsatisfiedSuggestions } from '@/lib/suggestions'
 
 // Nó tem 220px de largura — 300px de passo deixa ~80px de vão entre eles.
 const NODE_SPACING_X = 300
@@ -51,22 +52,6 @@ function sanitizeLayout(rawLayout) {
 }
 
 export const itemFlowKey = (item) => `item-${item.id}`
-
-// Ordem de urgência da listinha lateral: crítico (vermelho) sempre primeiro, depois essencial
-// (âmbar), depois alternativa opcional (laranja), recomendado (cinza) por último.
-function suggestionSeverityRank(req) {
-  if (req.severity === 'critical') return 0
-  if (req.essential) return 1
-  if (req.severity === 'optional') return 2
-  return 3
-}
-
-// Dentro do grupo "recomendado", Nobreak vem primeiro — pedido explícito.
-const RECOMMENDED_PRIORITY_KEYS = ['Nobreak']
-function recommendedPriorityRank(req) {
-  const index = RECOMMENDED_PRIORITY_KEYS.indexOf(req.key)
-  return index === -1 ? RECOMMENDED_PRIORITY_KEYS.length : index
-}
 
 // Sobe a cadeia containerId a partir de um item até achar o ancestral visível mais próximo — um
 // item some do canvas quando o container dele (ou o container do container...) está fechado, mas
@@ -548,20 +533,10 @@ export function useBudget(budgetId) {
   // Sugestões ainda não satisfeitas, deduplicadas entre âncoras que compartilham o mesmo requisito
   // (ex.: "Fonte 12V" pode ser sugestiva pro DVR e crítica/alternativa pra Câmera IP PoE ao mesmo
   // tempo) — fica a versão mais severa, não a primeira âncora processada.
-  const suggestions = useMemo(() => {
-    const unsatisfiedByKey = new Map()
-    Object.values(suggestionsData.requirements_by_category || {}).forEach((requirements) => {
-      requirements.forEach((req) => {
-        if (req.satisfied_by) return
-        const existing = unsatisfiedByKey.get(req.key)
-        if (!existing || suggestionSeverityRank(req) < suggestionSeverityRank(existing)) unsatisfiedByKey.set(req.key, req)
-      })
-    })
-    return [...unsatisfiedByKey.values()].sort((a, b) => {
-      const severityDiff = suggestionSeverityRank(a) - suggestionSeverityRank(b)
-      return severityDiff !== 0 ? severityDiff : recommendedPriorityRank(a) - recommendedPriorityRank(b)
-    })
-  }, [suggestionsData])
+  const suggestions = useMemo(
+    () => dedupeUnsatisfiedSuggestions(suggestionsData.requirements_by_category),
+    [suggestionsData]
+  )
 
   const total = useMemo(() => items.reduce((sum, item) => {
     const unitValue = parseBRL(item.averagePrice)

@@ -7,6 +7,7 @@ import { BudgetView } from '@/components/budget/BudgetView'
 import { BudgetsListView } from '@/components/budget/BudgetsListView'
 import { ProductsView } from '@/components/products/ProductsView'
 import { CategoriesView } from '@/components/categories/CategoriesView'
+import { QuotePdfAuditView } from '@/components/audit/QuotePdfAuditView'
 import { UsersView } from '@/components/users/UsersView'
 import { LoginView } from '@/components/auth/LoginView'
 import { useAuth } from '@/hooks/useAuth'
@@ -49,6 +50,7 @@ function App() {
         searchPanel={<SearchView />}
         productsPanel={<ProductsView />}
         categoriesPanel={<CategoriesView />}
+        quoteAuditPanel={<QuotePdfAuditView />}
         showUsersTab={auth.user?.role === 'admin'}
         usersPanel={<UsersView auth={auth} />}
       />

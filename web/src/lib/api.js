@@ -146,6 +146,21 @@ export async function uploadFloorPlan(id, file, width, height) {
   return response.json()
 }
 
+// Mesmo padrão de uploadFloorPlan: corpo cru (o File direto), filename na query string.
+export async function auditQuotePdf(file) {
+  const qs = new URLSearchParams({ filename: file.name })
+  const response = await fetch(`/api/pdf-audit?${qs}`, {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'application/pdf' },
+    body: file,
+  })
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}))
+    throw new Error(errData.detail || 'Não foi possível validar o PDF.')
+  }
+  return response.json()
+}
+
 export function getResources() {
   return requestJson('/api/resources')
 }

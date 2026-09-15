@@ -35,6 +35,7 @@ const {
 } = require('./lib/auth');
 const { geocodeAddress } = require('./lib/providers/geocoding');
 const { buildProductTemplateCsv, parseProductImportCsv } = require('./lib/productImport');
+const { extractPdfText, classifyQuoteItems, auditQuoteWithAI, PDF_AUDIT_MAX_BYTES } = require('./lib/quoteAudit');
 const { setShoppingFetcher } = require('./lib/providers/shoppingFetcher');
 const { excludePriceOutliers, selectTopDistinctStores, buildGoogleShoppingUrl } = require('./lib/providers/shared');
 const {
@@ -131,6 +132,24 @@ async function requestHandler(request, response) {
       const items = validateRecipePriceItems(body);
       const results = await Promise.all(items.map(fetchRecipeItemPrice));
       return sendJson(response, 200, { results });
+    }
+    if (request.method === 'POST' && url.pathname === '/api/pdf-audit') {
+      const user = await getAuthenticatedUser(request);
+      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      const filename = normalize(url.searchParams.get('filename'));
+      if ((filename.split('.').pop() || '').toLowerCase() !== 'pdf') return sendJson(response, 400, { detail: 'Envie um arquivo PDF.' });
+      const buffer = await readBinary(request, PDF_AUDIT_MAX_BYTES);
+      const [categories, resources] = await Promise.all([listCategories(), listResources()]);
+      const pdfText = await extractPdfText(buffer);
+      // Ordem importa (pedido explícito do usuário): extrai os itens e casa cada um com uma
+      // categoria do cadastro primeiro, roda o motor de regras determinístico sobre esse resultado,
+      // e só DEPOIS manda os itens já casados + as pendências do motor pra IA auditar por cima —
+      // a IA nunca vê o PDF cru de novo nem as seções (erradas) do sistema de origem.
+      const items = await classifyQuoteItems(pdfText, categories);
+      const cartItems = items.filter((i) => i.category).map((i) => ({ title: i.category, quantity: i.quantity }));
+      const engineResult = computeCategoryMissingEssentials(cartItems, categories, resources);
+      const aiAudit = await auditQuoteWithAI(items, categories, engineResult.missing);
+      return sendJson(response, 200, { items, engineResult, aiAudit });
     }
     if (request.method === 'GET' && url.pathname === '/api/products/template') {
       const categories = await listCategories();
