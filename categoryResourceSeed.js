@@ -53,19 +53,27 @@ const NVR_REQUIREMENTS_BASE = [
 
 const CATEGORY_RESOURCE_SEED = {};
 
+// Nem todo switch tem uma porta física rotulada "uplink", mas qualquer porta comum pode virar uplink
+// (conexão com outro switch/roteador/NVR) — então 1 das portas informadas no rótulo (ex.: "8 Portas")
+// não fica disponível pras câmeras. Vale pra todos os switches Giga/PoE Giga/PoE Fast; Switch Fast
+// comum já não provê recurso nenhum (não muda).
+function usablePorts(totalPorts) {
+  return Math.max(0, totalPorts - 1);
+}
+
 for (const label of SWITCH_GIGA_ALL) {
-  const ports = numberFrom(label, 'Portas');
+  const ports = usablePorts(numberFrom(label, 'Portas'));
   CATEGORY_RESOURCE_SEED[label] = { provides: [{ resource: 'network.gigabit_port', amount: ports }], requirements: SWITCH_REQUIREMENTS };
 }
 for (const label of SWITCH_POE_GIGA_ALL) {
-  const ports = numberFrom(label, 'Portas');
+  const ports = usablePorts(numberFrom(label, 'Portas'));
   CATEGORY_RESOURCE_SEED[label] = {
     provides: [{ resource: 'network.gigabit_port', amount: ports }, { resource: 'power.poe_port', amount: ports }],
     requirements: SWITCH_REQUIREMENTS,
   };
 }
 for (const label of SWITCH_POE_FAST_ALL) {
-  const ports = numberFrom(label, 'Portas');
+  const ports = usablePorts(numberFrom(label, 'Portas'));
   CATEGORY_RESOURCE_SEED[label] = { provides: [{ resource: 'power.poe_port', amount: ports }], requirements: SWITCH_REQUIREMENTS };
 }
 for (const label of SWITCH_FAST_ALL) {
