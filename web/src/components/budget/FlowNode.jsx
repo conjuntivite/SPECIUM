@@ -12,10 +12,11 @@ const handleClass = '!size-2.5 !border-2 !border-[#0a0d14] !bg-slate-300'
 // recurso-container.txt seção 7, "priorize usabilidade e simplicidade"). Única fonte de verdade,
 // usada tanto aqui (tamanho do próprio node) quanto em useBudget.js (posição relativa de cada
 // filho) — os dois têm que concordar, senão os filhos desalinham do espaço reservado no card.
-// originY = cabeçalho (58) + a linha de Quantidade do próprio container (36) — o container também é
-// um item com quantidade própria (ex.: 2 Racks), então essa linha sempre aparece antes da grade de
-// filhos agora. Mudar o layout de qualquer uma das duas (QuantityRow, header) exige reajustar aqui.
-export const CONTAINER_GRID = { columns: 2, spacingX: 236, spacingY: 128, originX: 16, originY: 94 }
+// originY = cabeçalho (até 2 linhas, nome quebra em vez de cortar — 82) + a linha de Quantidade do
+// próprio container (36) — o container também é um item com quantidade própria (ex.: 2 Racks), então
+// essa linha sempre aparece antes da grade de filhos agora. Mudar o layout de qualquer uma das duas
+// (QuantityRow, header) exige reajustar aqui.
+export const CONTAINER_GRID = { columns: 2, spacingX: 236, spacingY: 128, originX: 16, originY: 118 }
 // 72 = padding (16) + os dois selects do rodapé empilhados (28px cada + 6px de gap) quando há item
 // solto no canvas pra mover — com só 64 o segundo select ficava cortado pelo overflow-hidden do card.
 // Exportado: BudgetCanvas.jsx usa pra calcular o tamanho mínimo de um container a partir da extensão
@@ -86,11 +87,15 @@ function QuantityRow({ item, onQtyChange, readOnly }) {
   )
 }
 
-function NodeTitle({ item }) {
+// Nome quebra em várias linhas em vez de cortar com "..." (cabeçalho cresce em altura livremente).
+// clamp=true limita a 2 linhas — ponytail: teto conhecido, não altura livre — porque o container
+// aberto posiciona a grade de filhos num offset fixo (CONTAINER_GRID.originY) calculado pra caber
+// exatamente 2 linhas de cabeçalho; nome maior que isso ainda corta na 2ª linha ali.
+function NodeTitle({ item, clamp = false }) {
   return (
-    <span className="flex min-w-0 items-center gap-1.5 truncate text-[0.98rem]" title={item.title}>
+    <span className="flex min-w-0 items-center gap-1.5 text-[0.98rem]" title={item.title}>
       {item.icon ? <FontAwesomeIcon icon={getProductIcon(item.icon)} className="size-3.5 shrink-0" /> : null}
-      <span className="truncate">
+      <span className={`break-words ${clamp ? 'line-clamp-2' : ''}`}>
         {item.quantity > 1 ? `${item.quantity}× ` : ''}
         {item.title}
       </span>
@@ -174,7 +179,7 @@ export function FlowNode({ data, dragging, selected }) {
         ) : null}
         <NodeHandles />
         <div className={`flex items-center justify-between gap-2 px-3 py-2 font-bold ${headerClass}`}>
-          <NodeTitle item={item} />
+          <NodeTitle item={item} clamp />
           <span className="nodrag flex shrink-0 items-center gap-1">
             <button type="button" className="flex size-5 items-center justify-center rounded-full bg-black/15 hover:bg-black/30" title="Fechar Container" onClick={() => onToggleContainer(item.id)}>
               <FontAwesomeIcon icon={faCompress} className="size-3" />
