@@ -11,7 +11,7 @@ import { PRODUCT_ICON_OPTIONS, getProductIcon } from '@/lib/productIcons'
 // com backdrop-blur/filter/transform (comum nos cards flutuantes sobre o mapa e o canvas) cria um
 // stacking context próprio e prende o z-index do menu lá dentro, deixando-o escondido atrás de
 // texto/elementos que vêm depois no HTML mas fora desse ancestral.
-export function IconPicker({ value, onChange }) {
+export function IconPicker({ value, onChange, compact = false }) {
   const triggerRef = useRef(null)
   const menuRef = useRef(null)
   const [open, setOpen] = useState(false)
@@ -65,9 +65,9 @@ export function IconPicker({ value, onChange }) {
         type="button"
         onClick={toggleOpen}
         title={selected?.label || 'Escolher ícone'}
-        className="flex size-9 items-center justify-center rounded-lg border border-input bg-transparent text-foreground transition-colors hover:bg-secondary"
+        className={`flex ${compact ? 'size-7' : 'size-9'} shrink-0 items-center justify-center rounded-lg border border-input bg-transparent text-foreground transition-colors hover:bg-secondary`}
       >
-        <FontAwesomeIcon icon={getProductIcon(value)} className="size-4" />
+        <FontAwesomeIcon icon={getProductIcon(value)} className={compact ? 'size-3.5' : 'size-4'} />
       </button>
 
       {open && coords ? createPortal(

@@ -2,7 +2,7 @@ import { Fragment, useCallback, useMemo, useRef, useState } from 'react'
 import { CircleMarker, ImageOverlay, MapContainer, Marker, Polyline, Popup, useMapEvents } from 'react-leaflet'
 import { icon as faIconToSvg } from '@fortawesome/fontawesome-svg-core'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faLink, faRuler } from '@fortawesome/free-solid-svg-icons'
+import { faChevronDown, faChevronUp, faLink, faRuler } from '@fortawesome/free-solid-svg-icons'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { getProductIcon } from '@/lib/productIcons'
@@ -62,6 +62,7 @@ export function FloorPlanCanvas({ budgetId, floorPlan, items, coverageByItemId, 
   const [lines, setLines] = useState(() => floorPlanLayout.lines || [])
   const [armedItemId, setArmedItemId] = useState(null) // null | number (id do item) | 'link' | 'scale'
   const [linkFromId, setLinkFromId] = useState(null)
+  const [paletteOpen, setPaletteOpen] = useState(true)
   const nextIdRef = useRef(1)
 
   // Escala da planta (pixels por metro), definida pelo consultor medindo uma distância conhecida na
@@ -331,11 +332,21 @@ export function FloorPlanCanvas({ budgetId, floorPlan, items, coverageByItemId, 
         })}
       </MapContainer>
 
-      <div className="pointer-events-none absolute bottom-4 left-4 z-[1000] flex max-h-[75vh] flex-col gap-2 overflow-y-auto">
+      {/* Painel único, pequeno e recolhível — a planta é o foco, então a lista de equipamentos não
+          pode cobrir uma fatia dela. Título truncado (tooltip mostra inteiro); a contagem fica sempre visível. */}
+      <div className="pointer-events-auto absolute bottom-4 left-4 z-[1000] flex max-h-[45vh] w-[200px] flex-col rounded-lg border border-border bg-card/85 text-xs backdrop-blur">
+        <button
+          type="button"
+          onClick={() => setPaletteOpen((open) => !open)}
+          className="flex items-center justify-between px-2 py-1.5 font-medium"
+        >
+          Equipamentos
+          <FontAwesomeIcon icon={paletteOpen ? faChevronDown : faChevronUp} className="size-3" />
+        </button>
+        {paletteOpen ? (
+        <div className="flex flex-col gap-1 overflow-y-auto p-1 pt-0">
         {!placeableItems.length ? (
-          <p className="pointer-events-none max-w-[230px] rounded-lg bg-card/80 px-2 py-1 text-xs text-muted-foreground backdrop-blur">
-            Nenhum equipamento neste orçamento ainda.
-          </p>
+          <p className="px-1 text-muted-foreground">Nenhum equipamento neste orçamento ainda.</p>
         ) : null}
         {placeableItems.map((item) => {
           const placed = placedCountByItemId.get(item.id) || 0
@@ -343,30 +354,30 @@ export function FloorPlanCanvas({ budgetId, floorPlan, items, coverageByItemId, 
           return (
             <div
               key={item.id}
-              className={`pointer-events-auto flex items-center gap-1.5 rounded-full border py-1 pr-3 pl-1 text-sm font-medium backdrop-blur transition-colors ${
-                armedItemId === item.id ? 'border-amber-400 bg-amber-400/90 text-black' : 'border-border bg-card/90'
+              className={`flex items-center gap-1 rounded-md border py-0.5 pr-1.5 pl-0.5 transition-colors ${
+                armedItemId === item.id ? 'border-amber-400 bg-amber-400/90 text-black' : 'border-border'
               }`}
             >
-              <IconPicker value={item.icon} onChange={(icon) => onSetItemIcon(item.id, icon)} />
+              <IconPicker compact value={item.icon} onChange={(icon) => onSetItemIcon(item.id, icon)} />
               <button
                 type="button"
                 disabled={remaining <= 0}
+                title={`${item.title} (${placed}/${item.quantity})${armedItemId === item.id ? ' — clique na planta' : ''}`}
                 onClick={() => setArmedItemId((current) => (current === item.id ? null : item.id))}
-                className="disabled:pointer-events-none disabled:opacity-50 hover:underline"
+                className="flex min-w-0 flex-1 items-center gap-1 text-left disabled:pointer-events-none disabled:opacity-50 hover:underline"
               >
-                {item.title} ({placed}/{item.quantity}){armedItemId === item.id ? ' — clique na planta' : ''}
+                <span className="truncate">{item.title}</span>
+                <span className="ml-auto shrink-0 tabular-nums">{placed}/{item.quantity}</span>
               </button>
             </div>
           )
         })}
         {coverageByItemId?.size && !pxPerMeter ? (
-          <p className="pointer-events-none max-w-[230px] rounded-lg bg-card/80 px-2 py-1 text-xs text-muted-foreground backdrop-blur">
-            Defina a escala da planta pra ver a área de cobertura dos equipamentos.
-          </p>
+          <p className="px-1 text-muted-foreground">Defina a escala pra ver a área de cobertura.</p>
         ) : null}
         {armedItemId === 'scale' && scalePoints.length === 2 ? (
-          <div className="pointer-events-auto flex max-w-[260px] flex-col gap-2 rounded-lg border border-border bg-card/90 p-2 text-sm backdrop-blur">
-            <label className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 rounded-md border border-border p-2">
+            <label className="flex flex-wrap items-center gap-2">
               Distância real entre os pontos
               <input
                 autoFocus
@@ -387,30 +398,35 @@ export function FloorPlanCanvas({ budgetId, floorPlan, items, coverageByItemId, 
         <button
           type="button"
           onClick={() => { setArmedItemId((current) => (current === 'scale' ? null : 'scale')); setScalePoints([]); setScaleMeters(''); setLinkFromId(null) }}
-          className={`pointer-events-auto flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium backdrop-blur transition-colors ${
-            armedItemId === 'scale' ? 'border-amber-400 bg-amber-400/90 text-black' : 'border-border bg-card/90 hover:bg-secondary'
+          className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-left font-medium transition-colors ${
+            armedItemId === 'scale' ? 'border-amber-400 bg-amber-400/90 text-black' : 'border-border hover:bg-secondary'
           }`}
         >
-          <FontAwesomeIcon icon={faRuler} className="size-4" />{' '}
+          <FontAwesomeIcon icon={faRuler} className="size-3.5 shrink-0" />{' '}
           {armedItemId === 'scale'
-            ? scalePoints.length === 2 ? 'Informe a distância acima' : `Definir escala — clique no ${scalePoints.length ? '2º' : '1º'} ponto`
-            : pxPerMeter ? 'Escala definida — refazer' : 'Definir escala'}
+            ? scalePoints.length === 2 ? 'Informe a distância' : `Escala — clique no ${scalePoints.length ? '2º' : '1º'} ponto`
+            : pxPerMeter ? 'Refazer escala' : 'Definir escala'}
         </button>
         <button
           type="button"
           onClick={() => { setArmedItemId((current) => (current === 'link' ? null : 'link')); setLinkFromId(null) }}
           disabled={markers.length < 2}
-          className={`pointer-events-auto flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium backdrop-blur transition-colors disabled:pointer-events-none disabled:opacity-50 ${
-            armedItemId === 'link' ? 'border-amber-400 bg-amber-400/90 text-black' : 'border-border bg-card/90 hover:bg-secondary'
+          className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-left font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 ${
+            armedItemId === 'link' ? 'border-amber-400 bg-amber-400/90 text-black' : 'border-border hover:bg-secondary'
           }`}
         >
-          <FontAwesomeIcon icon={faLink} className="size-4" /> Ligar com linha{armedItemId === 'link' ? (linkFromId ? ' — clique no segundo ícone' : ' — clique no primeiro ícone') : ''}
+          <FontAwesomeIcon icon={faLink} className="size-3.5 shrink-0" /> {armedItemId === 'link' ? (linkFromId ? 'Clique no 2º ícone' : 'Clique no 1º ícone') : 'Ligar com linha'}
         </button>
+        </div>
+        ) : null}
       </div>
 
-      <p className="pointer-events-none absolute bottom-4 right-4 z-[1000] max-w-[230px] rounded-lg bg-card/80 px-2 py-1 text-right text-xs text-muted-foreground backdrop-blur">
+      <details className="pointer-events-auto absolute bottom-4 right-4 z-[1000] max-w-[260px] rounded-lg bg-card/85 px-2 py-1 text-xs text-muted-foreground backdrop-blur">
+        <summary className="cursor-pointer select-none text-right font-medium">Ajuda</summary>
+        <p className="mt-1 text-right">
         A quantidade em cada botão é a do orçamento — some pra 0/N quando todos já foram colocados. Clique num ícone com selo pra ver o que tem dentro dele. Botão direito remove. Arrastar move a posição (desligado enquanto "Ligar com linha" está ativo). Clique numa linha de ligação pra criar um ponto de dobra; arraste o ponto pra ajustar, botão direito nele remove a dobra. Equipamento com área de cobertura: arraste o ponto amarelo na ponta pra ajustar direção e alcance, ou clique no ícone pra digitar os valores (precisa da escala definida).
-      </p>
+        </p>
+      </details>
     </div>
   )
 }
