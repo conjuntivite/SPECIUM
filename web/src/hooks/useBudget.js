@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getCategories, getPrices, getSuggestions, getBudget, updateBudget, uploadFloorPlan as uploadFloorPlanFile } from '@/lib/api'
 import { parseBRL } from '@/lib/money'
+import { resolutionFromTitle } from '@/lib/coverage'
 import { CONTAINER_GRID, containerNodeSize } from '@/components/budget/FlowNode'
 import { dedupeUnsatisfiedSuggestions } from '@/lib/suggestions'
 
@@ -422,6 +423,19 @@ export function useBudget(budgetId) {
     return ids
   }, [items, suggestionsData, containerCategoryValues])
 
+  // Itens cuja categoria mostra área de cobertura no mapa/planta (câmera, central de alarme sem
+  // fio...) → { shape: 'cone' | 'circle' | 'camera', resolution padrão lida do título }. Mesma
+  // associação item↔categoria por índice do container acima.
+  const coverageByItemId = useMemo(() => {
+    const shapeByCategory = new Map(categories.filter((c) => c.coverage).map((c) => [c.value, c.coverage]))
+    const map = new Map()
+    items.forEach((item, index) => {
+      const shape = shapeByCategory.get(suggestionsData.items?.[index]?.category)
+      if (shape) map.set(item.id, { shape, resolution: resolutionFromTitle(item.title) })
+    })
+    return map
+  }, [items, suggestionsData, categories])
+
   // Cabeçalho do card só fica verde depois que o item ganha uma ligação manual (linha desenhada pelo
   // usuário) com outro card — antes disso fica neutro, pra não passar a falsa impressão de que já
   // está "resolvido" dentro do fluxo. Ver FlowNode.jsx.
@@ -550,6 +564,7 @@ export function useBudget(budgetId) {
     edges,
     suggestions,
     total,
+    coverageByItemId,
     mapLayout,
     setMapLayout,
     floorPlan,

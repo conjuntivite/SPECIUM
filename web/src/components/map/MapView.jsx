@@ -2,10 +2,10 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faArrowLeft } from '@fortawesome/free-solid-svg-icons'
 import { MapCanvas } from './MapCanvas'
 
-export function MapView({ budgetId, lat, lng, items, onSetItemIcon, mapLayout, onChangeMapLayout, onBackToCanvas }) {
+export function MapView({ budgetId, lat, lng, items, coverageByItemId, onSetItemIcon, mapLayout, onChangeMapLayout, onBackToCanvas }) {
   return (
     <div className="fixed inset-0 z-40">
-      <MapCanvas budgetId={budgetId} lat={lat} lng={lng} items={items} onSetItemIcon={onSetItemIcon} mapLayout={mapLayout} onChange={onChangeMapLayout} />
+      <MapCanvas budgetId={budgetId} lat={lat} lng={lng} items={items} coverageByItemId={coverageByItemId} onSetItemIcon={onSetItemIcon} mapLayout={mapLayout} onChange={onChangeMapLayout} />
 
       {/* Leaflet põe seu controle de zoom no canto superior esquerdo com z-index alto — o botão de
           voltar fica no canto oposto (direita) pra não ficar escondido atrás dele. */}

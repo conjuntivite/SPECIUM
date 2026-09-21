@@ -738,7 +738,7 @@ test('CRUD de /api/categories: lista a pré-build semeada, cadastra, atualiza e 
 
   const created = await fetch(`${baseUrl}/api/categories`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ group: '__teste__ Grupo', label, canBeContainer: true }),
+    body: JSON.stringify({ group: '__teste__ Grupo', label, canBeContainer: true, coverage: 'cone' }),
   });
   const category = await created.json();
   assert.equal(created.status, 201);
@@ -747,6 +747,8 @@ test('CRUD de /api/categories: lista a pré-build semeada, cadastra, atualiza e 
   // canBeContainer (container de itens no canvas, ex.: Rack) é boolean simples — sem candidate
   // list pra colidir, então pode ser criado e devolvido de cara, sem precisar de outro requisito.
   assert.equal(category.canBeContainer, true);
+  // coverage = forma da área de cobertura no mapa/planta ('cone' | 'circle' | 'camera'); qualquer outro valor vira null.
+  assert.equal(category.coverage, 'cone');
 
   // "value" (=label) é a chave usada em products.category/requirements.candidates/provides.resource
   // em toda a base — duplicata colidiria nela, então recusa mesmo em outro grupo e mesmo com
@@ -766,7 +768,7 @@ test('CRUD de /api/categories: lista a pré-build semeada, cadastra, atualiza e 
 
   const updated = await fetch(`${baseUrl}/api/categories/${category.id}`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ group: '__teste__ Grupo 2', label: `${label} editado` }),
+    body: JSON.stringify({ group: '__teste__ Grupo 2', label: `${label} editado`, coverage: 'camera' }),
   });
   assert.equal(updated.status, 200);
   const updatedBody = await updated.json();
@@ -775,6 +777,12 @@ test('CRUD de /api/categories: lista a pré-build semeada, cadastra, atualiza e 
   // campo de edição parcial como provides/requirements) — omitir no PUT desliga, igual a desmarcar
   // o checkbox no cadastro.
   assert.equal(updatedBody.canBeContainer, false);
+  assert.equal(updatedBody.coverage, 'camera');
+  const invalidCoverage = await fetch(`${baseUrl}/api/categories/${category.id}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ group: '__teste__ Grupo 2', label: `${label} editado`, coverage: 'hexagono' }),
+  });
+  assert.equal((await invalidCoverage.json()).coverage, null);
 
   const missingUpdate = await fetch(`${baseUrl}/api/categories/ffffffffffffffffffffffff`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },

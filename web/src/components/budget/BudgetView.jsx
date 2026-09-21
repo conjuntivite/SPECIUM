@@ -64,6 +64,7 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
         lat={budget.lat}
         lng={budget.lng}
         items={budget.items}
+        coverageByItemId={budget.coverageByItemId}
         onSetItemIcon={budget.setItemIcon}
         mapLayout={budget.mapLayout}
         onChangeMapLayout={budget.setMapLayout}
@@ -78,6 +79,7 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
         budgetId={budgetId}
         floorPlan={budget.floorPlan}
         items={budget.items}
+        coverageByItemId={budget.coverageByItemId}
         onSetItemIcon={budget.setItemIcon}
         floorPlanLayout={budget.floorPlanLayout}
         onChangeFloorPlanLayout={budget.setFloorPlanLayout}

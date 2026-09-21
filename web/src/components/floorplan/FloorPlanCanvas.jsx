@@ -1,12 +1,14 @@
 import { Fragment, useCallback, useMemo, useRef, useState } from 'react'
-import { ImageOverlay, MapContainer, Marker, Polyline, Popup, useMapEvents } from 'react-leaflet'
+import { CircleMarker, ImageOverlay, MapContainer, Marker, Polyline, Popup, useMapEvents } from 'react-leaflet'
 import { icon as faIconToSvg } from '@fortawesome/fontawesome-svg-core'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faLink } from '@fortawesome/free-solid-svg-icons'
+import { faLink, faRuler } from '@fortawesome/free-solid-svg-icons'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { getProductIcon } from '@/lib/productIcons'
 import { IconPicker } from '@/components/ui/icon-picker'
+import { CoverageFields, CoverageOverlay } from '@/components/map/CoverageOverlay'
+import { planFrame } from '@/lib/coverage'
 
 // Alternativa ao mapa geográfico (MapCanvas): mesma interação (posicionar item, trocar ícone,
 // ligar com linha, ponto de dobra), mas em cima de uma imagem enviada pelo consultor (planta
@@ -43,28 +45,65 @@ function lineWaypoints(line) {
   return line.waypoints || (line.waypoint ? [line.waypoint] : [])
 }
 
-function ClickToPlace({ armedItemId, onPlace }) {
+function ClickToPlace({ armedItemId, onPlace, onScalePoint }) {
   useMapEvents({
     click(e) {
       if (typeof armedItemId === 'number') onPlace(armedItemId, e.latlng)
+      else if (armedItemId === 'scale') onScalePoint(e.latlng)
     },
   })
   return null
 }
 
-export function FloorPlanCanvas({ budgetId, floorPlan, items, onSetItemIcon, floorPlanLayout, onChange }) {
+export function FloorPlanCanvas({ budgetId, floorPlan, items, coverageByItemId, onSetItemIcon, floorPlanLayout, onChange }) {
   const bounds = useMemo(() => [[0, 0], [floorPlan.height, floorPlan.width]], [floorPlan.height, floorPlan.width])
 
   const [markers, setMarkers] = useState(() => floorPlanLayout.markers || [])
   const [lines, setLines] = useState(() => floorPlanLayout.lines || [])
-  const [armedItemId, setArmedItemId] = useState(null) // null | number (id do item) | 'link'
+  const [armedItemId, setArmedItemId] = useState(null) // null | number (id do item) | 'link' | 'scale'
   const [linkFromId, setLinkFromId] = useState(null)
   const nextIdRef = useRef(1)
 
+  // Escala da planta (pixels por metro), definida pelo consultor medindo uma distância conhecida na
+  // imagem. Sem ela a área de cobertura (em metros) não tem como ser desenhada. Vai junto no layout.
+  const [pxPerMeter, setPxPerMeter] = useState(() => floorPlanLayout.pxPerMeter || null)
+  const pxPerMeterRef = useRef(pxPerMeter)
+  const [scalePoints, setScalePoints] = useState([]) // até 2 pontos clicados enquanto armedItemId === 'scale'
+  const [scaleMeters, setScaleMeters] = useState('')
+  const frame = useMemo(() => (pxPerMeter ? planFrame(pxPerMeter) : null), [pxPerMeter])
+
   const emit = useCallback(
-    (nextMarkers, nextLines) => onChange({ markers: nextMarkers, lines: nextLines }),
+    (nextMarkers, nextLines, scale = pxPerMeterRef.current) => onChange({ markers: nextMarkers, lines: nextLines, pxPerMeter: scale }),
     [onChange]
   )
+
+  const addScalePoint = useCallback((latlng) => {
+    setScalePoints((prev) => (prev.length >= 2 ? prev : [...prev, { lat: latlng.lat, lng: latlng.lng }]))
+  }, [])
+
+  const scalePixelDistance = scalePoints.length === 2
+    ? Math.hypot(scalePoints[1].lat - scalePoints[0].lat, scalePoints[1].lng - scalePoints[0].lng)
+    : 0
+
+  function applyScale() {
+    const meters = Number(scaleMeters.replace(',', '.'))
+    if (!(meters > 0) || !(scalePixelDistance > 0)) return
+    const next = scalePixelDistance / meters
+    pxPerMeterRef.current = next
+    setPxPerMeter(next)
+    emit(markers, lines, next)
+    setScalePoints([])
+    setScaleMeters('')
+    setArmedItemId(null)
+  }
+
+  const updateMarker = useCallback((id, patch) => {
+    setMarkers((prev) => {
+      const next = prev.map((m) => (m.id === id ? { ...m, ...patch } : m))
+      emit(next, lines)
+      return next
+    })
+  }, [emit, lines])
 
   const itemsById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items])
 
@@ -198,7 +237,17 @@ export function FloorPlanCanvas({ budgetId, floorPlan, items, onSetItemIcon, flo
     <div className="relative size-full">
       <MapContainer crs={L.CRS.Simple} bounds={bounds} minZoom={-10} maxZoom={4} className="size-full bg-flow-canvas">
         <ImageOverlay url={floorPlan.path} bounds={bounds} />
-        <ClickToPlace armedItemId={armedItemId} onPlace={placeMarker} />
+        <ClickToPlace armedItemId={armedItemId} onPlace={placeMarker} onScalePoint={addScalePoint} />
+        {armedItemId === 'scale' ? (
+          <>
+            {scalePoints.length === 2 ? (
+              <Polyline positions={scalePoints.map((p) => [p.lat, p.lng])} pathOptions={{ color: '#facc15', weight: 2, dashArray: '6 6', interactive: false }} />
+            ) : null}
+            {scalePoints.map((p, i) => (
+              <CircleMarker key={i} center={[p.lat, p.lng]} radius={5} pathOptions={{ color: '#1a1400', weight: 2, fillColor: '#facc15', fillOpacity: 1, interactive: false }} />
+            ))}
+          </>
+        ) : null}
         {lines.map((line) => {
           const from = byId[line.fromId]
           const to = byId[line.toId]
@@ -237,9 +286,19 @@ export function FloorPlanCanvas({ budgetId, floorPlan, items, onSetItemIcon, flo
           const item = itemsById.get(marker.itemId)
           if (!item) return null
           const children = childrenByContainer.get(item.id) || []
+          const coverageShape = coverageByItemId?.get(item.id)
           return (
+            <Fragment key={marker.id}>
+            {coverageShape && frame ? (
+              <CoverageOverlay
+                marker={marker}
+                coverage={coverageShape}
+                frame={frame}
+                draggable={armedItemId !== 'link'}
+                onChange={(patch) => updateMarker(marker.id, patch)}
+              />
+            ) : null}
             <Marker
-              key={marker.id}
               position={[marker.lat, marker.lng]}
               icon={buildMarkerIcon(item, marker.id === linkFromId, children.length)}
               draggable={armedItemId !== 'link'}
@@ -252,9 +311,10 @@ export function FloorPlanCanvas({ budgetId, floorPlan, items, onSetItemIcon, flo
                 contextmenu: (e) => { e.originalEvent.preventDefault(); removeMarker(marker.id) },
               }}
             >
-              {children.length && armedItemId !== 'link' ? (
+              {(children.length || (coverageShape && frame)) && armedItemId !== 'link' ? (
                 <Popup>
-                  <p className="mb-1 font-medium">{item.title} — equipamentos dentro</p>
+                  {coverageShape && frame ? <CoverageFields marker={marker} coverage={coverageShape} onChange={(patch) => updateMarker(marker.id, patch)} /> : null}
+                  {children.length ? <p className="mb-1 font-medium">{item.title} — equipamentos dentro</p> : null}
                   <ul className="flex flex-col gap-1">
                     {children.map((child) => (
                       <li key={child.id} className="flex items-center gap-1.5">
@@ -266,6 +326,7 @@ export function FloorPlanCanvas({ budgetId, floorPlan, items, onSetItemIcon, flo
                 </Popup>
               ) : null}
             </Marker>
+            </Fragment>
           )
         })}
       </MapContainer>
@@ -298,6 +359,43 @@ export function FloorPlanCanvas({ budgetId, floorPlan, items, onSetItemIcon, flo
             </div>
           )
         })}
+        {coverageByItemId?.size && !pxPerMeter ? (
+          <p className="pointer-events-none max-w-[230px] rounded-lg bg-card/80 px-2 py-1 text-xs text-muted-foreground backdrop-blur">
+            Defina a escala da planta pra ver a área de cobertura dos equipamentos.
+          </p>
+        ) : null}
+        {armedItemId === 'scale' && scalePoints.length === 2 ? (
+          <div className="pointer-events-auto flex max-w-[260px] flex-col gap-2 rounded-lg border border-border bg-card/90 p-2 text-sm backdrop-blur">
+            <label className="flex items-center gap-2">
+              Distância real entre os pontos
+              <input
+                autoFocus
+                inputMode="decimal"
+                value={scaleMeters}
+                onChange={(e) => setScaleMeters(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') applyScale() }}
+                className="w-16 rounded border border-border bg-background px-1.5 py-0.5 text-right"
+              />
+              m
+            </label>
+            <div className="flex gap-2">
+              <button type="button" onClick={applyScale} className="rounded-full bg-amber-400 px-3 py-1 font-medium text-black hover:bg-amber-300">Aplicar</button>
+              <button type="button" onClick={() => { setScalePoints([]); setScaleMeters(''); setArmedItemId(null) }} className="rounded-full border border-border px-3 py-1 hover:bg-secondary">Cancelar</button>
+            </div>
+          </div>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => { setArmedItemId((current) => (current === 'scale' ? null : 'scale')); setScalePoints([]); setScaleMeters(''); setLinkFromId(null) }}
+          className={`pointer-events-auto flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium backdrop-blur transition-colors ${
+            armedItemId === 'scale' ? 'border-amber-400 bg-amber-400/90 text-black' : 'border-border bg-card/90 hover:bg-secondary'
+          }`}
+        >
+          <FontAwesomeIcon icon={faRuler} className="size-4" />{' '}
+          {armedItemId === 'scale'
+            ? scalePoints.length === 2 ? 'Informe a distância acima' : `Definir escala — clique no ${scalePoints.length ? '2º' : '1º'} ponto`
+            : pxPerMeter ? 'Escala definida — refazer' : 'Definir escala'}
+        </button>
         <button
           type="button"
           onClick={() => { setArmedItemId((current) => (current === 'link' ? null : 'link')); setLinkFromId(null) }}
@@ -311,7 +409,7 @@ export function FloorPlanCanvas({ budgetId, floorPlan, items, onSetItemIcon, flo
       </div>
 
       <p className="pointer-events-none absolute bottom-4 right-4 z-[1000] max-w-[230px] rounded-lg bg-card/80 px-2 py-1 text-right text-xs text-muted-foreground backdrop-blur">
-        A quantidade em cada botão é a do orçamento — some pra 0/N quando todos já foram colocados. Clique num ícone com selo pra ver o que tem dentro dele. Botão direito remove. Arrastar move a posição (desligado enquanto "Ligar com linha" está ativo). Clique numa linha de ligação pra criar um ponto de dobra; arraste o ponto pra ajustar, botão direito nele remove a dobra.
+        A quantidade em cada botão é a do orçamento — some pra 0/N quando todos já foram colocados. Clique num ícone com selo pra ver o que tem dentro dele. Botão direito remove. Arrastar move a posição (desligado enquanto "Ligar com linha" está ativo). Clique numa linha de ligação pra criar um ponto de dobra; arraste o ponto pra ajustar, botão direito nele remove a dobra. Equipamento com área de cobertura: arraste o ponto amarelo na ponta pra ajustar direção e alcance, ou clique no ícone pra digitar os valores (precisa da escala definida).
       </p>
     </div>
   )

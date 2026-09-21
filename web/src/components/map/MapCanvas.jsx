@@ -11,6 +11,8 @@ import 'leaflet/dist/leaflet.css'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { getProductIcon } from '@/lib/productIcons'
 import { IconPicker } from '@/components/ui/icon-picker'
+import { CoverageFields, CoverageOverlay } from '@/components/map/CoverageOverlay'
+import { geoFrame } from '@/lib/coverage'
 
 // Dentro de um bundler, import.meta.url não resolve o worker do maplibre-gl de forma confiável —
 // precisa apontar explicitamente pro chunk que o Vite gera (?worker&url, não só ?url, senão o
@@ -106,7 +108,7 @@ function ClickToPlace({ armedItemId, onPlace }) {
   return null
 }
 
-export function MapCanvas({ budgetId, lat, lng, items, onSetItemIcon, mapLayout, onChange }) {
+export function MapCanvas({ budgetId, lat, lng, items, coverageByItemId, onSetItemIcon, mapLayout, onChange }) {
   const [markers, setMarkers] = useState(() => mapLayout.markers || [])
   const [lines, setLines] = useState(() => mapLayout.lines || [])
   // Posição ajustável da flag do endereço — só existe estado próprio depois que o usuário arrasta
@@ -196,6 +198,15 @@ export function MapCanvas({ budgetId, lat, lng, items, onSetItemIcon, mapLayout,
   const moveMarker = useCallback((id, newLat, newLng) => {
     setMarkers((prev) => {
       const next = prev.map((m) => (m.id === id ? { ...m, lat: newLat, lng: newLng } : m))
+      emit(next, lines, addressPoint)
+      return next
+    })
+  }, [emit, lines, addressPoint])
+
+  // Direção/alcance/ângulo da área de cobertura — guardados no próprio marker, ao lado de lat/lng.
+  const updateMarker = useCallback((id, patch) => {
+    setMarkers((prev) => {
+      const next = prev.map((m) => (m.id === id ? { ...m, ...patch } : m))
       emit(next, lines, addressPoint)
       return next
     })
@@ -354,9 +365,19 @@ export function MapCanvas({ budgetId, lat, lng, items, onSetItemIcon, mapLayout,
           const item = itemsById.get(marker.itemId)
           if (!item) return null // item foi removido do orçamento depois de já colocado no mapa
           const children = childrenByContainer.get(item.id) || []
+          const coverageShape = coverageByItemId?.get(item.id)
           return (
+            <Fragment key={marker.id}>
+            {coverageShape ? (
+              <CoverageOverlay
+                marker={marker}
+                coverage={coverageShape}
+                frame={geoFrame}
+                draggable={armedItemId !== 'link'}
+                onChange={(patch) => updateMarker(marker.id, patch)}
+              />
+            ) : null}
             <Marker
-              key={marker.id}
               position={[marker.lat, marker.lng]}
               icon={buildMarkerIcon(item, marker.id === linkFromId, children.length)}
               draggable={armedItemId !== 'link'}
@@ -369,9 +390,10 @@ export function MapCanvas({ budgetId, lat, lng, items, onSetItemIcon, mapLayout,
                 contextmenu: (e) => { e.originalEvent.preventDefault(); removeMarker(marker.id) },
               }}
             >
-              {children.length && armedItemId !== 'link' ? (
+              {(children.length || coverageShape) && armedItemId !== 'link' ? (
                 <Popup>
-                  <p className="mb-1 font-medium">{item.title} — equipamentos dentro</p>
+                  {coverageShape ? <CoverageFields marker={marker} coverage={coverageShape} onChange={(patch) => updateMarker(marker.id, patch)} /> : null}
+                  {children.length ? <p className="mb-1 font-medium">{item.title} — equipamentos dentro</p> : null}
                   <ul className="flex flex-col gap-1">
                     {children.map((child) => (
                       <li key={child.id} className="flex items-center gap-1.5">
@@ -387,6 +409,7 @@ export function MapCanvas({ budgetId, lat, lng, items, onSetItemIcon, mapLayout,
                 </Popup>
               ) : null}
             </Marker>
+            </Fragment>
           )
         })}
       </MapContainer>
@@ -435,7 +458,7 @@ export function MapCanvas({ budgetId, lat, lng, items, onSetItemIcon, mapLayout,
       </div>
 
       <p className="pointer-events-none absolute bottom-4 right-4 z-[1000] max-w-[230px] rounded-lg bg-card/80 px-2 py-1 text-right text-xs text-muted-foreground backdrop-blur">
-        A quantidade em cada botão é a do orçamento — some pra 0/N quando todos já foram colocados. Clique num ícone com selo pra ver o que tem dentro dele. Botão direito remove. Arrastar move a posição (desligado enquanto "Ligar com linha" está ativo). Clique numa linha de ligação pra criar um ponto de dobra; arraste o ponto pra ajustar, botão direito nele remove a dobra.
+        A quantidade em cada botão é a do orçamento — some pra 0/N quando todos já foram colocados. Clique num ícone com selo pra ver o que tem dentro dele. Botão direito remove. Arrastar move a posição (desligado enquanto "Ligar com linha" está ativo). Clique numa linha de ligação pra criar um ponto de dobra; arraste o ponto pra ajustar, botão direito nele remove a dobra. Equipamento com área de cobertura: arraste o ponto amarelo na ponta pra ajustar direção e alcance, ou clique no ícone pra digitar os valores.
       </p>
     </div>
   )

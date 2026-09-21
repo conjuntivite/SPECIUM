@@ -22,7 +22,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select'
 
-const emptyForm = { group: '', label: '', capacity: '', capacityTouched: false, canBeContainer: false, icon: '' }
+const emptyForm = { group: '', label: '', capacity: '', capacityTouched: false, canBeContainer: false, coverage: '', icon: '' }
 
 // Mesmo padrão do inferSeedCapacity em db.js: o número já está no nome ("Switch Giga 8 Portas",
 // "DVR 16 Canais"), então preenchemos sozinhos em vez de pedir pra digitar de novo. Categorias sem
@@ -98,7 +98,7 @@ export function CategoryFormDialog({
     if (open) {
       setForm(
         category
-          ? { group: category.group, label: category.label, capacity: category.capacity ?? '', capacityTouched: category.capacity != null, canBeContainer: !!category.canBeContainer, icon: category.icon || '' }
+          ? { group: category.group, label: category.label, capacity: category.capacity ?? '', capacityTouched: category.capacity != null, canBeContainer: !!category.canBeContainer, coverage: category.coverage || '', icon: category.icon || '' }
           : emptyForm
       )
       setProvides((category?.provides || []).map((p) => ({ ...p })))
@@ -132,7 +132,7 @@ export function CategoryFormDialog({
     try {
       const capacity = form.capacity === '' ? null : Math.max(1, Math.trunc(Number(form.capacity)) || 1)
       await onSubmit({
-        group: form.group, label: form.label, capacity, canBeContainer: form.canBeContainer, icon: form.icon,
+        group: form.group, label: form.label, capacity, canBeContainer: form.canBeContainer, coverage: form.coverage || null, icon: form.icon,
         provides: cleanProvides(provides), requirements: cleanRequirements(requirements),
       })
     } catch (err) {
@@ -201,6 +201,46 @@ export function CategoryFormDialog({
                 <strong>Exemplo:</strong> um Rack contendo Nobreak, Switch e NVR aparece fechado
                 como um card só ("3 equipamentos internos"), sem os três ocupando espaço à parte.
               </InfoHint>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-1.5">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    className="size-4"
+                    checked={!!form.coverage}
+                    onChange={(e) => setForm((f) => ({ ...f, coverage: e.target.checked ? 'camera' : '' }))}
+                  />
+                  Mostra área de cobertura (ex.: Câmera, Central de alarme sem fio)
+                </label>
+                <InfoHint>
+                  No mapa e na planta baixa, o equipamento dessa categoria ganha uma área colorida ao
+                  redor do ícone, com direção e alcance ajustáveis.
+                  <br /><br />
+                  <strong>Câmera:</strong> cone com faixas de cor pela nitidez (verde = dá pra
+                  identificar, vermelho = só detectar), calculadas pela resolução da câmera (lida do
+                  nome, ex.: "4MP", ajustável no mapa) e pelo ângulo de visão.
+                  <br /><br />
+                  <strong>Cone:</strong> cobertura só pra frente, num ângulo (central de alarme sem
+                  fio). <strong>Circular:</strong> cobertura 360° (sirene, repetidor).
+                </InfoHint>
+              </div>
+              {form.coverage ? (
+                <div className="flex items-center gap-4 pl-6 text-sm">
+                  {[['camera', 'Câmera (faixas por resolução)'], ['cone', 'Cone'], ['circle', 'Circular (360°)']].map(([value, text]) => (
+                    <label key={value} className="flex items-center gap-1.5">
+                      <input
+                        type="radio"
+                        name="coverage-shape"
+                        checked={form.coverage === value}
+                        onChange={() => setForm((f) => ({ ...f, coverage: value }))}
+                      />
+                      {text}
+                    </label>
+                  ))}
+                </div>
+              ) : null}
             </div>
 
             <div className="flex flex-col gap-1.5">

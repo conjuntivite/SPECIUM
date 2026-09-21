@@ -9,7 +9,7 @@ import { FloorPlanCanvas } from './FloorPlanCanvas'
 const DWG_CONVERTER_URL = 'https://www.freepdfconvert.com/pt/autocad-para-pdf'
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg']
 
-export function FloorPlanView({ budgetId, floorPlan, items, onSetItemIcon, floorPlanLayout, onChangeFloorPlanLayout, onUpload, onBackToCanvas }) {
+export function FloorPlanView({ budgetId, floorPlan, items, coverageByItemId, onSetItemIcon, floorPlanLayout, onChangeFloorPlanLayout, onUpload, onBackToCanvas }) {
   const fileInputRef = useRef(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
@@ -40,6 +40,7 @@ export function FloorPlanView({ budgetId, floorPlan, items, onSetItemIcon, floor
           budgetId={budgetId}
           floorPlan={floorPlan}
           items={items}
+          coverageByItemId={coverageByItemId}
           onSetItemIcon={onSetItemIcon}
           floorPlanLayout={floorPlanLayout}
           onChange={onChangeFloorPlanLayout}

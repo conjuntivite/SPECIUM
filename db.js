@@ -1,6 +1,7 @@
 const { MongoClient, ObjectId } = require('mongodb');
 const catalogSeed = require('./web/src/data/catalog.json');
 const { CATEGORY_RESOURCE_SEED } = require('./categoryResourceSeed');
+const { COVERAGE_SHAPES } = require('./lib/validators');
 
 // Conexão lazy (só na primeira query): assim process.env.MONGODB_URI já está carregado do .env
 // (server.js lê o .env depois de dar require neste módulo) e os testes podem sobrescrever a env var
@@ -126,6 +127,7 @@ function toCategory(doc) {
     provides: doc.provides || [],
     requirements: doc.requirements || [],
     canBeContainer: !!doc.canBeContainer,
+    coverage: COVERAGE_SHAPES.includes(doc.coverage) ? doc.coverage : null,
   };
 }
 
@@ -208,7 +210,7 @@ async function listCategories() {
 // "value" (usado em products.category, requirements.candidates e provides.resource em toda a
 // base) sai direto do label e nunca muda depois — duas categorias com o mesmo nome colidiriam nessa
 // chave e uma ficaria inacessível pro motor de sugestões. Mesma checagem de duplicata do createGroup.
-async function createCategory({ group, label, capacity, icon, provides, requirements, canBeContainer }) {
+async function createCategory({ group, label, capacity, icon, provides, requirements, canBeContainer, coverage }) {
   const categories = await getCategoriesCollection();
   const value = label;
   const all = await categories.find({}, { projection: { value: 1 } }).toArray();
@@ -222,9 +224,9 @@ async function createCategory({ group, label, capacity, icon, provides, requirem
   const cleanCanBeContainer = !!canBeContainer;
   const { insertedId } = await categories.insertOne({
     group, value, label, capacity: cleanCapacity, icon: cleanIcon,
-    provides: cleanProvides, requirements: cleanRequirements, canBeContainer: cleanCanBeContainer, createdAt: new Date(),
+    provides: cleanProvides, requirements: cleanRequirements, canBeContainer: cleanCanBeContainer, coverage: coverage || null, createdAt: new Date(),
   });
-  return { id: insertedId.toString(), group, value, label, capacity: cleanCapacity, icon: cleanIcon, provides: cleanProvides, requirements: cleanRequirements, canBeContainer: cleanCanBeContainer };
+  return { id: insertedId.toString(), group, value, label, capacity: cleanCapacity, icon: cleanIcon, provides: cleanProvides, requirements: cleanRequirements, canBeContainer: cleanCanBeContainer, coverage: coverage || null };
 }
 
 // "value" não é editável: é a chave que já pode estar gravada em products.category e nas
@@ -232,13 +234,13 @@ async function createCategory({ group, label, capacity, icon, provides, requirem
 // essas referências. provides/requirements só entram no $set quando o chamador realmente os envia
 // (undefined = não mexe), pra uma edição comum (grupo, nome, capacidade) não apagar o que já estava
 // cadastrado ali.
-async function updateCategory(id, { group, label, capacity, icon, provides, requirements, canBeContainer }) {
+async function updateCategory(id, { group, label, capacity, icon, provides, requirements, canBeContainer, coverage }) {
   if (!ObjectId.isValid(id)) return false;
   const categories = await getCategoriesCollection();
   const existing = await categories.findOne({ _id: new ObjectId(id) });
   if (!existing) return false;
   const cleanCapacity = sanitizeCapacity(capacity);
-  const update = { group, label, capacity: cleanCapacity, icon: icon || '', canBeContainer: !!canBeContainer };
+  const update = { group, label, capacity: cleanCapacity, icon: icon || '', canBeContainer: !!canBeContainer, coverage: coverage || null };
   if (provides !== undefined) update.provides = sanitizeProvides(provides);
   if (requirements !== undefined) update.requirements = sanitizeRequirements(requirements);
   const { matchedCount } = await categories.updateOne({ _id: new ObjectId(id) }, { $set: update });
