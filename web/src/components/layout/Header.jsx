@@ -5,7 +5,7 @@ import { Brand } from './Brand'
 export function Header() {
   return (
     <header className="mb-5 text-center">
-      <Brand className="mb-4 block text-3xl" />
+      <div className="mb-4 flex justify-center"><Brand icon className="text-3xl" /></div>
       <div className="mb-5 inline-flex items-center gap-1.5 rounded-full border border-red-500/25 bg-red-500/10 px-4 py-1.5 text-sm font-semibold tracking-wide text-[var(--primary)]">
         <FontAwesomeIcon icon={faLock} className="size-4" />
         Receita de Instalação para o Comercial

@@ -21,7 +21,8 @@ export function LoginView({ auth }) {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-6">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6">
+      <img src="/logo.png" alt="Logo REDVISION" className="w-48" />
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>{mode === 'login' ? 'Entrar' : 'Criar conta'}</CardTitle>
