@@ -8,7 +8,7 @@ import 'leaflet/dist/leaflet.css'
 import { getProductIcon } from '@/lib/productIcons'
 import { IconPicker } from '@/components/ui/icon-picker'
 import { CoverageFields, CoverageOverlay } from '@/components/map/CoverageOverlay'
-import { planFrame } from '@/lib/coverage'
+import { PAPER_LONG_SIDE_M, planFrame, pxPerMeterFromDrawingScale } from '@/lib/coverage'
 
 // Alternativa ao mapa geográfico (MapCanvas): mesma interação (posicionar item, trocar ícone,
 // ligar com linha, ponto de dobra), mas em cima de uma imagem enviada pelo consultor (planta
@@ -71,6 +71,7 @@ export function FloorPlanCanvas({ budgetId, floorPlan, items, coverageByItemId, 
   const pxPerMeterRef = useRef(pxPerMeter)
   const [scalePoints, setScalePoints] = useState([]) // até 2 pontos clicados enquanto armedItemId === 'scale'
   const [scaleMeters, setScaleMeters] = useState('')
+  const [drawingScale, setDrawingScale] = useState(null) // formulário "escala do desenho": null | { ratio, paper }
   const frame = useMemo(() => (pxPerMeter ? planFrame(pxPerMeter) : null), [pxPerMeter])
 
   const emit = useCallback(
@@ -86,16 +87,25 @@ export function FloorPlanCanvas({ budgetId, floorPlan, items, coverageByItemId, 
     ? Math.hypot(scalePoints[1].lat - scalePoints[0].lat, scalePoints[1].lng - scalePoints[0].lng)
     : 0
 
-  function applyScale() {
-    const meters = Number(scaleMeters.replace(',', '.'))
-    if (!(meters > 0) || !(scalePixelDistance > 0)) return
-    const next = scalePixelDistance / meters
+  function commitScale(next) {
     pxPerMeterRef.current = next
     setPxPerMeter(next)
     emit(markers, lines, next)
     setScalePoints([])
     setScaleMeters('')
+    setDrawingScale(null)
     setArmedItemId(null)
+  }
+
+  function applyScale() {
+    const meters = Number(scaleMeters.replace(',', '.'))
+    if (!(meters > 0) || !(scalePixelDistance > 0)) return
+    commitScale(scalePixelDistance / meters)
+  }
+
+  function applyDrawingScale() {
+    const next = pxPerMeterFromDrawingScale(floorPlan.width, floorPlan.height, PAPER_LONG_SIDE_M[drawingScale.paper], Number(drawingScale.ratio))
+    if (next) commitScale(next)
   }
 
   const updateMarker = useCallback((id, patch) => {
@@ -397,7 +407,7 @@ export function FloorPlanCanvas({ budgetId, floorPlan, items, coverageByItemId, 
         ) : null}
         <button
           type="button"
-          onClick={() => { setArmedItemId((current) => (current === 'scale' ? null : 'scale')); setScalePoints([]); setScaleMeters(''); setLinkFromId(null) }}
+          onClick={() => { setArmedItemId((current) => (current === 'scale' ? null : 'scale')); setScalePoints([]); setScaleMeters(''); setLinkFromId(null); setDrawingScale(null) }}
           className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-left font-medium transition-colors ${
             armedItemId === 'scale' ? 'border-amber-400 bg-amber-400/90 text-black' : 'border-border hover:bg-secondary'
           }`}
@@ -405,8 +415,49 @@ export function FloorPlanCanvas({ budgetId, floorPlan, items, coverageByItemId, 
           <FontAwesomeIcon icon={faRuler} className="size-3.5 shrink-0" />{' '}
           {armedItemId === 'scale'
             ? scalePoints.length === 2 ? 'Informe a distância' : `Escala — clique no ${scalePoints.length ? '2º' : '1º'} ponto`
-            : pxPerMeter ? 'Refazer escala' : 'Definir escala'}
+            : pxPerMeter ? 'Refazer medindo' : 'Medir escala'}
         </button>
+        {/* A planta já traz "ESCALA 1:25" no carimbo — informar isso é mais rápido que medir uma cota. */}
+        <button
+          type="button"
+          onClick={() => { setDrawingScale((current) => (current ? null : { ratio: '25', paper: 'A4' })); setArmedItemId(null); setScalePoints([]); setScaleMeters('') }}
+          className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-left font-medium transition-colors ${
+            drawingScale ? 'border-amber-400 bg-amber-400/90 text-black' : 'border-border hover:bg-secondary'
+          }`}
+        >
+          <FontAwesomeIcon icon={faRuler} className="size-3.5 shrink-0" /> Escala do desenho (1:N)
+        </button>
+        {drawingScale ? (
+          <div className="flex flex-col gap-2 rounded-md border border-border p-2">
+            <label className="flex items-center gap-1.5">
+              Escala 1:
+              <input
+                autoFocus
+                inputMode="numeric"
+                value={drawingScale.ratio}
+                onChange={(e) => setDrawingScale((s) => ({ ...s, ratio: e.target.value }))}
+                onKeyDown={(e) => { if (e.key === 'Enter') applyDrawingScale() }}
+                className="w-14 rounded border border-border bg-background px-1.5 py-0.5 text-right"
+              />
+            </label>
+            <label className="flex items-center gap-1.5">
+              Folha
+              <select
+                value={drawingScale.paper}
+                onChange={(e) => setDrawingScale((s) => ({ ...s, paper: e.target.value }))}
+                className="rounded border border-border bg-background px-1 py-0.5"
+              >
+                {Object.keys(PAPER_LONG_SIDE_M).map((paper) => <option key={paper} value={paper}>{paper}</option>)}
+              </select>
+            </label>
+            <p className="text-muted-foreground">Vale quando a imagem é a folha inteira. Se cortada, use "Medir escala".</p>
+            <div className="flex gap-2">
+              <button type="button" onClick={applyDrawingScale} className="rounded-full bg-amber-400 px-3 py-1 font-medium text-black hover:bg-amber-300">Aplicar</button>
+              <button type="button" onClick={() => setDrawingScale(null)} className="rounded-full border border-border px-3 py-1 hover:bg-secondary">Cancelar</button>
+            </div>
+          </div>
+        ) : null}
+        {pxPerMeter ? <p className="px-1 text-muted-foreground">Escala atual: 10 m ≈ {Math.round(pxPerMeter * 10)} px</p> : null}
         <button
           type="button"
           onClick={() => { setArmedItemId((current) => (current === 'link' ? null : 'link')); setLinkFromId(null) }}

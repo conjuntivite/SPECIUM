@@ -49,6 +49,16 @@ export const planFrame = (pxPerMeter) => ({
   fromMeters: (c, { x, y }) => ({ lat: c.lat + y * pxPerMeter, lng: c.lng + x * pxPerMeter }),
 })
 
+// Escala impressa no desenho ("ESCALA 1:25") → px/m. O arquivo de imagem não guarda o tamanho do
+// papel nem o DPI, então assume que a imagem é a folha inteira: o lado maior da imagem vale o lado
+// maior do papel × N. Se a imagem foi recortada, o resultado sai errado — daí a medição manual
+// (dois cliques + distância real) continuar existindo como conferência/alternativa.
+export const PAPER_LONG_SIDE_M = { A4: 0.297, A3: 0.42, A2: 0.594, A1: 0.841, A0: 1.189 }
+export function pxPerMeterFromDrawingScale(widthPx, heightPx, paperLongSideM, ratio) {
+  if (!(ratio > 0) || !(paperLongSideM > 0)) return null
+  return Math.max(widthPx, heightPx) / (paperLongSideM * ratio)
+}
+
 const clamp = (value, [min, max]) => Math.min(max, Math.max(min, value))
 const at = (frame, center, bearing, meters) =>
   frame.fromMeters(center, { x: meters * Math.sin(toRad(bearing)), y: meters * Math.cos(toRad(bearing)) })

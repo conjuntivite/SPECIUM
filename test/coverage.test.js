@@ -65,6 +65,16 @@ test('faixas de densidade: 2MP com 90° identifica até 3,84 m e detecta até 38
   near(bandLimits({ ...marker, resolution: 3840 })[0].distance, limits[0].distance * 2, 1e-6);
 });
 
+test('pxPerMeterFromDrawingScale: A3 em 1:25 (planta de exemplo, 1677×1188) dá ~160 px/m, batendo com a cota de 4,81 m (~758 px)', async () => {
+  const { PAPER_LONG_SIDE_M, pxPerMeterFromDrawingScale } = await load();
+  const pxPerMeter = pxPerMeterFromDrawingScale(1677, 1188, PAPER_LONG_SIDE_M.A3, 25);
+  near(pxPerMeter, 1677 / 10.5, 1e-9);
+  assert.ok(Math.abs(758 / pxPerMeter - 4.81) < 0.1);
+  // Retrato dá o mesmo resultado (usa o lado maior da imagem); escala inválida não gera número.
+  near(pxPerMeterFromDrawingScale(1188, 1677, PAPER_LONG_SIDE_M.A3, 25), pxPerMeter, 1e-9);
+  assert.equal(pxPerMeterFromDrawingScale(1677, 1188, PAPER_LONG_SIDE_M.A3, 0), null);
+});
+
 test('coverageOf: marker sem valores salvos usa o padrão; valores fora do limite são contidos', async () => {
   const { COVERAGE_DEFAULTS, coverageOf } = await load();
   assert.deepEqual(coverageOf({}), COVERAGE_DEFAULTS);
