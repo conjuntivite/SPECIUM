@@ -46,3 +46,20 @@ test('stripSectionNoise: remove cabeçalho de seção e linha de total, mantém 
   assert.ok(result.includes('QUADRO COMNADO METAL 60X60X20'));
   assert.ok(result.includes('GRAVADOR DIGITAL DE VIDEO 32 CANAIS 3032 NVD'));
 });
+
+test('relevantKnowledge: item ONE/SIAM traz a ficha técnica, item de outra marca não traz nada', () => {
+  const { relevantKnowledge } = require('../lib/equipmentKnowledge');
+  const ag = relevantKnowledge([{ name: 'CORTEX AG PORTARIA AUTOGERENCIADA' }]);
+  assert.match(ag, /30 endpoints/);
+  assert.doesNotMatch(ag, /Córtex V6/);
+  assert.match(relevantKnowledge([{ name: 'CONTROLADORA RAS 1P4L' }]), /7\.000 usuários/);
+  assert.equal(relevantKnowledge([{ name: 'CAMERA BULLET 2MP INTELBRAS' }, { name: 'FECHADURA ELETROIMA 300KG' }]), '');
+});
+
+test('relevantKnowledge: item ONE traz também as regras de instalação e o escopo de portaria remota', () => {
+  const { relevantKnowledge } = require('../lib/equipmentKnowledge');
+  const k = relevantKnowledge([{ name: 'ENDPOINT 4 PORTAS ONE' }]);
+  assert.match(k, /no máximo 30 m/);
+  assert.match(k, /30 Mbps/);
+  assert.match(k, /locado\/comodato/);
+});
