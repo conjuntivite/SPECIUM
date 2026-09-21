@@ -63,3 +63,25 @@ test('relevantKnowledge: item ONE traz também as regras de instalação e o esc
   assert.match(k, /30 Mbps/);
   assert.match(k, /locado\/comodato/);
 });
+
+test('relevantKnowledge: nomes reais dos orçamentos ONE/SIAM (com erro de digitação) acionam a ficha certa, sem falso positivo', () => {
+  const { relevantKnowledge } = require('../lib/equipmentKnowledge');
+  const k = (name) => relevantKnowledge([{ name }]);
+  assert.match(k('RECPETORA FULL ONE'), /Receptor 433/);
+  assert.match(k('RECEPTORA FULL ONE'), /Receptor 433/);
+  assert.match(k('PLACA MONITORAMENTO FALTA ENERGIA'), /Sensor de Falha de Energia/);
+  assert.match(k('LEITORA WIEGAND-34 RFID 125KHZ . SENHA KR003 SIAM INVIOLAVEL'), /KR00x/);
+  assert.match(k('INTERFACE SENSOR DE TENSAO 110/220V SIAM'), /IMU Tensão/);
+  assert.match(k('CONTROLADOR ENDPOINT ONEPORTARIA'), /Todo endpoint precisa de fonte/);
+  assert.equal(k('RADIO FULL DXNET CONTACT ID'), '');
+  assert.equal(k('CATRACA DSK3G411LX / PG COMBO'), '');
+});
+
+test('candidateModels: aceita lista separada por vírgula, mantém a ordem e põe os gratuitos depois', () => {
+  const { candidateModels } = require('../lib/openrouter');
+  const list = candidateModels('a/um, b/dois');
+  assert.deepEqual(list.slice(0, 2), ['a/um', 'b/dois']);
+  assert.ok(list.length > 2 && list.slice(2).every((m) => m.endsWith(':free')));
+  assert.equal(candidateModels('a/um').filter((m) => m === 'a/um').length, 1);
+  assert.ok(candidateModels('').every((m) => m.endsWith(':free')));
+});
