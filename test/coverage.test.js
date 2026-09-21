@@ -50,19 +50,23 @@ test('resolutionFromTitle: lê MP/4K/HD do título e cai em Full HD sem sinal', 
   assert.equal(resolutionFromTitle('Câmera bullet'), 1920);
 });
 
-test('faixas de densidade: 2MP com 90° identifica até 3,84 m e detecta até 38,4 m; o alcance corta as fatias', async () => {
-  const { bandLimits, coverageBands, pixelDensity, planFrame } = await load();
+test('faixas de densidade (IEC 62676-4:2025): 2MP com 90° caracteriza até 3,84 m e dá visão geral até 48 m; o alcance corta as fatias', async () => {
+  const { DENSITY_BANDS, bandLimits, coverageBands, pixelDensity, planFrame } = await load();
+  assert.deepEqual(DENSITY_BANDS.map((b) => b.ppm), [1500, 500, 250, 125, 80, 40, 20]);
   const marker = { lat: 0, lng: 0, heading: 0, range: 20, angle: 90, resolution: 1920 };
   const limits = bandLimits(marker);
-  near(limits[0].distance, 1920 / (250 * 2), 1e-6); // tan(45°) = 1 → cena = 2·d
-  near(limits[3].distance, 1920 / (25 * 2), 1e-6);
-  near(pixelDensity(1920, 90, limits[1].distance), 125, 1e-6);
-  // Alcance 20 m: 0–3,84 / 3,84–7,68 / 7,68–15,36 / 15,36–20 (a última é cortada); com 10 m sobram 3 faixas.
-  assert.equal(coverageBands(marker, planFrame(1)).length, 4);
+  near(limits[2].distance, 1920 / (250 * 2), 1e-6); // Caracterizar; tan(45°) = 1 → cena = 2·d
+  near(limits[6].distance, 1920 / (20 * 2), 1e-6); // Visão geral
+  near(pixelDensity(1920, 90, limits[3].distance), 125, 1e-6);
+  // Alcance 20 m: 0,64 / 1,92 / 3,84 / 7,68 / 12 / 12–20 (a última é cortada) — 6 fatias; com 10 m sobram 5.
+  assert.equal(coverageBands(marker, planFrame(1)).length, 6);
   const bands = coverageBands({ ...marker, range: 10 }, planFrame(1));
-  assert.deepEqual(bands.map((b) => b.color), ['#22c55e', '#facc15', '#fb923c']);
+  assert.deepEqual(bands.map((b) => b.color), ['#14532d', '#15803d', '#22c55e', '#facc15', '#fb923c']);
   // Resolução maior empurra tudo pra longe: 4K vê 2x mais longe que 2MP com o mesmo ângulo.
-  near(bandLimits({ ...marker, resolution: 3840 })[0].distance, limits[0].distance * 2, 1e-6);
+  near(bandLimits({ ...marker, resolution: 3840 })[2].distance, limits[2].distance * 2, 1e-6);
+  // Exemplo do guia: 2.688 px numa cena de 10 m = ~269 px/m (Caracterizar) e em 35 m = ~77 px/m (abaixo de Discernir).
+  near(2688 / 10, 268.8, 1e-6);
+  near(2688 / 35, 76.8, 1e-6);
 });
 
 test('pxPerMeterFromDrawingScale: A3 em 1:25 (planta de exemplo, 1677×1188) dá ~160 px/m, batendo com a cota de 4,81 m (~758 px)', async () => {

@@ -26,12 +26,17 @@ export function resolutionFromTitle(title) {
   return COVERAGE_DEFAULTS.resolution
 }
 
-// Faixas de densidade de pixels (px/m) da norma IEC 62676-4, da mais nítida (perto) pra mais fraca.
+// Faixas de densidade de pixels (px/m) da IEC 62676-4:2025 (vídeo visível visto por operador; térmica e
+// análise por software têm critérios próprios), da mais nítida (perto) pra mais fraca. A edição 2014
+// (DORI: 250/125/62,5/25) foi substituída — os nomes em pt-BR são os do guia, conferir na norma licenciada.
 export const DENSITY_BANDS = [
-  { ppm: 250, color: '#22c55e', label: 'Identificar' },
-  { ppm: 125, color: '#facc15', label: 'Reconhecer' },
-  { ppm: 62.5, color: '#fb923c', label: 'Observar' },
-  { ppm: 25, color: '#ef4444', label: 'Detectar' },
+  { ppm: 1500, color: '#14532d', label: 'Examinar' },
+  { ppm: 500, color: '#15803d', label: 'Validar' },
+  { ppm: 250, color: '#22c55e', label: 'Caracterizar' },
+  { ppm: 125, color: '#facc15', label: 'Perceber' },
+  { ppm: 80, color: '#fb923c', label: 'Discernir' },
+  { ppm: 40, color: '#ef4444', label: 'Contorno' },
+  { ppm: 20, color: '#991b1b', label: 'Visão geral' },
 ]
 
 const METERS_PER_DEGREE = 111320
@@ -104,7 +109,7 @@ export function bandLimits(marker, defaultResolution) {
 }
 
 // Fatias coloridas do cone da câmera, coladas uma na outra e cortadas no alcance definido.
-// Além da faixa "Detectar" (menos de 25 px/m) não desenha nada — não presta pra identificar ninguém.
+// Além da faixa "Visão geral" (menos de 20 px/m) não desenha nada — não dá nem pra entender o contexto.
 export function coverageBands(marker, frame, defaultResolution) {
   const { heading, range, angle } = coverageOf(marker, defaultResolution)
   let from = 0

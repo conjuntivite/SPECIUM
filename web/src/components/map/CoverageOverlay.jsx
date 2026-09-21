@@ -115,6 +115,7 @@ export function CoverageFields({ marker, coverage: { shape, resolution: defaultR
             </select>
           </label>
           <ul className="flex flex-col gap-0.5 text-xs text-gray-700">
+            <li className="font-medium">Densidade de pixels — IEC 62676-4:2025</li>
             {bandLimits(marker, defaultResolution).map(({ ppm, color, label, distance }) => (
               <li key={ppm} className="flex items-center gap-1.5">
                 <span className="size-2.5 rounded-sm" style={{ background: color }} />
