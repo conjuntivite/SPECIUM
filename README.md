@@ -1,8 +1,12 @@
-# Orçamento Inteligente
+# REDVISION
 
 Ferramenta para o comercial montar o orçamento de uma instalação de segurança eletrônica sem esquecer equipamento. Você vai adicionando os itens que o cliente vai levar (câmera IP, DVR, switch...); a cada item, o sistema recalcula quais complementos ainda faltam para a instalação funcionar de verdade (cabo, switch PoE, caixa Steck, gravação etc.), separando o que é essencial do que é só recomendado. Preço não é mais o ponto de partida — só é consultado quando o comercial pede, item por item, contra Intelbras/Amazon/Google Shopping.
 
 Também compara a ficha técnica de até 3 produtos selecionados: quando a oferta é da Intelbras, usa a ficha técnica oficial do fabricante; nos demais casos, extrai atributos reconhecíveis do próprio título.
+
+## Identidade visual
+
+O sistema se chama **REDVISION** (wordmark "RED" em vermelho + "VISION"). O estilo segue o [shadcn/ui](https://ui.shadcn.com/): tokens semânticos em `web/src/index.css` com base neutra (zinc) e cor primária vermelha (`--primary: #dc2626`), tema escuro por padrão e tema claro/personalizado pelo botão de tema. O componente `web/src/components/layout/Brand.jsx` renderiza o wordmark; o ícone é `web/public/favicon.svg`.
 
 ## Categorias cobertas
 

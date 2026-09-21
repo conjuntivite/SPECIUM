@@ -1,5 +1,5 @@
 const LEGEND_ITEMS = [
-  { dot: 'bg-slate-600', label: 'Ainda sem vínculo' },
+  { dot: 'bg-zinc-600', label: 'Ainda sem vínculo' },
   { dot: 'bg-flow-green', label: 'Vinculado a outro card' },
   { dot: 'bg-flow-red', label: 'Sem isso não liga' },
   { dot: 'bg-flow-amber', label: 'Sugestão essencial' },

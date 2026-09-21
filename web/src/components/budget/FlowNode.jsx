@@ -6,7 +6,7 @@ import { getProductIcon } from '@/lib/productIcons'
 import { formatBRL, parseBRL } from '@/lib/money'
 import { ContainerAddPanel } from './ContainerAddPanel'
 
-const handleClass = '!size-2.5 !border-2 !border-[#0a0d14] !bg-slate-300'
+const handleClass = '!size-2.5 !border-2 !border-[#0a0a0c] !bg-zinc-300'
 
 // Grade simples pros filhos de um container aberto (sem posição livre no MVP — ver
 // recurso-container.txt seção 7, "priorize usabilidade e simplicidade"). Única fonte de verdade,
@@ -113,10 +113,10 @@ export function FlowNode({ data, dragging, selected }) {
   const unitValue = parseBRL(item.averagePrice)
   // Seleção (clique/shift/ctrl+clique, ou caixa de seleção) tem prioridade visual sobre o alerta de
   // lacuna crítica — o usuário precisa ver o que está selecionado antes de arrastar o grupo.
-  const borderClass = selected ? 'border-cyan-400' : hasCriticalGap ? 'border-flow-red' : 'border-transparent'
+  const borderClass = selected ? 'border-zinc-100' : hasCriticalGap ? 'border-flow-red' : 'border-transparent'
   // Cabeçalho só vira verde depois que o card ganha uma linha manual pra outro — antes disso fica
   // neutro (cinza-escuro), pra não sugerir que o item já está "encaixado" no fluxo sem estar.
-  const headerClass = isLinked ? 'bg-flow-green text-flow-green-text' : 'bg-slate-700 text-slate-200'
+  const headerClass = isLinked ? 'bg-flow-green text-flow-green-text' : 'bg-zinc-700 text-zinc-200'
 
   // Container fechado: card compacto de resumo, sem os filhos ocupando espaço no canvas.
   if (isContainer && !containerOpen) {

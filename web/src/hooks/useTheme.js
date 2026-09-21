@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
-const STORAGE_KEY = 'comprador-inviolavel:theme'
-const DEFAULT_CUSTOM_COLOR = '#06b6d4'
+const STORAGE_KEY = 'redvision:theme'
+const DEFAULT_CUSTOM_COLOR = '#dc2626'
 const MODES = ['dark', 'light', 'custom']
 
 function loadTheme() {
@@ -32,7 +32,7 @@ function relativeLuminance({ r, g, b }) {
 }
 
 function idealForeground(hex) {
-  return relativeLuminance(hexToRgb(hex)) > 0.4 ? '#0b0f19' : '#f8fafc'
+  return relativeLuminance(hexToRgb(hex)) > 0.4 ? '#09090b' : '#fef2f2'
 }
 
 function withAlpha(hex, alpha) {

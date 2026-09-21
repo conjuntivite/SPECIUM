@@ -4,28 +4,30 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Paleta portada de static/style.css (:root) pros tokens semânticos do shadcn — assim os componentes
-   de ui/ (Button, Card, Input, Select...) já nascem no tema escuro certo, sem precisar de classe
-   `.dark` nem de um toggle de tema (a app original sempre foi dark, não temos os dois modos). */
+/* REDVISION — tokens semânticos do shadcn (ui.shadcn.com/themes): base neutra (zinc) + primária vermelha.
+   Os componentes de ui/ (Button, Card, Input, Select...) já nascem no tema escuro certo, sem precisar
+   de classe `.dark` (o escuro é o padrão; o claro é ativado via [data-theme="light"], ver useTheme.js).
+   --destructive é um vermelho mais claro no escuro (#f87171, legível como texto sobre o fundo preto) e mais
+   fechado no claro (#991b1b) — assim ações de perigo se distinguem do --primary. */
 :root {
-  --background: #0b0f19;
-  --foreground: #f8fafc;
-  --card: rgba(22, 30, 49, 0.75);
-  --card-foreground: #f8fafc;
-  --popover: rgba(15, 20, 33, 0.97);
-  --popover-foreground: #f8fafc;
-  --primary: #06b6d4;
-  --primary-foreground: #0b0f19;
-  --secondary: rgba(30, 41, 68, 0.9);
-  --secondary-foreground: #f8fafc;
+  --background: #09090b;
+  --foreground: #fafafa;
+  --card: rgba(24, 24, 27, 0.8);
+  --card-foreground: #fafafa;
+  --popover: rgba(18, 18, 20, 0.97);
+  --popover-foreground: #fafafa;
+  --primary: #dc2626;
+  --primary-foreground: #fef2f2;
+  --secondary: rgba(39, 39, 42, 0.9);
+  --secondary-foreground: #fafafa;
   --muted: rgba(255, 255, 255, 0.06);
-  --muted-foreground: #94a3b8;
-  --accent: #8b5cf6;
-  --accent-foreground: #f8fafc;
-  --destructive: #e5484d;
+  --muted-foreground: #a1a1aa;
+  --accent: rgba(239, 68, 68, 0.16);
+  --accent-foreground: #fafafa;
+  --destructive: #f87171;
   --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.08);
-  --ring: rgba(6, 182, 212, 0.5);
+  --input: rgba(255, 255, 255, 0.1);
+  --ring: rgba(239, 68, 68, 0.5);
   --radius: 0.75rem;
 }
 
@@ -36,26 +38,26 @@
    @theme abaixo) também são sobrescritos aqui: o canvas do orçamento muda de cor junto, só não um
    branco puro — um cinza suave, mais confortável pra quem fica olhando o quadro por muito tempo. */
 :root[data-theme="light"] {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --background: #fafafa;
+  --foreground: #18181b;
   --card: #ffffff;
-  --card-foreground: #0f172a;
+  --card-foreground: #18181b;
   --popover: #ffffff;
-  --popover-foreground: #0f172a;
-  --primary: #0e7490;
-  --primary-foreground: #f8fafc;
-  --secondary: #e2e8f0;
-  --secondary-foreground: #0f172a;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --accent: #7c3aed;
-  --accent-foreground: #f8fafc;
-  --destructive: #dc2626;
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: rgba(14, 116, 144, 0.5);
-  --color-flow-canvas: #eceef2;
-  --color-flow-grid: rgba(15, 23, 42, 0.07);
+  --popover-foreground: #18181b;
+  --primary: #dc2626;
+  --primary-foreground: #fef2f2;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --accent: #fee2e2;
+  --accent-foreground: #7f1d1d;
+  --destructive: #991b1b;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: rgba(220, 38, 38, 0.4);
+  --color-flow-canvas: #eeeef0;
+  --color-flow-grid: rgba(24, 24, 27, 0.07);
 }
 
 /* Tokens sem equivalente semântico no shadcn: cores de severidade do canvas de orçamento, fonte
@@ -75,15 +77,15 @@
   --color-flow-gray-text: #1c2430;
   --color-flow-red: #e5484d;
   --color-flow-orange: #f5793f;
-  --color-flow-body: #161b26;
-  --color-flow-canvas: #0a0d14;
+  --color-flow-body: #18181b;
+  --color-flow-canvas: #0a0a0c;
   --color-flow-grid: rgba(255, 255, 255, 0.05);
 
   --shadow-elevated: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
 }
 
 :root {
-  --accent-gradient: linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #8b5cf6 100%);
+  --accent-gradient: linear-gradient(135deg, #f87171 0%, #dc2626 50%, #7f1d1d 100%);
 }
 
 .bg-accent-gradient {
@@ -129,11 +131,11 @@
     @apply font-sans;
   }
 
-  /* Scrollbar fina no tom do tema: repouso no cinza-azulado do texto secundário (--muted-foreground),
-     realce ciano (--primary) no hover — em vez da barra cinza padrão do navegador. */
+  /* Scrollbar fina no tom do tema: repouso no cinza do texto secundário (--muted-foreground),
+     realce vermelho (--primary) no hover — em vez da barra cinza padrão do navegador. */
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+    scrollbar-color: rgba(161, 161, 170, 0.35) transparent;
   }
 
   ::-webkit-scrollbar {
@@ -144,13 +146,13 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background-color: rgba(148, 163, 184, 0.35);
+    background-color: rgba(161, 161, 170, 0.35);
     border-radius: 999px;
     border: 2px solid transparent;
     background-clip: padding-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(6, 182, 212, 0.55);
+    background-color: rgba(239, 68, 68, 0.6);
   }
   ::-webkit-scrollbar-corner {
     background: transparent;

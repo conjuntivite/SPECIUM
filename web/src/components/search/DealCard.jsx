@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 export function DealCard({ deal, isPrimary, rankLabel, checked, disabled, onToggle }) {
   return (
     <Card
-      className={`cursor-pointer gap-3 border-border bg-card p-6 transition hover:-translate-y-1 hover:border-cyan-500/30 hover:bg-[var(--secondary)] hover:shadow-lg ${isPrimary ? 'border-[var(--primary)]/50' : ''}`}
+      className={`cursor-pointer gap-3 border-border bg-card p-6 transition hover:-translate-y-1 hover:border-red-500/30 hover:bg-[var(--secondary)] hover:shadow-lg ${isPrimary ? 'border-[var(--primary)]/50' : ''}`}
       onClick={(e) => {
         if (e.target.closest('a') || e.target.closest('.compare-check')) return
         window.open(deal.url, '_blank', 'noopener,noreferrer')

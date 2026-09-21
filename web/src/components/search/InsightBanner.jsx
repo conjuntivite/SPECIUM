@@ -5,7 +5,7 @@ import { formatMarkdownLike } from '@/lib/markdown'
 export function InsightBanner({ text }) {
   if (!text) return null
   return (
-    <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+    <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
       <div className="mb-1 flex items-center gap-2 font-semibold">
         <FontAwesomeIcon icon={faLightbulb} className="size-4" />
         <h3>Análise de Mercado & Recomendação</h3>

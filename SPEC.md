@@ -1,4 +1,4 @@
-# Spec: buscador de segurança eletrônica
+# Spec: REDVISION — orçamentos de segurança eletrônica
 
 ## Origem
 
@@ -267,7 +267,7 @@ opções já são presença", mais rápido de cadastrar pro caso comum.
 Pedido do usuário: um botão pra trocar entre tema escuro (o único que existia), claro, e um
 "personalizado" cuja customização é só estética e só sobre a cor do sistema (não um editor de
 paleta completo). `useTheme.js` guarda `{ mode, customColor }` no `localStorage`
-(`comprador-inviolavel:theme`) e aplica via `data-theme` no `<html>`:
+(`redvision:theme`) e aplica via `data-theme` no `<html>`:
 
 - **Escuro/Claro**: blocos CSS puros em `index.css` (`:root` e `:root[data-theme="light"]`) — todos
   os tokens semânticos do shadcn (background, card, border, muted...) têm par claro/escuro.
@@ -328,6 +328,16 @@ de `detected_categories` simplificado pra só olhar `requirements?.length`. No f
 dependências, diálogo de conflito de críticas mútuas, prefixo de "adicionar grupo inteiro" — e
 `copyFrom`/`copyableFrom` (usados por "Copiar de...", ver seção anterior) passaram a olhar só
 `provides`/`requirements`. `CategoriesView.jsx` perdeu a coluna "Dependências" da tabela.
+
+## Identidade REDVISION (2026-09-21)
+
+O sistema passou a se chamar **REDVISION** (antes "Comprador Inviolável"/"Orçamento Inteligente"), com estilo baseado no [shadcn/ui](https://ui.shadcn.com/) e elementos em vermelho:
+
+- **Tokens** (`web/src/index.css`): base neutra (zinc) no lugar do azul-noite; `--primary` `#dc2626` (red-600) nos dois temas, `--ring` vermelho, `--accent` um vermelho translúcido (escuro) / `#fee2e2` (claro) e `--destructive` distinto do primário (`#f87171` no escuro, legível como texto no fundo preto; `#991b1b` no claro). `--accent-gradient` virou vermelho (`#f87171 → #dc2626 → #7f1d1d`); a barra de rolagem realça em vermelho no hover.
+- **Cores fixas trocadas**: os `cyan-*`/`slate-*` de `Header`, `DealCard`, `InsightBanner`, `FlowNode`, `FlowLegend` e da aresta destacada do `BudgetCanvas` viraram `red-*`/`zinc-*`. A **seleção** de card no canvas passou de ciano pra branco (`border-zinc-100`): com o tema vermelho, uma borda vermelha se confundiria com a de "lacuna crítica" (`flow-red`), que tem prioridade menor que a seleção.
+- **Tema personalizado**: a cor padrão passou de `#06b6d4` a `#dc2626`, e a chave do `localStorage` mudou pra `redvision:theme` (quem tinha ciano salvo volta pro escuro padrão).
+- **Marca**: `Brand.jsx` (wordmark "RED" em `text-primary` + "VISION"), usado no `Header` e no `LoginView`; título da aba, rodapé, log do servidor e `package.json` renomeados; favicon em `web/public/favicon.svg`.
+- **Mantido de propósito**: o nome do banco (`MONGODB_DB`, padrão `comprador_inviolavel`) e o `container_name` do `docker-compose.yml` continuam como estavam — renomear o banco deixaria os dados atuais órfãos (exigiria migração), e os nomes dos arquivos-fonte citados nesta spec (`arquitetura_..._comprador_inviolavel.txt` etc.) são nomes de arquivos do usuário. Cores de **severidade** (verde/âmbar/vermelho do canvas e as faixas de densidade da câmera) não mudam: têm significado próprio.
 
 ## Próximos passos (fora de escopo por enquanto)
 

@@ -55,7 +55,7 @@ function App() {
         usersPanel={<UsersView auth={auth} />}
       />
       <footer className="mt-10 text-center text-sm text-muted-foreground">
-        <p>Comprador Inviolável © 2026 • Análise inteligente de custo-benefício em tempo real</p>
+        <p>REDVISION © 2026 • Análise inteligente de custo-benefício em tempo real</p>
       </footer>
     </div>
   )

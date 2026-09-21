@@ -323,7 +323,7 @@ function startServer() {
       await seedDevAdmin({ email: DEV_EMAIL, passwordHash: hashPassword(DEV_PASSWORD) });
       console.log(`Usuário dev (admin) pronto: ${DEV_EMAIL}`);
     }
-    console.log(`Comprador Inviolável em http://localhost:${PORT}`);
+    console.log(`REDVISION em http://localhost:${PORT}`);
   });
   return server;
 }
