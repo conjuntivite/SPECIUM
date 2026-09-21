@@ -9,7 +9,7 @@ import { FloorPlanCanvas } from './FloorPlanCanvas'
 const DWG_CONVERTER_URL = 'https://www.freepdfconvert.com/pt/autocad-para-pdf'
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg']
 
-export function FloorPlanView({ budgetId, floorPlan, items, coverageByItemId, onSetItemIcon, floorPlanLayout, onChangeFloorPlanLayout, onUpload, onBackToCanvas }) {
+export function FloorPlanView({ budgetId, floorPlan, items, coverageByItemId, onSetItemIcon, floorPlanLayout, onChangeFloorPlanLayout, onUpload, readOnly, onBackToCanvas }) {
   const fileInputRef = useRef(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
@@ -37,6 +37,7 @@ export function FloorPlanView({ budgetId, floorPlan, items, coverageByItemId, on
     <div className="fixed inset-0 z-40">
       {floorPlan ? (
         <FloorPlanCanvas
+          key={floorPlan.path} // planta nova = canvas novo (o estado dos markers nasce do layout inicial)
           budgetId={budgetId}
           floorPlan={floorPlan}
           items={items}
@@ -50,7 +51,6 @@ export function FloorPlanView({ budgetId, floorPlan, items, coverageByItemId, on
           <p className="max-w-sm text-center text-sm text-muted-foreground">
             Envie uma imagem da planta baixa (PNG ou JPG) pra posicionar câmera, rack e outros equipamentos em cima dela — mesmas ferramentas do mapa (desenhar ligação, soltar item, trocar ícone).
           </p>
-          <input ref={fileInputRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleFileChange} />
           <button
             type="button"
             disabled={uploading}
@@ -71,7 +71,23 @@ export function FloorPlanView({ budgetId, floorPlan, items, coverageByItemId, on
         </div>
       )}
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-[1100] flex justify-end p-4">
+      {/* Fora do estado "sem planta" pra servir tanto ao envio inicial quanto à troca. */}
+      <input ref={fileInputRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleFileChange} />
+
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-[1100] flex flex-col items-end gap-2 p-4">
+        {floorPlan && !readOnly ? (
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => {
+              if (window.confirm('Trocar a planta baixa? Os equipamentos já posicionados nela e a escala serão removidos.')) fileInputRef.current?.click()
+            }}
+            className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur transition-colors hover:bg-secondary disabled:pointer-events-none disabled:opacity-50"
+          >
+            <FontAwesomeIcon icon={faArrowUpFromBracket} className="size-4" /> {uploading ? 'Enviando...' : 'Trocar planta baixa'}
+          </button>
+        ) : null}
+        {floorPlan && error ? <p className="pointer-events-auto rounded-lg bg-card/90 px-2 py-1 text-sm text-destructive">{error}</p> : null}
         <button
           type="button"
           onClick={onBackToCanvas}

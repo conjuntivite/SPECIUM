@@ -1004,7 +1004,7 @@ test('POST /api/budgets/:id/floorplan grava a imagem em disco, serve de volta, r
   });
   assert.equal(uploaded.status, 200);
   const updated = await uploaded.json();
-  assert.match(updated.floorPlan.path, /^\/uploads\/floorplans\/[a-f0-9]{24}\.png$/);
+  assert.match(updated.floorPlan.path, /^\/uploads\/floorplans\/[a-f0-9]{24}\.\d+\.png$/);
   assert.equal(updated.floorPlan.width, 1);
   assert.equal(updated.floorPlan.height, 1);
   assert.deepEqual(updated.floorPlanLayout, {});
@@ -1013,6 +1013,16 @@ test('POST /api/budgets/:id/floorplan grava a imagem em disco, serve de volta, r
   assert.equal(served.status, 200);
   assert.equal(served.headers.get('content-type'), 'image/png');
   assert.ok(Buffer.from(await served.arrayBuffer()).equals(TINY_PNG));
+
+  // Trocar a planta: URL nova (não reaproveita cache do navegador) e o arquivo anterior some do disco.
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  const replaced = await (await fetch(`${baseUrl}/api/budgets/${budget.id}/floorplan?filename=outra.png&width=1&height=1`, {
+    method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'image/png' }, body: TINY_PNG,
+  })).json();
+  assert.notEqual(replaced.floorPlan.path, updated.floorPlan.path);
+  assert.equal((await fetch(`${baseUrl}${updated.floorPlan.path}`)).status, 404);
+  assert.equal((await fetch(`${baseUrl}${replaced.floorPlan.path}`)).status, 200);
+  updated.floorPlan.path = replaced.floorPlan.path;
 
   const otherUser = `__teste__floorplan-outro-${Date.now()}@example.com`;
   const otherRegistered = await fetch(`${baseUrl}/api/auth/register`, {

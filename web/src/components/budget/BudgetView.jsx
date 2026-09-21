@@ -84,6 +84,7 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
         floorPlanLayout={budget.floorPlanLayout}
         onChangeFloorPlanLayout={budget.setFloorPlanLayout}
         onUpload={budget.uploadFloorPlan}
+        readOnly={readOnly}
         onBackToCanvas={() => setStep('canvas')}
       />
     )
