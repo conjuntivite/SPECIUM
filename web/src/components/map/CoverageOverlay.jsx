@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Marker, Polygon } from 'react-leaflet'
 import L from 'leaflet'
 import {
-  COVERAGE_LIMITS, RESOLUTIONS, bandLimits, coverageBands, coverageFromHandle, coverageHandle, coverageOf, coveragePolygon, pixelDensity,
+  COVERAGE_LIMITS, DENSITY_BANDS, RESOLUTIONS, bandLimits, coverageBands, coverageFromHandle, coverageHandle, coverageOf, coveragePolygon, pixelDensity,
 } from '@/lib/coverage'
 
 // Área de cobertura de um equipamento (câmera, central de alarme sem fio...) — usada igual pelo
@@ -15,6 +15,26 @@ const HANDLE_ICON = L.divIcon({
   iconSize: [24, 24],
   iconAnchor: [12, 12],
 })
+
+// Legenda das cores do cone da câmera (mesmas faixas e opacidade de coverageBands). Fica sobre o canvas, fora do Leaflet.
+// top-28 = abaixo dos botões "Trocar planta baixa" / "Voltar ao orçamento" do FloorPlanView (canto superior direito, z-[1100]).
+export function CoverageLegend() {
+  return (
+    <details open className="pointer-events-auto absolute top-28 right-4 z-[1000] rounded-lg border border-border bg-card/85 px-2 py-1 text-xs backdrop-blur">
+      <summary className="cursor-pointer select-none font-medium">Cores da câmera</summary>
+      <p className="mt-1 text-muted-foreground">Densidade de pixels — IEC 62676-4:2025</p>
+      <ul className="mt-1 flex flex-col gap-0.5">
+        {DENSITY_BANDS.map(({ ppm, color, label }) => (
+          <li key={ppm} className="flex items-center gap-1.5">
+            <span className="size-3 shrink-0 rounded-sm border border-white/30" style={{ background: color, opacity: 0.8 }} />
+            {label}
+            <span className="ml-auto pl-2 tabular-nums text-muted-foreground">≥ {ppm} px/m</span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  )
+}
 
 // `interactive: false` no polígono: ele fica só como desenho — clique nele tem que continuar
 // chegando no mapa (colocar equipamento) e nos ícones por baixo.

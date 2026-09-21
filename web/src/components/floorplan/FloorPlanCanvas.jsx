@@ -7,7 +7,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { getProductIcon } from '@/lib/productIcons'
 import { IconPicker } from '@/components/ui/icon-picker'
-import { CoverageFields, CoverageOverlay } from '@/components/map/CoverageOverlay'
+import { CoverageFields, CoverageLegend, CoverageOverlay } from '@/components/map/CoverageOverlay'
 import { PAPER_LONG_SIDE_M, planFrame, pxPerMeterFromDrawingScale } from '@/lib/coverage'
 
 // Alternativa ao mapa geográfico (MapCanvas): mesma interação (posicionar item, trocar ícone,
@@ -341,6 +341,8 @@ export function FloorPlanCanvas({ budgetId, floorPlan, items, coverageByItemId, 
           )
         })}
       </MapContainer>
+
+      {frame && markers.some((m) => coverageByItemId?.get(m.itemId)?.shape === 'camera') ? <CoverageLegend /> : null}
 
       {/* Painel único, pequeno e recolhível — a planta é o foco, então a lista de equipamentos não
           pode cobrir uma fatia dela. Título truncado (tooltip mostra inteiro); a contagem fica sempre visível. */}
