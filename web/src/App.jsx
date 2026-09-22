@@ -9,6 +9,7 @@ import { ProductsView } from '@/components/products/ProductsView'
 import { CategoriesView } from '@/components/categories/CategoriesView'
 import { QuotePdfAuditView } from '@/components/audit/QuotePdfAuditView'
 import { UsersView } from '@/components/users/UsersView'
+import { AiSettingsView } from '@/components/settings/AiSettingsView'
 import { LoginView } from '@/components/auth/LoginView'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -53,9 +54,11 @@ function App() {
         quoteAuditPanel={<QuotePdfAuditView />}
         showUsersTab={auth.user?.role === 'admin'}
         usersPanel={<UsersView auth={auth} />}
+        showAiSettingsTab={auth.user?.role === 'admin'}
+        aiSettingsPanel={<AiSettingsView />}
       />
       <footer className="mt-10 text-center text-sm text-muted-foreground">
-        <p>REDVISION © 2026 • Análise inteligente de custo-benefício em tempo real</p>
+        <p>SPECIUM © 2026 • Intelligent System Design</p>
       </footer>
     </div>
   )

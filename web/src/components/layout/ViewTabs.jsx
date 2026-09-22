@@ -1,9 +1,10 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faClipboardList, faBox, faMagnifyingGlass, faTag, faUsers, faFileShield } from '@fortawesome/free-solid-svg-icons'
+import { faClipboardList, faBox, faMagnifyingGlass, faTag, faUsers, faFileShield, faRobot } from '@fortawesome/free-solid-svg-icons'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
 export function ViewTabs({
-  value, onValueChange, budgetPanel, searchPanel, productsPanel, categoriesPanel, quoteAuditPanel, usersPanel, showUsersTab,
+  value, onValueChange, budgetPanel, searchPanel, productsPanel, categoriesPanel, quoteAuditPanel,
+  usersPanel, showUsersTab, aiSettingsPanel, showAiSettingsTab,
 }) {
   return (
     <Tabs value={value} onValueChange={onValueChange} className="gap-6">
@@ -16,6 +17,9 @@ export function ViewTabs({
         {showUsersTab ? (
           <TabsTrigger value="users"><FontAwesomeIcon icon={faUsers} className="size-4" /> Usuários</TabsTrigger>
         ) : null}
+        {showAiSettingsTab ? (
+          <TabsTrigger value="ai-settings"><FontAwesomeIcon icon={faRobot} className="size-4" /> Instruções da IA</TabsTrigger>
+        ) : null}
       </TabsList>
       <TabsContent value="budget">{budgetPanel}</TabsContent>
       <TabsContent value="search">{searchPanel}</TabsContent>
@@ -23,6 +27,7 @@ export function ViewTabs({
       <TabsContent value="categories">{categoriesPanel}</TabsContent>
       <TabsContent value="quote-audit">{quoteAuditPanel}</TabsContent>
       {showUsersTab ? <TabsContent value="users">{usersPanel}</TabsContent> : null}
+      {showAiSettingsTab ? <TabsContent value="ai-settings">{aiSettingsPanel}</TabsContent> : null}
     </Tabs>
   )
 }

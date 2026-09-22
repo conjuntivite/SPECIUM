@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { parseClassificationResponse, stripSectionNoise } = require('../lib/quoteAudit');
+const { parseClassificationResponse, stripSectionNoise, applyRegisteredProductOverrides } = require('../lib/quoteAudit');
 
 const VALID_CATEGORIES = ['NVR 32 Canais', 'Mikrotik', 'Switch Híbrido PoE'];
 
@@ -27,6 +27,37 @@ test('parseClassificationResponse: quantidade ausente/inválida vira 1, item sem
 
 test('parseClassificationResponse: sem nenhum array JSON reconhecível lança erro claro', () => {
   assert.throws(() => parseClassificationResponse('desculpe, não consigo ajudar com isso', VALID_CATEGORIES), /JSON/);
+});
+
+test('applyRegisteredProductOverrides: modelo de produto cadastrado vence a categoria (ou a falta dela) que a IA chutou', () => {
+  const products = [{ id: '1', category: 'Interfone PoE', brand: 'Intelbras', model: 'TDMI 400' }];
+  const items = [
+    { code: '001', name: 'TERMINAL DEDICADO TDMI 400 IP POE', quantity: 1, category: null },
+    { code: '002', name: 'GRAVADOR DIGITAL DE VIDEO 32 CANAIS 3032 NVD', quantity: 1, category: 'NVR 32 Canais' },
+  ];
+  const result = applyRegisteredProductOverrides(items, products);
+  assert.equal(result[0].category, 'Interfone PoE');
+  assert.equal(result[1].category, 'NVR 32 Canais');
+});
+
+test('applyRegisteredProductOverrides: ignora modelo curto demais pra não dar falso positivo', () => {
+  const products = [{ id: '1', category: 'Categoria Errada', brand: 'X', model: 'V5' }];
+  const items = [{ code: '001', name: 'QUALQUER COISA V5 AQUI', quantity: 1, category: null }];
+  assert.equal(applyRegisteredProductOverrides(items, products)[0].category, null);
+});
+
+test('applyRegisteredProductOverrides: prefere o modelo mais específico quando mais de um produto bate', () => {
+  const products = [
+    { id: '1', category: 'ONE Córtex genérico', brand: 'ONE', model: 'CÓRTEX' },
+    { id: '2', category: 'ONE Córtex V5', brand: 'ONE', model: 'CÓRTEX V5' },
+  ];
+  const items = [{ code: '001', name: 'ONE CÓRTEX V5 CENTRAL', quantity: 1, category: null }];
+  assert.equal(applyRegisteredProductOverrides(items, products)[0].category, 'ONE Córtex V5');
+});
+
+test('applyRegisteredProductOverrides: sem produtos cadastrados, devolve os itens sem mexer', () => {
+  const items = [{ code: '001', name: 'ITEM QUALQUER', quantity: 1, category: null }];
+  assert.deepEqual(applyRegisteredProductOverrides(items, []), items);
 });
 
 test('stripSectionNoise: remove cabeçalho de seção e linha de total, mantém as linhas de item', () => {

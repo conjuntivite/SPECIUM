@@ -5,6 +5,7 @@ const {
   listCategories, createCategory, updateCategory, deleteCategory,
   listGroups, createGroup, deleteGroup,
   listResources, createResource, updateResource, deleteResource,
+  getAiInstructions, updateAiInstructions,
   createUser, findUserByEmail, listUsers, updateUser, seedDevAdmin,
   createSession, findSessionUser, deleteSession,
   createBudget, listBudgetsForUser, getBudgetForUser, updateBudgetForUser, setBudgetAddressForUser, deleteBudgetForUser,
@@ -28,6 +29,7 @@ const {
   validateSearchRequest, validateCompareRequest, validateRecipeItems, validateRecipePriceItems,
   validateProductRequest, validateCategoryRequest, validateResourceRequest,
   validateAuthRequest, validateUserUpdateRequest, validateSetAddressRequest, validateBudgetSaveRequest,
+  validateAiInstructionsRequest,
 } = require('./lib/validators');
 const {
   hashPassword, verifyPassword, generateSessionToken, SESSION_COOKIE_NAME, SESSION_TTL_MS,
@@ -35,7 +37,10 @@ const {
 } = require('./lib/auth');
 const { geocodeAddress } = require('./lib/providers/geocoding');
 const { buildProductTemplateCsv, parseProductImportCsv } = require('./lib/productImport');
-const { extractPdfText, classifyQuoteItems, auditQuoteWithAI, PDF_AUDIT_MAX_BYTES } = require('./lib/quoteAudit');
+const {
+  extractPdfText, classifyQuoteItems, auditQuoteWithAI, PDF_AUDIT_MAX_BYTES,
+  DEFAULT_CLASSIFICATION_INSTRUCTIONS, DEFAULT_AUDIT_INSTRUCTIONS,
+} = require('./lib/quoteAudit');
 const { setShoppingFetcher } = require('./lib/providers/shoppingFetcher');
 const { excludePriceOutliers, selectTopDistinctStores, buildGoogleShoppingUrl } = require('./lib/providers/shared');
 const {
@@ -103,6 +108,25 @@ async function requestHandler(request, response) {
       if (!updated) return sendJson(response, 404, { detail: 'Usuário não encontrado.' });
       return sendJson(response, 200, updated);
     }
+    // Instruções de negócio das etapas de IA (ver lib/quoteAudit.js) — mesma regra de acesso do
+    // cadastro de usuários: edição é coisa de administrador.
+    if (request.method === 'GET' && url.pathname === '/api/ai-instructions') {
+      const user = await getAuthenticatedUser(request);
+      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      if (user.role !== 'admin') return sendJson(response, 403, { detail: 'Só administradores podem ver as instruções da IA.' });
+      const stored = await getAiInstructions();
+      return sendJson(response, 200, {
+        classification: stored.classification || DEFAULT_CLASSIFICATION_INSTRUCTIONS,
+        audit: stored.audit || DEFAULT_AUDIT_INSTRUCTIONS,
+      });
+    }
+    if (request.method === 'PUT' && url.pathname === '/api/ai-instructions') {
+      const user = await getAuthenticatedUser(request);
+      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      if (user.role !== 'admin') return sendJson(response, 403, { detail: 'Só administradores podem editar as instruções da IA.' });
+      const { classification, audit } = validateAiInstructionsRequest(await readJson(request));
+      return sendJson(response, 200, await updateAiInstructions({ classification, audit }));
+    }
     if (request.method === 'POST' && url.pathname === '/api/search') {
       const body = await readJson(request);
       const { query } = validateSearchRequest(body);
@@ -139,16 +163,18 @@ async function requestHandler(request, response) {
       const filename = normalize(url.searchParams.get('filename'));
       if ((filename.split('.').pop() || '').toLowerCase() !== 'pdf') return sendJson(response, 400, { detail: 'Envie um arquivo PDF.' });
       const buffer = await readBinary(request, PDF_AUDIT_MAX_BYTES);
-      const [categories, resources] = await Promise.all([listCategories(), listResources()]);
+      const [categories, resources, aiInstructions, products] = await Promise.all([listCategories(), listResources(), getAiInstructions(), listProducts()]);
       const pdfText = await extractPdfText(buffer);
       // Ordem importa (pedido explícito do usuário): extrai os itens e casa cada um com uma
       // categoria do cadastro primeiro, roda o motor de regras determinístico sobre esse resultado,
       // e só DEPOIS manda os itens já casados + as pendências do motor pra IA auditar por cima —
-      // a IA nunca vê o PDF cru de novo nem as seções (erradas) do sistema de origem.
-      const items = await classifyQuoteItems(pdfText, categories);
+      // a IA nunca vê o PDF cru de novo nem as seções (erradas) do sistema de origem. Produto já
+      // cadastrado (aba Produtos) vence o palpite da IA quando o nome do item bate com um modelo
+      // conhecido (ver applyRegisteredProductOverrides em lib/quoteAudit.js).
+      const items = await classifyQuoteItems(pdfText, categories, aiInstructions.classification || undefined, products);
       const cartItems = items.filter((i) => i.category).map((i) => ({ title: i.category, quantity: i.quantity }));
       const engineResult = computeCategoryMissingEssentials(cartItems, categories, resources);
-      const aiAudit = await auditQuoteWithAI(items, categories, engineResult.missing);
+      const aiAudit = await auditQuoteWithAI(items, categories, engineResult.missing, aiInstructions.audit || undefined);
       return sendJson(response, 200, { items, engineResult, aiAudit });
     }
     if (request.method === 'GET' && url.pathname === '/api/products/template') {
@@ -323,7 +349,7 @@ function startServer() {
       await seedDevAdmin({ email: DEV_EMAIL, passwordHash: hashPassword(DEV_PASSWORD) });
       console.log(`Usuário dev (admin) pronto: ${DEV_EMAIL}`);
     }
-    console.log(`REDVISION em http://localhost:${PORT}`);
+    console.log(`SPECIUM em http://localhost:${PORT}`);
   });
   return server;
 }

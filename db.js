@@ -407,6 +407,30 @@ async function deleteResource(id) {
   return deletedCount > 0;
 }
 
+async function getSettingsCollection() {
+  const db = await getDb();
+  return db.collection('settings');
+}
+
+// Documento único (_id fixo, sem ObjectId — não é uma lista) com as instruções de negócio das
+// etapas de IA (ver lib/quoteAudit.js). Campo ausente/null = tela ainda não sobrescreveu; quem
+// decide o texto padrão nesse caso é o próprio lib/quoteAudit.js (DEFAULT_*_INSTRUCTIONS).
+async function getAiInstructions() {
+  const settings = await getSettingsCollection();
+  const doc = await settings.findOne({ _id: 'ai_instructions' });
+  return { classification: doc?.classification || null, audit: doc?.audit || null };
+}
+
+async function updateAiInstructions({ classification, audit }) {
+  const settings = await getSettingsCollection();
+  await settings.updateOne(
+    { _id: 'ai_instructions' },
+    { $set: { classification, audit, updatedAt: new Date() } },
+    { upsert: true },
+  );
+  return { classification, audit };
+}
+
 async function getUsersCollection() {
   const db = await getDb();
   return db.collection('users');
@@ -632,6 +656,7 @@ module.exports = {
   listCategories, createCategory, updateCategory, deleteCategory,
   listGroups, createGroup, deleteGroup,
   listResources, createResource, updateResource, deleteResource,
+  getAiInstructions, updateAiInstructions,
   createUser, findUserByEmail, findUserById, listUsers, updateUser, seedDevAdmin,
   createSession, findSessionUser, deleteSession,
   createBudget, listBudgetsForUser, getBudgetForUser, updateBudgetForUser, setBudgetAddressForUser, deleteBudgetForUser,

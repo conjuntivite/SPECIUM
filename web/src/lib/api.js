@@ -161,6 +161,14 @@ export async function auditQuotePdf(file) {
   return response.json()
 }
 
+export function getAiInstructions() {
+  return requestJson('/api/ai-instructions')
+}
+
+export function updateAiInstructions(data) {
+  return requestJson('/api/ai-instructions', { method: 'PUT', body: data })
+}
+
 export function getResources() {
   return requestJson('/api/resources')
 }
