@@ -52,9 +52,13 @@ export function CategoriesView() {
   useEffect(() => { reloadGroups() }, [reloadGroups])
   useEffect(() => { reloadResources() }, [reloadResources])
 
+  // Atualiza a lista local direto com o que a criação já devolveu, em vez de disparar um novo GET
+  // (reloadGroups/reloadResources) — um reload é um 2º round-trip assíncrono à parte, e reabrir o
+  // combobox antes dele voltar via a lista local ainda sem o item recém-criado, faz o combobox achar
+  // que "não existe" e deixar criar de novo (duplicata com sufixo _2, sem erro nenhum pro usuário).
   async function handleCreateGroup(name) {
     const created = await createGroup(name)
-    reloadGroups()
+    setGroups((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')))
     return created
   }
 
@@ -65,7 +69,7 @@ export function CategoriesView() {
 
   async function handleCreateResource(data) {
     const created = await createResource(data)
-    reloadResources()
+    setResources((prev) => [...prev, created].sort((a, b) => a.key.localeCompare(b.key)))
     return created
   }
 
