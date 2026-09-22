@@ -7,9 +7,10 @@ import {
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { auditQuotePdf, getCategories, getResources } from '@/lib/api'
+import { auditQuotePdf, createProduct, getCategories, getResources } from '@/lib/api'
 import { useCategories } from '@/hooks/useCategories'
 import { dedupeUnsatisfiedSuggestions } from '@/lib/suggestions'
+import { ProductFormDialog } from '@/components/products/ProductFormDialog'
 
 const SEVERITY_STYLES = {
   critical: { border: 'border-l-flow-red', icon: faCircleExclamation, kind: 'Sem isso não liga' },
@@ -185,12 +186,28 @@ export function QuotePdfAuditView() {
   }, [])
   const [selectedFinding, setSelectedFinding] = useState(null)
 
+  // Item do PDF sem categoria batida no cadastro — o vendedor cotou algo que ainda não existe como
+  // Produto no sistema. Deixa cadastrar na hora (mesmo dialog/CRUD da aba Produtos) em vez de anotar
+  // o nome e ir cadastrar depois em outra aba.
+  const [createTarget, setCreateTarget] = useState(null)
+  const [registeredNames, setRegisteredNames] = useState(new Set())
+
+  async function handleCreateProduct(form) {
+    await createProduct(form)
+    setRegisteredNames((prev) => new Set(prev).add(createTarget.name))
+    setCreateTarget(null)
+  }
+
   const fileInputRef = useRef(null)
   const [fileName, setFileName] = useState('')
   const [file, setFile] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const progressTimerRef = useRef(null)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+
+  useEffect(() => () => clearInterval(progressTimerRef.current), [])
 
   function handleFileChange(e) {
     const chosen = e.target.files?.[0]
@@ -200,16 +217,30 @@ export function QuotePdfAuditView() {
     setFileName(chosen?.name || '')
   }
 
+  // Não dá pra saber o progresso real (é 1 request só, com extração do PDF + 2 chamadas de IA
+  // sequenciais por trás) — avança suave até 92% enquanto espera (etapas encolhem o passo à medida
+  // que se aproxima, nunca "trava" visualmente) e só bate 100% quando a resposta chega de verdade.
+  const PROGRESS_CAP = 92
   async function handleAnalyze() {
     if (!file) { setError('Escolha um arquivo PDF.'); return }
     setLoading(true)
     setError('')
     setResult(null)
+    setRegisteredNames(new Set())
+    setProgress(0)
+    clearInterval(progressTimerRef.current)
+    progressTimerRef.current = setInterval(() => {
+      setProgress((p) => (p >= PROGRESS_CAP ? p : p + (PROGRESS_CAP - p) * 0.08))
+    }, 200)
     try {
-      setResult(await auditQuotePdf(file))
+      const data = await auditQuotePdf(file)
+      clearInterval(progressTimerRef.current)
+      setProgress(100)
+      setResult(data)
+      setTimeout(() => setLoading(false), 300)
     } catch (err) {
+      clearInterval(progressTimerRef.current)
       setError(err.message || 'Erro ao validar o orçamento.')
-    } finally {
       setLoading(false)
     }
   }
@@ -246,6 +277,17 @@ export function QuotePdfAuditView() {
         <Button type="button" className="mt-3" onClick={handleAnalyze} disabled={loading || !file}>
           {loading ? 'Analisando...' : 'Analisar orçamento'}
         </Button>
+        {loading ? (
+          <div className="mt-3">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary transition-[width] duration-200 ease-linear"
+                style={{ width: `${Math.round(progress)}%` }}
+              />
+            </div>
+            <p className="mt-1 text-right text-xs text-muted-foreground">{Math.round(progress)}%</p>
+          </div>
+        ) : null}
       </div>
 
       {error ? (
@@ -271,11 +313,29 @@ export function QuotePdfAuditView() {
               </p>
             )}
             {unrecognizedItems.length ? (
-              <p className="mt-2 flex items-start gap-1.5 text-xs text-muted-foreground">
-                <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 size-3 shrink-0 text-flow-amber" />
-                {unrecognizedItems.length} item(ns) do PDF não bateram com nenhuma categoria do cadastro,
-                então não entraram nessa checagem: {unrecognizedItems.map((i) => i.name).join('; ')}.
-              </p>
+              <div className="mt-2">
+                <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                  <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 size-3 shrink-0 text-flow-amber" />
+                  {unrecognizedItems.length} item(ns) do PDF não bateram com nenhuma categoria do cadastro,
+                  então não entraram nessa checagem. Se for um produto de verdade, cadastre pra manter o catálogo atualizado:
+                </p>
+                <ul className="mt-1.5 flex flex-col gap-1 pl-4.5">
+                  {unrecognizedItems.map((item, i) => (
+                    <li key={i} className="flex items-center justify-between gap-2 text-xs">
+                      <span>{item.quantity}x {item.name}</span>
+                      {registeredNames.has(item.name) ? (
+                        <span className="flex shrink-0 items-center gap-1 text-flow-green">
+                          <FontAwesomeIcon icon={faCircleCheck} className="size-3" /> Cadastrado
+                        </span>
+                      ) : (
+                        <Button type="button" variant="secondary" size="sm" className="h-6 shrink-0 px-2 text-xs" onClick={() => setCreateTarget(item)}>
+                          + Cadastrar produto
+                        </Button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ) : null}
           </div>
 
@@ -309,6 +369,14 @@ export function QuotePdfAuditView() {
         items={result?.items || []}
         categoriesByValue={categoriesByValue}
         resourceLabelByKey={resourceLabelByKey}
+      />
+
+      <ProductFormDialog
+        open={!!createTarget}
+        product={null}
+        initialValues={{ model: createTarget?.name || '' }}
+        onOpenChange={(open) => { if (!open) setCreateTarget(null) }}
+        onSubmit={handleCreateProduct}
       />
     </div>
   )
