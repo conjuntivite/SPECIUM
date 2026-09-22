@@ -1,6 +1,6 @@
-<p align="center"><img src="web/public/logo.png" alt="Logo REDVISION" width="220" /></p>
+<p align="center"><img src="web/public/logo.png" alt="Logo SPECIUM" width="220" /></p>
 
-# REDVISION
+# SPECIUM
 
 Ferramenta para o comercial montar o orçamento de uma instalação de segurança eletrônica sem esquecer equipamento. Você vai adicionando os itens que o cliente vai levar (câmera IP, DVR, switch...); a cada item, o sistema recalcula quais complementos ainda faltam para a instalação funcionar de verdade (cabo, switch PoE, caixa Steck, gravação etc.), separando o que é essencial do que é só recomendado. Preço não é mais o ponto de partida — só é consultado quando o comercial pede, item por item, contra Intelbras/Amazon/Google Shopping.
 
@@ -8,7 +8,7 @@ Também compara a ficha técnica de até 3 produtos selecionados: quando a ofert
 
 ## Identidade visual
 
-O sistema se chama **REDVISION** (wordmark "RED" em vermelho + "VISION"). O estilo segue o [shadcn/ui](https://ui.shadcn.com/): tokens semânticos em `web/src/index.css` com base neutra (zinc) e cor primária vermelha (`--primary: #dc2626`), tema escuro por padrão e tema claro/personalizado pelo botão de tema. O componente `web/src/components/layout/Brand.jsx` renderiza o wordmark (com o olho da logo à esquerda na tela inicial). Arquivos em `web/public/`: `logo.png` (logo completa, usada no login e aqui), `logo-eye.png` (só o olho) e `favicon.png`; todos com fundo transparente, gerados a partir das artes originais em fundo branco.
+O sistema se chama **SPECIUM** ("Intelligent System Design"), wordmark em negrito sem split de cor. O estilo segue o [shadcn/ui](https://ui.shadcn.com/): tokens semânticos em `web/src/index.css` com base neutra (zinc) e cor primária vermelha (`--primary: #dc2626`, mantida do rebrand anterior), tema escuro por padrão e tema claro/personalizado pelo botão de tema. O componente `web/src/components/layout/Brand.jsx` renderiza o wordmark (com o olho da logo à esquerda na tela inicial). Arquivos em `web/public/`: `logo.png` (logo completa, usada no login e aqui), `logo-eye.png` (só o olho) e `favicon.png`; todos com fundo transparente, gerados a partir das artes originais em fundo branco.
 
 ## Categorias cobertas
 

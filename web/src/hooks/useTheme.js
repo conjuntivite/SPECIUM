@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
-const STORAGE_KEY = 'redvision:theme'
+const STORAGE_KEY = 'specium:theme'
 const DEFAULT_CUSTOM_COLOR = '#dc2626'
 const MODES = ['dark', 'light', 'custom']
 

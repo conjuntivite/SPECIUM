@@ -1,4 +1,4 @@
-# Spec: REDVISION — orçamentos de segurança eletrônica
+# Spec: SPECIUM — orçamentos de segurança eletrônica
 
 ## Origem
 
@@ -267,7 +267,7 @@ opções já são presença", mais rápido de cadastrar pro caso comum.
 Pedido do usuário: um botão pra trocar entre tema escuro (o único que existia), claro, e um
 "personalizado" cuja customização é só estética e só sobre a cor do sistema (não um editor de
 paleta completo). `useTheme.js` guarda `{ mode, customColor }` no `localStorage`
-(`redvision:theme`) e aplica via `data-theme` no `<html>`:
+(`specium:theme`) e aplica via `data-theme` no `<html>`:
 
 - **Escuro/Claro**: blocos CSS puros em `index.css` (`:root` e `:root[data-theme="light"]`) — todos
   os tokens semânticos do shadcn (background, card, border, muted...) têm par claro/escuro.
@@ -338,6 +338,26 @@ O sistema passou a se chamar **REDVISION** (antes "Comprador Inviolável"/"Orça
 - **Tema personalizado**: a cor padrão passou de `#06b6d4` a `#dc2626`, e a chave do `localStorage` mudou pra `redvision:theme` (quem tinha ciano salvo volta pro escuro padrão).
 - **Marca**: `Brand.jsx` (wordmark "RED" em `text-primary` + "VISION"), usado no `Header` e no `LoginView`; título da aba, rodapé, log do servidor e `package.json` renomeados; logo real em `web/public/` (`logo.png` completa no login e no README, `logo-eye.png` só o olho ao lado do nome na tela inicial, `favicon.png`) — as artes originais tinham fundo branco sólido, então o branco foi convertido em transparência (cor→alfa, preserva o brilho vermelho) e as imagens reduzidas (de ~1,2 MB pra 10–340 KB).
 - **Mantido de propósito**: o nome do banco (`MONGODB_DB`, padrão `comprador_inviolavel`) e o `container_name` do `docker-compose.yml` continuam como estavam — renomear o banco deixaria os dados atuais órfãos (exigiria migração), e os nomes dos arquivos-fonte citados nesta spec (`arquitetura_..._comprador_inviolavel.txt` etc.) são nomes de arquivos do usuário. Cores de **severidade** (verde/âmbar/vermelho do canvas e as faixas de densidade da câmera) não mudam: têm significado próprio.
+
+## Identidade SPECIUM (2026-09-22)
+
+O sistema trocou de nome de novo, de **REDVISION** pra **SPECIUM** ("Intelligent System Design") —
+mudança só de marca/texto, sem reabrir as decisões visuais da seção anterior:
+
+- **Wordmark**: `Brand.jsx` foi de "RED" (`text-primary`) + "VISION" pra "SPECIUM" num bloco só, sem
+  split de cor — o nome não tem uma quebra semântica natural em duas palavras como RED/VISION tinha.
+- **Mantido de propósito** (perguntado ao usuário, resposta explícita): tema vermelho (`--primary:
+  #dc2626`) e a logo/olho existentes (`web/public/logo.png`, `logo-eye.png`, `favicon.png`) — sem
+  arte nova pronta, reaproveitar a mesma imagem ao lado do wordmark novo evita ficar sem ícone.
+- **Tagline "Intelligent System Design"**: aparece em 3 lugares (pedido do usuário) — abaixo da logo
+  grande na tela de login, no rodapé (troca o texto de copyright antigo) e no `<title>` da aba.
+- **Chave do tema mudou nova vez**: `redvision:theme` → `specium:theme` no `localStorage` (mesmo
+  efeito colateral da troca anterior: quem tinha tema salvo volta pro escuro padrão).
+- **Repositórios renomeados de novo**: GitHub (`conjuntivite`) e GitLab
+  (`gitlab.invixap.com.br/tauan`) passaram de `redvision` pra `specium` (pedido explícito do
+  usuário, mesmo padrão do rebrand anterior).
+- **Mantido, mesma razão de antes**: nome do banco (`comprador_inviolavel`) e `container_name` do
+  Docker não mudam (evita órfãos de dado); cores de severidade não mudam (significado próprio).
 
 ## Próximos passos (fora de escopo por enquanto)
 

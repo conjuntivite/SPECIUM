@@ -4,7 +4,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* REDVISION — tokens semânticos do shadcn (ui.shadcn.com/themes): base neutra (zinc) + primária vermelha.
+/* SPECIUM — tokens semânticos do shadcn (ui.shadcn.com/themes): base neutra (zinc) + primária vermelha.
    Os componentes de ui/ (Button, Card, Input, Select...) já nascem no tema escuro certo, sem precisar
    de classe `.dark` (o escuro é o padrão; o claro é ativado via [data-theme="light"], ver useTheme.js).
    --destructive é um vermelho mais claro no escuro (#f87171, legível como texto sobre o fundo preto) e mais

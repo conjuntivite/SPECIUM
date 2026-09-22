@@ -22,7 +22,8 @@ export function LoginView({ auth }) {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6">
-      <img src="/logo.png" alt="Logo REDVISION" className="w-48" />
+      <img src="/logo.png" alt="Logo SPECIUM" className="w-48" />
+      <p className="-mt-2 text-sm text-muted-foreground">Intelligent System Design</p>
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>{mode === 'login' ? 'Entrar' : 'Criar conta'}</CardTitle>
