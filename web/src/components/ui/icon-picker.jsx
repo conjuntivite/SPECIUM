@@ -73,7 +73,12 @@ export function IconPicker({ value, onChange, compact = false }) {
       {open && coords ? createPortal(
         <div
           ref={menuRef}
-          style={{ ...coords, maxHeight: 'calc(100vh - 16px)' }}
+          data-portal-menu
+          // Dialog modal do Radix desativa pointer-events do <body> inteiro enquanto aberto e só
+          // reabilita no próprio nó do DialogContent (ver DismissableLayer/disableOutsidePointerEvents)
+          // — como este menu vive fora dessa árvore (portado em document.body), herdaria "none" e
+          // ficaria visível mas inclicável. `auto` explícito sobrescreve a herança só aqui.
+          style={{ ...coords, maxHeight: 'calc(100vh - 16px)', pointerEvents: 'auto' }}
           className="fixed z-[10000] grid w-64 grid-cols-6 gap-1 overflow-y-auto rounded-lg border border-input bg-popover p-2 text-popover-foreground shadow-md"
         >
           {value ? (
