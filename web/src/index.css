@@ -158,3 +158,14 @@
     background: transparent;
   }
 }
+
+/* Logo com wordmark: versão escura por padrão (inclui o tema personalizado, que usa a base escura). */
+:root[data-theme="light"] .logo-dark,
+:root:not([data-theme="light"]) .logo-light {
+  display: none;
+}
+/* O PNG escuro tem fundo #000 (mais escuro que o --background): lighten funde esse preto com o fundo
+   da página. Não dá pra recortar o fundo por cor — o gato também é preto e sumiria junto. */
+.logo-dark {
+  mix-blend-mode: lighten;
+}
