@@ -32,7 +32,7 @@ const {
   validateAiInstructionsRequest,
 } = require('./lib/validators');
 const {
-  hashPassword, verifyPassword, generateSessionToken, SESSION_COOKIE_NAME, SESSION_TTL_MS,
+  canAccessScreen, hashPassword, verifyPassword, generateSessionToken, SESSION_COOKIE_NAME, SESSION_TTL_MS,
   serializeSessionCookie, serializeClearSessionCookie,
 } = require('./lib/auth');
 const { geocodeAddress } = require('./lib/providers/geocoding');
@@ -54,6 +54,15 @@ const { SEARCH_PROVIDERS, AGGREGATE_PROVIDER, DEFAULT_PROVIDER, searchAllProvide
 
 function getAuthenticatedUser(request) {
   return findSessionUser(parseCookies(request)[SESSION_COOKIE_NAME]);
+}
+
+// Login + permissão de tela (ver SCREENS em lib/auth.js). Já responde 401/403 e devolve null —
+// quem chama só faz `if (!user) return;`.
+async function requireScreen(request, response, ...screens) {
+  const user = await getAuthenticatedUser(request);
+  if (!user) { sendJson(response, 401, { detail: 'Não autenticado.' }); return null; }
+  if (!canAccessScreen(user, ...screens)) { sendJson(response, 403, { detail: 'Você não tem permissão para esta tela.' }); return null; }
+  return user;
 }
 
 async function requestHandler(request, response) {
@@ -78,7 +87,7 @@ async function requestHandler(request, response) {
       if (!userDoc || !verifyPassword(password, userDoc.passwordHash)) throw new Error('E-mail ou senha inválidos.');
       const token = generateSessionToken();
       await createSession(token, userDoc._id.toString(), new Date(Date.now() + SESSION_TTL_MS));
-      const loggedInUser = { id: userDoc._id.toString(), email: userDoc.email, name: userDoc.name || null, role: userDoc.role || 'user', unrestricted: userDoc.unrestricted === true, avatar: userDoc.avatar || null };
+      const loggedInUser = { id: userDoc._id.toString(), email: userDoc.email, name: userDoc.name || null, role: userDoc.role || 'user', unrestricted: userDoc.unrestricted === true, avatar: userDoc.avatar || null, screens: Array.isArray(userDoc.screens) ? userDoc.screens : null };
       return sendJson(response, 200, loggedInUser, { 'Set-Cookie': serializeSessionCookie(token) });
     }
     if (request.method === 'POST' && url.pathname === '/api/auth/logout') {
@@ -129,6 +138,7 @@ async function requestHandler(request, response) {
       return sendJson(response, 200, await updateAiInstructions({ classification, audit }));
     }
     if (request.method === 'POST' && url.pathname === '/api/search') {
+      if (!(await requireScreen(request, response, 'search'))) return;
       const body = await readJson(request);
       const { query } = validateSearchRequest(body);
       const requestedProvider = normalize(body.provider).toLowerCase();
@@ -137,12 +147,14 @@ async function requestHandler(request, response) {
       return sendJson(response, 200, { ...result, provider: providerKey });
     }
     if (request.method === 'POST' && url.pathname === '/api/compare') {
+      if (!(await requireScreen(request, response, 'search'))) return;
       const body = await readJson(request);
       const items = validateCompareRequest(body);
       const results = await Promise.all(items.map(async (item) => ({ url: item.url, ...(await fetchProductSpecs(item.url, item.title)) })));
       return sendJson(response, 200, { results });
     }
     if (request.method === 'POST' && url.pathname === '/api/recipe/suggestions') {
+      if (!(await requireScreen(request, response, 'budget'))) return;
       const body = await readJson(request);
       const cartItems = validateRecipeItems(body);
       const categories = await listCategories();
@@ -153,14 +165,15 @@ async function requestHandler(request, response) {
       return sendJson(response, 200, { ...computeCategoryMissingEssentials(cartItems, categories, resources), items });
     }
     if (request.method === 'POST' && url.pathname === '/api/recipe/prices') {
+      if (!(await requireScreen(request, response, 'budget'))) return;
       const body = await readJson(request);
       const items = validateRecipePriceItems(body);
       const results = await Promise.all(items.map(fetchRecipeItemPrice));
       return sendJson(response, 200, { results });
     }
     if (request.method === 'POST' && url.pathname === '/api/pdf-audit') {
-      const user = await getAuthenticatedUser(request);
-      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      const user = await requireScreen(request, response, 'quote-audit');
+      if (!user) return;
       const filename = normalize(url.searchParams.get('filename'));
       if ((filename.split('.').pop() || '').toLowerCase() !== 'pdf') return sendJson(response, 400, { detail: 'Envie um arquivo PDF.' });
       const buffer = await readBinary(request, PDF_AUDIT_MAX_BYTES);
@@ -179,16 +192,18 @@ async function requestHandler(request, response) {
       return sendJson(response, 200, { items, engineResult, aiAudit });
     }
     if (request.method === 'POST' && url.pathname === '/api/assistant') {
-      const user = await getAuthenticatedUser(request);
-      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      const user = await requireScreen(request, response, 'assistant');
+      if (!user) return;
       const body = await readJson(request);
       return sendJson(response, 200, { answer: await askEquipmentAssistant(body.messages) });
     }
     if (request.method === 'GET' && url.pathname === '/api/products/template') {
+      if (!(await requireScreen(request, response, 'products', 'quote-audit'))) return;
       const categories = await listCategories();
       return sendCsv(response, 'produtos-modelo.csv', buildProductTemplateCsv(categories));
     }
     if (request.method === 'POST' && url.pathname === '/api/products/import') {
+      if (!(await requireScreen(request, response, 'products', 'quote-audit'))) return;
       const body = await readJson(request);
       const csvText = typeof body.csv === 'string' ? body.csv : '';
       if (!csvText.trim()) throw new Error('Envie o conteúdo da planilha.');
@@ -202,17 +217,20 @@ async function requestHandler(request, response) {
       return sendJson(response, 200, { products: await listProducts(category || undefined) });
     }
     if (request.method === 'POST' && url.pathname === '/api/products') {
+      if (!(await requireScreen(request, response, 'products', 'quote-audit'))) return;
       const body = await readJson(request);
       return sendJson(response, 201, await createProduct(validateProductRequest(body)));
     }
     const productIdMatch = url.pathname.match(/^\/api\/products\/([a-f0-9]{24})$/i);
     if (productIdMatch && request.method === 'PUT') {
+      if (!(await requireScreen(request, response, 'products', 'quote-audit'))) return;
       const id = productIdMatch[1];
       const data = validateProductRequest(await readJson(request));
       if (!(await updateProduct(id, data))) return sendJson(response, 404, { detail: 'Produto não encontrado.' });
       return sendJson(response, 200, { id, ...data });
     }
     if (productIdMatch && request.method === 'DELETE') {
+      if (!(await requireScreen(request, response, 'products', 'quote-audit'))) return;
       const id = productIdMatch[1];
       if (!(await deleteProduct(id))) return sendJson(response, 404, { detail: 'Produto não encontrado.' });
       return sendJson(response, 200, { deleted: true });
@@ -221,17 +239,20 @@ async function requestHandler(request, response) {
       return sendJson(response, 200, { categories: await listCategories() });
     }
     if (request.method === 'POST' && url.pathname === '/api/categories') {
+      if (!(await requireScreen(request, response, 'categories', 'products', 'quote-audit'))) return;
       const body = await readJson(request);
       return sendJson(response, 201, await createCategory(validateCategoryRequest(body)));
     }
     const categoryIdMatch = url.pathname.match(/^\/api\/categories\/([a-f0-9]{24})$/i);
     if (categoryIdMatch && request.method === 'PUT') {
+      if (!(await requireScreen(request, response, 'categories', 'products', 'quote-audit'))) return;
       const id = categoryIdMatch[1];
       const data = validateCategoryRequest(await readJson(request));
       if (!(await updateCategory(id, data))) return sendJson(response, 404, { detail: 'Categoria não encontrada.' });
       return sendJson(response, 200, { id, ...data });
     }
     if (categoryIdMatch && request.method === 'DELETE') {
+      if (!(await requireScreen(request, response, 'categories', 'products', 'quote-audit'))) return;
       const id = categoryIdMatch[1];
       if (!(await deleteCategory(id))) return sendJson(response, 404, { detail: 'Categoria não encontrada.' });
       return sendJson(response, 200, { deleted: true });
@@ -240,11 +261,13 @@ async function requestHandler(request, response) {
       return sendJson(response, 200, { groups: await listGroups() });
     }
     if (request.method === 'POST' && url.pathname === '/api/groups') {
+      if (!(await requireScreen(request, response, 'categories', 'products', 'quote-audit'))) return;
       const body = await readJson(request);
       return sendJson(response, 201, await createGroup(body?.name));
     }
     const groupIdMatch = url.pathname.match(/^\/api\/groups\/([a-f0-9]{24})$/i);
     if (groupIdMatch && request.method === 'DELETE') {
+      if (!(await requireScreen(request, response, 'categories', 'products', 'quote-audit'))) return;
       const id = groupIdMatch[1];
       if (!(await deleteGroup(id))) return sendJson(response, 404, { detail: 'Grupo não encontrado.' });
       return sendJson(response, 200, { deleted: true });
@@ -253,11 +276,13 @@ async function requestHandler(request, response) {
       return sendJson(response, 200, { resources: await listResources() });
     }
     if (request.method === 'POST' && url.pathname === '/api/resources') {
+      if (!(await requireScreen(request, response, 'categories', 'products', 'quote-audit'))) return;
       const body = await readJson(request);
       return sendJson(response, 201, await createResource(validateResourceRequest(body)));
     }
     const resourceIdMatch = url.pathname.match(/^\/api\/resources\/([a-f0-9]{24})$/i);
     if (resourceIdMatch && request.method === 'PUT') {
+      if (!(await requireScreen(request, response, 'categories', 'products', 'quote-audit'))) return;
       const id = resourceIdMatch[1];
       const label = normalize((await readJson(request)).label);
       if (!label || label.length > 100) throw new Error('Informe um nome para o recurso (até 100 caracteres).');
@@ -265,24 +290,25 @@ async function requestHandler(request, response) {
       return sendJson(response, 200, { id, label });
     }
     if (resourceIdMatch && request.method === 'DELETE') {
+      if (!(await requireScreen(request, response, 'categories', 'products', 'quote-audit'))) return;
       const id = resourceIdMatch[1];
       if (!(await deleteResource(id))) return sendJson(response, 404, { detail: 'Recurso não encontrado.' });
       return sendJson(response, 200, { deleted: true });
     }
     if (request.method === 'GET' && url.pathname === '/api/budgets') {
-      const user = await getAuthenticatedUser(request);
-      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      const user = await requireScreen(request, response, 'budget');
+      if (!user) return;
       return sendJson(response, 200, { budgets: await listBudgetsForUser(user.id, user.unrestricted) });
     }
     if (request.method === 'POST' && url.pathname === '/api/budgets') {
-      const user = await getAuthenticatedUser(request);
-      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      const user = await requireScreen(request, response, 'budget');
+      if (!user) return;
       return sendJson(response, 201, await createBudget(user.id));
     }
     const budgetAddressMatch = url.pathname.match(/^\/api\/budgets\/([a-f0-9]{24})\/address$/i);
     if (budgetAddressMatch && request.method === 'POST') {
-      const user = await getAuthenticatedUser(request);
-      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      const user = await requireScreen(request, response, 'budget');
+      if (!user) return;
       const { clientName, address, number } = validateSetAddressRequest(await readJson(request));
       const { lat, lng } = await geocodeAddress(`${address}, ${number}`);
       const budget = await setBudgetAddressForUser(budgetAddressMatch[1], user.id, { clientName, address, number, lat, lng }, user.unrestricted);
@@ -295,8 +321,8 @@ async function requestHandler(request, response) {
     // navegador já sabe as dimensões da imagem antes de mandar (lido com createImageBitmap).
     const floorPlanMatch = url.pathname.match(/^\/api\/budgets\/([a-f0-9]{24})\/floorplan$/i);
     if (floorPlanMatch && request.method === 'POST') {
-      const user = await getAuthenticatedUser(request);
-      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      const user = await requireScreen(request, response, 'budget');
+      if (!user) return;
       const existing = await getBudgetForUser(floorPlanMatch[1], user.id, user.unrestricted);
       if (!existing) return sendJson(response, 404, { detail: 'Orçamento não encontrado.' });
       if (existing.status === 'fechado') return sendJson(response, 400, { detail: 'Orçamento fechado só pode ser visualizado — não é possível editar.' });
@@ -314,23 +340,23 @@ async function requestHandler(request, response) {
     }
     const budgetIdMatch = url.pathname.match(/^\/api\/budgets\/([a-f0-9]{24})$/i);
     if (budgetIdMatch && request.method === 'GET') {
-      const user = await getAuthenticatedUser(request);
-      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      const user = await requireScreen(request, response, 'budget');
+      if (!user) return;
       const budget = await getBudgetForUser(budgetIdMatch[1], user.id, user.unrestricted);
       if (!budget) return sendJson(response, 404, { detail: 'Orçamento não encontrado.' });
       return sendJson(response, 200, budget);
     }
     if (budgetIdMatch && request.method === 'PATCH') {
-      const user = await getAuthenticatedUser(request);
-      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      const user = await requireScreen(request, response, 'budget');
+      if (!user) return;
       const patch = validateBudgetSaveRequest(await readJson(request));
       const budget = await updateBudgetForUser(budgetIdMatch[1], user.id, patch, user.unrestricted);
       if (!budget) return sendJson(response, 404, { detail: 'Orçamento não encontrado.' });
       return sendJson(response, 200, budget);
     }
     if (budgetIdMatch && request.method === 'DELETE') {
-      const user = await getAuthenticatedUser(request);
-      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      const user = await requireScreen(request, response, 'budget');
+      if (!user) return;
       const result = await deleteBudgetForUser(budgetIdMatch[1], user.id, user.unrestricted);
       if (!result.deleted) {
         if (result.reason === 'not_found') return sendJson(response, 404, { detail: 'Orçamento não encontrado.' });

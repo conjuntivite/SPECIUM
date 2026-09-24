@@ -4,6 +4,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { Badge } from '@/components/ui/badge'
 import { listUsers, updateUser } from '@/lib/api'
 import { UserFormDialog } from './UserFormDialog'
+import { SCREENS, allowedScreens } from '@/lib/screens'
 
 function formatDate(value) {
   return value ? new Date(value).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'
@@ -57,6 +58,7 @@ export function UsersView({ auth }) {
               <TableHead>Nome</TableHead>
               <TableHead>E-mail</TableHead>
               <TableHead>Papel</TableHead>
+              <TableHead>Telas</TableHead>
               <TableHead>Criado em</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
@@ -67,6 +69,9 @@ export function UsersView({ auth }) {
                 <TableCell>{user.name || <span className="text-muted-foreground">(sem nome)</span>}</TableCell>
                 <TableCell>{user.email}</TableCell>
                 <TableCell><Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>{user.role === 'admin' ? 'Administrador' : 'Usuário'}</Badge></TableCell>
+                <TableCell title={allowedScreens(user).map((v) => SCREENS.find((s) => s.value === v)?.label).join(', ')}>
+                  {allowedScreens(user).length === SCREENS.length ? 'Todas' : `${allowedScreens(user).length} de ${SCREENS.length}`}
+                </TableCell>
                 <TableCell>{formatDate(user.createdAt)}</TableCell>
                 <TableCell className="text-right">
                   <Button type="button" variant="ghost" size="sm" onClick={() => openEdit(user)}>Editar</Button>

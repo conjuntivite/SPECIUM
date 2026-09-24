@@ -49,3 +49,17 @@ test('validateUserUpdateRequest: foto aceita data URL png/jpeg/webp, null remove
   assert.throws(() => validateUserUpdateRequest({ avatar: 'https://exemplo.com/foto.png' }));
   assert.throws(() => validateUserUpdateRequest({ avatar: `data:image/png;base64,${'A'.repeat(200_001)}` }));
 });
+
+test('permissão por tela: admin e conta sem lista acessam tudo; lista restringe; validação só aceita telas conhecidas', () => {
+  const { canAccessScreen } = require('../lib/auth');
+  const { validateUserUpdateRequest } = require('../lib/validators');
+  assert.equal(canAccessScreen(null, 'budget'), false);
+  assert.equal(canAccessScreen({ role: 'admin', screens: [] }, 'products'), true);
+  assert.equal(canAccessScreen({ role: 'user', screens: null }, 'products'), true);
+  assert.equal(canAccessScreen({ role: 'user', screens: ['budget'] }, 'products'), false);
+  assert.equal(canAccessScreen({ role: 'user', screens: ['quote-audit'] }, 'products', 'quote-audit'), true);
+  assert.deepEqual(validateUserUpdateRequest({ screens: ['budget', 'budget', 'search'] }), { screens: ['budget', 'search'] });
+  assert.deepEqual(validateUserUpdateRequest({ screens: [] }), { screens: [] });
+  assert.throws(() => validateUserUpdateRequest({ screens: ['users'] }));
+  assert.throws(() => validateUserUpdateRequest({ screens: 'budget' }));
+});

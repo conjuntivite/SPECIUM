@@ -3,9 +3,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { UserAvatar, resizeAvatar } from './UserAvatar'
+import { SCREENS, allowedScreens } from '@/lib/screens'
 
-const emptyForm = { name: '', email: '', password: '', role: 'user', avatar: null }
+const emptyForm = { name: '', email: '', password: '', role: 'user', avatar: null, screens: SCREENS.map((s) => s.value) }
 
 export function UserFormDialog({ open, user, onOpenChange, onSubmit }) {
   const [form, setForm] = useState(emptyForm)
@@ -14,7 +16,7 @@ export function UserFormDialog({ open, user, onOpenChange, onSubmit }) {
 
   useEffect(() => {
     if (open) {
-      setForm(user ? { name: user.name || '', email: user.email, password: '', role: user.role, avatar: user.avatar || null } : emptyForm)
+      setForm(user ? { name: user.name || '', email: user.email, password: '', role: user.role, avatar: user.avatar || null, screens: allowedScreens({ ...user, role: 'user' }) } : emptyForm)
       setError('')
     }
   }, [open, user])
@@ -29,6 +31,10 @@ export function UserFormDialog({ open, user, onOpenChange, onSubmit }) {
     } catch (err) {
       setError(err.message)
     }
+  }
+
+  function toggleScreen(value) {
+    setForm((f) => ({ ...f, screens: f.screens.includes(value) ? f.screens.filter((v) => v !== value) : [...f.screens, value] }))
   }
 
   async function handleSubmit(e) {
@@ -115,6 +121,28 @@ export function UserFormDialog({ open, user, onOpenChange, onSubmit }) {
                   <SelectItem value="admin">Administrador</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium">Telas liberadas</label>
+              {form.role === 'admin' ? (
+                <p className="text-sm text-muted-foreground">Administrador acessa todas as telas, inclusive Usuários e Instruções da IA.</p>
+              ) : (
+                <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                  {SCREENS.map((screen) => (
+                    <label key={screen.value} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted">
+                      <input
+                        type="checkbox"
+                        className="size-4 accent-[var(--primary)]"
+                        checked={form.screens.includes(screen.value)}
+                        onChange={() => toggleScreen(screen.value)}
+                      />
+                      <FontAwesomeIcon icon={screen.icon} className="size-3.5 text-muted-foreground" />
+                      {screen.label}
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
 
             {error ? <p className="text-sm text-destructive">{error}</p> : null}

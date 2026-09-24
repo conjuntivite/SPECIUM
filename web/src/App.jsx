@@ -11,6 +11,7 @@ import { UsersView } from '@/components/users/UsersView'
 import { AiSettingsView } from '@/components/settings/AiSettingsView'
 import { LoginView } from '@/components/auth/LoginView'
 import { useAuth } from '@/hooks/useAuth'
+import { allowedScreens } from '@/lib/screens'
 
 function App() {
   const auth = useAuth()
@@ -26,16 +27,24 @@ function App() {
   if (auth.checking) return null
   if (!auth.user) return <LoginView auth={auth} />
 
+  // Aba ativa sem permissão (ou o padrão 'budget' pra quem não tem Orçamento) cai na primeira liberada;
+  // atalhos entre telas (ex.: "ir pra Produtos" de dentro do orçamento) só navegam se a tela for dele.
+  const allowed = allowedScreens(auth.user)
+  const adminTabs = auth.user.role === 'admin' ? ['users', 'ai-settings'] : []
+  const currentTab = allowed.includes(activeTab) || adminTabs.includes(activeTab) ? activeTab : (allowed[0] || adminTabs[0] || '')
+  const goTo = (tab) => { if (allowed.includes(tab)) setActiveTab(tab) }
+
   return (
     <ViewTabs
       user={auth.user}
       onLogout={auth.logout}
+      allowed={allowed}
       footer={
         <footer className="mt-10 text-center text-sm text-muted-foreground">
           <p>SPECIUM © 2026 • Intelligent System Design</p>
         </footer>
       }
-      value={activeTab}
+      value={currentTab}
       onValueChange={setActiveTab}
       budgetPanel={
         currentBudgetId ? (
@@ -43,9 +52,9 @@ function App() {
             budgetId={currentBudgetId}
             initialStep={initialBudgetStep}
             onBackToList={() => setCurrentBudgetId(null)}
-            onSwitchToSearch={() => setActiveTab('search')}
-            onGoToProducts={() => setActiveTab('products')}
-            onGoToCategories={() => setActiveTab('categories')}
+            onSwitchToSearch={() => goTo('search')}
+            onGoToProducts={() => goTo('products')}
+            onGoToCategories={() => goTo('categories')}
           />
         ) : (
           <BudgetsListView onOpenBudget={openBudget} />

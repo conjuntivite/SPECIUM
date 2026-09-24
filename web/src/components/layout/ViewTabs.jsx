@@ -1,14 +1,12 @@
 import { useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import {
-  faClipboardList, faBox, faMagnifyingGlass, faTag, faUsers, faFileShield, faRobot, faComments,
-  faAnglesLeft, faAnglesRight, faRightFromBracket,
-} from '@fortawesome/free-solid-svg-icons'
+import { faUsers, faRobot, faAnglesLeft, faAnglesRight, faRightFromBracket } from '@fortawesome/free-solid-svg-icons'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { Brand } from './Brand'
 import { ThemeSwitcher } from './ThemeSwitcher'
 import { UserAvatar } from '@/components/users/UserAvatar'
+import { SCREENS } from '@/lib/screens'
 
 const COLLAPSED_KEY = 'specium.sidebarCollapsed'
 
@@ -19,7 +17,7 @@ function readCollapsed() {
 // Menu lateral fixo à esquerda; recolhido mostra só os ícones (o nome vira tooltip nativo via title).
 // z-30 de propósito: o canvas do orçamento (BudgetView, fixed z-40) continua cobrindo a tela inteira.
 export function ViewTabs({
-  value, onValueChange, user, onLogout, footer, budgetPanel, searchPanel, productsPanel, categoriesPanel, quoteAuditPanel, assistantPanel,
+  value, onValueChange, user, onLogout, footer, allowed, budgetPanel, searchPanel, productsPanel, categoriesPanel, quoteAuditPanel, assistantPanel,
   usersPanel, showUsersTab, aiSettingsPanel, showAiSettingsTab,
 }) {
   const [collapsed, setCollapsed] = useState(readCollapsed)
@@ -31,13 +29,13 @@ export function ViewTabs({
     })
   }
 
+  // `allowed`: telas liberadas pro usuário logado (lib/screens.js) — as outras nem aparecem no menu.
+  const panels = {
+    budget: budgetPanel, search: searchPanel, products: productsPanel, categories: categoriesPanel,
+    'quote-audit': quoteAuditPanel, assistant: assistantPanel,
+  }
   const items = [
-    { value: 'budget', icon: faClipboardList, label: 'Orçamento' },
-    { value: 'search', icon: faMagnifyingGlass, label: 'Busca avançada por item' },
-    { value: 'products', icon: faBox, label: 'Produtos' },
-    { value: 'categories', icon: faTag, label: 'Categorias' },
-    { value: 'quote-audit', icon: faFileShield, label: 'Validar orçamento (PDF)' },
-    { value: 'assistant', icon: faComments, label: 'Assistente ONE/SIAM' },
+    ...SCREENS.filter((s) => allowed.includes(s.value)),
     ...(showUsersTab ? [{ value: 'users', icon: faUsers, label: 'Usuários' }] : []),
     ...(showAiSettingsTab ? [{ value: 'ai-settings', icon: faRobot, label: 'Instruções da IA' }] : []),
   ]
@@ -108,12 +106,12 @@ export function ViewTabs({
 
       <div className={cn('min-w-0 flex-1 transition-[padding] duration-200', collapsed ? 'pl-16' : 'pl-60')}>
         <div className="mx-auto max-w-[1100px] px-6 py-7">
-          <TabsContent value="budget">{budgetPanel}</TabsContent>
-          <TabsContent value="search">{searchPanel}</TabsContent>
-          <TabsContent value="products">{productsPanel}</TabsContent>
-          <TabsContent value="categories">{categoriesPanel}</TabsContent>
-          <TabsContent value="quote-audit">{quoteAuditPanel}</TabsContent>
-          <TabsContent value="assistant">{assistantPanel}</TabsContent>
+          {allowed.map((screen) => <TabsContent key={screen} value={screen}>{panels[screen]}</TabsContent>)}
+          {!items.length ? (
+            <p className="py-20 text-center text-sm text-muted-foreground">
+              Sua conta ainda não tem acesso a nenhuma tela. Fale com um administrador.
+            </p>
+          ) : null}
           {showUsersTab ? <TabsContent value="users">{usersPanel}</TabsContent> : null}
           {showAiSettingsTab ? <TabsContent value="ai-settings">{aiSettingsPanel}</TabsContent> : null}
           {footer}

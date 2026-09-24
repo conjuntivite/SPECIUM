@@ -40,6 +40,25 @@ const {
 // depois de mostrar o resultado.
 after(() => closeDb());
 
+// Rotas de tela exigem login + permissão (requireScreen em server.js): registra uma conta descartável
+// (sem `screens` = todas as telas liberadas, ou com a lista passada) e devolve um fetch que já manda
+// o cookie dela. A conta é apagada direto no Mongo no fim do teste (o app não tem exclusão de usuário).
+async function loggedInFetch(baseUrl, t, screens) {
+  const email = `__teste__sessao-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
+  const registered = await globalThis.fetch(`${baseUrl}/api/auth/register`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: 'senha12345' }),
+  });
+  assert.equal(registered.status, 201);
+  const cookie = registered.headers.getSetCookie()[0].split(';')[0];
+  const withUsers = async (fn) => {
+    const client = await MongoClient.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017');
+    try { await fn(client.db(process.env.MONGODB_DB || 'comprador_inviolavel').collection('users')); } finally { await client.close(); }
+  };
+  if (screens) await withUsers((users) => users.updateOne({ email }, { $set: { screens } }));
+  t.after(() => withUsers((users) => users.deleteOne({ email })));
+  return (url, init = {}) => globalThis.fetch(url, { ...init, headers: { ...init.headers, Cookie: cookie } });
+}
+
 function fakeAmazonBrowser(items) {
   return {
     newPage: async () => ({
@@ -292,6 +311,7 @@ test('routes /api/search to Intelbras by default field name, and to a specific p
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => server.close());
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const fetch = await loggedInFetch(baseUrl, t);
 
   const response = await fetch(`${baseUrl}/api/search`, {
     method: 'POST',
@@ -338,6 +358,7 @@ test('POST /api/compare validates the selection size and mixes structured Intelb
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => server.close());
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const fetch = await loggedInFetch(baseUrl, t);
 
   const tooFew = await fetch(`${baseUrl}/api/compare`, {
     method: 'POST',
@@ -370,6 +391,7 @@ test('serves the interface and performs a direct search over HTTP', async (t) =>
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => server.close());
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const fetch = await loggedInFetch(baseUrl, t);
 
   const page = await fetch(`${baseUrl}/`);
   assert.equal(page.status, 200);
@@ -402,6 +424,7 @@ test('POST /api/recipe/suggestions expõe severidade critical/optional para o re
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => server.close());
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const fetch = await loggedInFetch(baseUrl, t);
 
   // "Switch Intelbras 8 Portas" não bate com nenhuma categoria exata (falta Fast/Giga/PoE no
   // título) — nenhuma opção do requisito "Alimentação" (PoE por capacidade OU Fonte 12V por
@@ -443,6 +466,7 @@ test('POST /api/recipe/suggestions validates the payload and returns missing ess
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => server.close());
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const fetch = await loggedInFetch(baseUrl, t);
 
   const empty = await fetch(`${baseUrl}/api/recipe/suggestions`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: [] }),
@@ -665,6 +689,7 @@ test('POST /api/recipe/prices searches each suggested item and reports its avera
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => server.close());
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const fetch = await loggedInFetch(baseUrl, t);
 
   const response = await fetch(`${baseUrl}/api/recipe/prices`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -681,6 +706,7 @@ test('CRUD de /api/products: cadastra, lista por categoria, atualiza e remove um
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => server.close());
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const fetch = await loggedInFetch(baseUrl, t);
   const category = `__teste__ DVR 16 Canais ${Date.now()}`;
 
   const invalid = await fetch(`${baseUrl}/api/products`, {
@@ -725,6 +751,7 @@ test('CRUD de /api/categories: lista a pré-build semeada, cadastra, atualiza e 
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => server.close());
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const fetch = await loggedInFetch(baseUrl, t);
   const label = `__teste__ Categoria ${Date.now()}`;
 
   const invalid = await fetch(`${baseUrl}/api/categories`, {
@@ -801,6 +828,7 @@ test('DELETE /api/categories/:id recusa remover categoria com produto cadastrado
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => server.close());
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const fetch = await loggedInFetch(baseUrl, t);
   const label = `__teste__ Categoria em uso ${Date.now()}`;
 
   const category = await (await fetch(`${baseUrl}/api/categories`, {
@@ -828,6 +856,7 @@ test('DELETE /api/categories/:id recusa remover categoria referenciada como cand
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => server.close());
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const fetch = await loggedInFetch(baseUrl, t);
   const suffix = Date.now();
 
   const candidate = await (await fetch(`${baseUrl}/api/categories`, {
@@ -881,6 +910,7 @@ test('CRUD de /api/groups: lista, cadastra, recusa nome duplicado e bloqueia exc
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => server.close());
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const fetch = await loggedInFetch(baseUrl, t);
   const name = `__teste__ Grupo ${Date.now()}`;
 
   const listedBefore = await fetch(`${baseUrl}/api/groups`);
@@ -919,6 +949,7 @@ test('CRUD de /api/resources: lista os 4 recursos semeados, cadastra, recusa cha
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => server.close());
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const fetch = await loggedInFetch(baseUrl, t);
   const suffix = Date.now();
   const key = `teste.recurso_${suffix}`;
 
@@ -1046,3 +1077,24 @@ test('POST /api/budgets/:id/floorplan grava a imagem em disco, serve de volta, r
   assert.equal(afterDelete.status, 404);
 });
 
+
+test('permissão por tela: usuário só com Orçamento é barrado em Produtos/Busca/Assistente, e usa Orçamento normalmente', async (t) => {
+  const server = http.createServer(requestHandler);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const fetch = await loggedInFetch(baseUrl, t, ['budget']);
+
+  const me = await (await fetch(`${baseUrl}/api/auth/me`)).json();
+  assert.deepEqual(me.screens, ['budget']);
+  assert.equal((await fetch(`${baseUrl}/api/budgets`)).status, 200);
+  const json = (body) => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  assert.equal((await fetch(`${baseUrl}/api/products`, json({ category: 'x', brand: 'x', model: 'x' }))).status, 403);
+  assert.equal((await fetch(`${baseUrl}/api/categories`, json({ group: 'x', label: 'x' }))).status, 403);
+  assert.equal((await fetch(`${baseUrl}/api/search`, json({ item_name: 'camera' }))).status, 403);
+  assert.equal((await fetch(`${baseUrl}/api/assistant`, json({ messages: [{ role: 'user', content: 'oi' }] }))).status, 403);
+  // Sem login nenhum: 401, não 403.
+  assert.equal((await globalThis.fetch(`${baseUrl}/api/products`, json({}))).status, 401);
+  // Editar permissões é só de admin — usuário comum não edita nem a própria conta.
+  assert.equal((await fetch(`${baseUrl}/api/users/${me.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ screens: ['budget', 'products'] }) })).status, 403);
+});

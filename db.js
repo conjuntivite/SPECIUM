@@ -440,6 +440,7 @@ function toPublicUser(doc) {
   return {
     id: doc._id.toString(), email: doc.email, name: doc.name || null, role: doc.role || 'user', createdAt: doc.createdAt || null,
     unrestricted: doc.unrestricted === true, avatar: doc.avatar || null,
+    screens: Array.isArray(doc.screens) ? doc.screens : null,
   };
 }
 
