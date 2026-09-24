@@ -33,7 +33,7 @@ function EngineFindingRow({ req, onSelect }) {
       <button
         type="button"
         onClick={() => onSelect(req)}
-        className={`w-full rounded-md border-l-2 bg-white/4 px-3 py-2 text-left transition-colors hover:bg-white/8 ${style.border}`}
+        className={`w-full rounded-md border-l-2 bg-foreground/4 px-3 py-2 text-left transition-colors hover:bg-foreground/8 ${style.border}`}
       >
         <span className="mb-0.5 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
           <FontAwesomeIcon icon={style.icon} className="size-3" /> {style.kind}
@@ -82,12 +82,12 @@ function BreakdownRow({ entry, items, expanded, onToggle }) {
   return (
     <li className="text-xs">
       {items ? (
-        <button type="button" onClick={() => onToggle(entry.category)} className="w-full rounded px-1 py-0.5 text-left transition-colors hover:bg-white/8">
+        <button type="button" onClick={() => onToggle(entry.category)} className="w-full rounded px-1 py-0.5 text-left transition-colors hover:bg-foreground/8">
           {row}
         </button>
       ) : <div className="px-1 py-0.5">{row}</div>}
       {expanded ? (
-        <ul className="ml-2 mt-1 flex flex-col gap-0.5 border-l border-white/10 pl-2 text-muted-foreground">
+        <ul className="ml-2 mt-1 flex flex-col gap-0.5 border-l border-foreground/10 pl-2 text-muted-foreground">
           {matches.length
             ? matches.map((m, i) => (<li key={i}>{m.quantity}x {m.name}</li>))
             : <li>Nenhum item do PDF bateu com essa categoria (nome não reconhecido).</li>}
@@ -124,7 +124,7 @@ function RequirementDetailDialog({ req, onClose, categoriesByValue, resourceLabe
               <div>
                 <h4 className="mb-1 text-xs font-semibold text-muted-foreground">Quem exige (demanda: {req.need ?? '—'})</h4>
                 {req.demandBreakdown?.length ? (
-                  <ul className="flex flex-col gap-1 rounded-md bg-white/4 p-2">
+                  <ul className="flex flex-col gap-1 rounded-md bg-foreground/4 p-2">
                     {req.demandBreakdown.map((e, i) => (
                       <BreakdownRow
                         key={i} entry={e} items={items}
@@ -139,7 +139,7 @@ function RequirementDetailDialog({ req, onClose, categoriesByValue, resourceLabe
               <div>
                 <h4 className="mb-1 text-xs font-semibold text-muted-foreground">O que já tenho instalado (oferta: {req.have ?? '—'})</h4>
                 {req.supplyBreakdown?.length ? (
-                  <ul className="flex flex-col gap-1 rounded-md bg-white/4 p-2">
+                  <ul className="flex flex-col gap-1 rounded-md bg-foreground/4 p-2">
                     {req.supplyBreakdown.map((e, i) => (<BreakdownRow key={i} entry={e} />))}
                   </ul>
                 ) : <p className="text-xs text-muted-foreground">Nenhum equipamento do orçamento fornece isso hoje.</p>}
@@ -152,7 +152,7 @@ function RequirementDetailDialog({ req, onClose, categoriesByValue, resourceLabe
                     {equipmentValues.map((value) => {
                       const category = categoriesByValue.get(value)
                       return (
-                        <li key={value} className="rounded-md bg-white/4 p-2 text-xs">
+                        <li key={value} className="rounded-md bg-foreground/4 p-2 text-xs">
                           <p className="mb-1 font-semibold">{category?.label || value}</p>
                           <p><span className="text-muted-foreground">Fornece:</span> {formatProvides(category, resourceLabelByKey)}</p>
                           <p><span className="text-muted-foreground">Exige:</span> {formatRequirements(category, resourceLabelByKey)}</p>

@@ -129,6 +129,37 @@
     @apply font-sans;
   }
 
+  /* Tailwind v4 tirou o cursor de mãozinha dos botões; aqui volta pra tudo que é clicável, num lugar só. */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='tab'],
+  [role='menuitem'],
+  [role='option'],
+  select:not(:disabled),
+  summary,
+  label[for],
+  label:has(input[type='checkbox'], input[type='radio']) {
+    cursor: pointer;
+  }
+
+  /* Valores numéricos alinham coluna a coluna em tabelas (algarismos de largura fixa). */
+  td,
+  th {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Quem pede menos movimento no sistema operacional não vê animação/transição decorativa. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
   /* Scrollbar fina no tom do tema: repouso no cinza do texto secundário (--muted-foreground),
      realce vermelho (--primary) no hover — em vez da barra cinza padrão do navegador. */
   * {

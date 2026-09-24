@@ -1,5 +1,5 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faLightbulb } from '@fortawesome/free-solid-svg-icons'
+import { faLightbulb, faStar } from '@fortawesome/free-solid-svg-icons'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -19,7 +19,7 @@ export function DealCard({ deal, isPrimary, rankLabel, checked, disabled, onTogg
           {rankLabel ? <Badge className="bg-badge-green/15 text-badge-green">{rankLabel}</Badge> : null}
           {deal.cost_benefit_score ? (
             <Badge className="bg-badge-green/15 font-mono text-badge-green">
-              ★ {deal.cost_benefit_score.toFixed(1)} / 10
+              <FontAwesomeIcon icon={faStar} aria-hidden="true" /> {deal.cost_benefit_score.toFixed(1)} / 10
             </Badge>
           ) : null}
         </div>
@@ -45,7 +45,7 @@ export function DealCard({ deal, isPrimary, rankLabel, checked, disabled, onTogg
           {deal.snippet || 'Clique para conferir os detalhes na loja.'}
         </p>
         {deal.recommendation_reason ? (
-          <div className="mb-2 flex items-start gap-1.5 rounded-lg bg-white/5 p-2 text-sm">
+          <div className="mb-2 flex items-start gap-1.5 rounded-lg bg-foreground/5 p-2 text-sm">
             <FontAwesomeIcon icon={faLightbulb} className="size-4 shrink-0 translate-y-0.5" /> {deal.recommendation_reason}
           </div>
         ) : null}

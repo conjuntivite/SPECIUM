@@ -74,7 +74,7 @@ export function BudgetsListView({ onOpenBudget }) {
       ) : null}
 
       {budgets.length ? (
-        <Table>
+        <Table stickyHeader>
           <TableHeader>
             <TableRow>
               <TableHead>Cliente</TableHead>

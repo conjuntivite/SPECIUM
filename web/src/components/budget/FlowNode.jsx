@@ -6,7 +6,7 @@ import { getProductIcon } from '@/lib/productIcons'
 import { formatBRL, parseBRL } from '@/lib/money'
 import { ContainerAddPanel } from './ContainerAddPanel'
 
-const handleClass = '!size-2.5 !border-2 !border-[#0a0a0c] !bg-zinc-300'
+const handleClass = '!size-2.5 !border-2 !border-flow-canvas !bg-zinc-300'
 
 // Grade simples pros filhos de um container aberto (sem posição livre no MVP — ver
 // recurso-container.txt seção 7, "priorize usabilidade e simplicidade"). Única fonte de verdade,
@@ -70,6 +70,8 @@ function QuantityRow({ item, onQtyChange, readOnly }) {
             type="button"
             className="flex size-[1.15rem] items-center justify-center rounded-[0.3rem] bg-foreground/8 text-card-foreground hover:bg-foreground/15"
             onClick={() => onQtyChange(item.id, -1)}
+            aria-label="Diminuir quantidade"
+            title="Diminuir quantidade"
           >
             <FontAwesomeIcon icon={faMinus} className="size-2.5" />
           </button>
@@ -78,6 +80,8 @@ function QuantityRow({ item, onQtyChange, readOnly }) {
             type="button"
             className="flex size-[1.15rem] items-center justify-center rounded-[0.3rem] bg-foreground/8 text-card-foreground hover:bg-foreground/15"
             onClick={() => onQtyChange(item.id, 1)}
+            aria-label="Aumentar quantidade"
+            title="Aumentar quantidade"
           >
             <FontAwesomeIcon icon={faPlus} className="size-2.5" />
           </button>

@@ -236,7 +236,7 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
   // Flow, então sem isso aqui o clique seleciona (funciona, dá pra apagar) mas não SE VÊ selecionado.
   const displayEdges = useMemo(() => edges.map((edge) => (
     edge.selected && edge.style
-      ? { ...edge, style: { ...edge.style, stroke: '#fca5a5', strokeWidth: (edge.style.strokeWidth ?? 2) + 1.5 } }
+      ? { ...edge, style: { ...edge.style, stroke: 'var(--primary)', strokeWidth: (edge.style.strokeWidth ?? 2) + 1.5 } }
       : edge
   )), [edges])
 

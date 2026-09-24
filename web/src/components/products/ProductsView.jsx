@@ -124,7 +124,7 @@ export function ProductsView() {
       ) : null}
 
       {filteredProducts.length ? (
-        <Table>
+        <Table stickyHeader>
           <TableHeader>
             <TableRow>
               <TableHead className="w-10"></TableHead>

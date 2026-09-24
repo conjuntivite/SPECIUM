@@ -52,7 +52,7 @@ export function UsersView({ auth }) {
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       {users.length ? (
-        <Table>
+        <Table stickyHeader>
           <TableHeader>
             <TableRow>
               <TableHead>Nome</TableHead>

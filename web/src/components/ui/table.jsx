@@ -1,14 +1,20 @@
 import * as React from "react"
 import { cn } from "cn"
 
+// stickyHeader: pra listas de página inteira. Tira a rolagem horizontal própria do contêiner (senão o
+// sticky gruda nele, não na janela) e fixa o cabeçalho no topo com fundo sólido ao rolar a lista.
 function Table({
   className,
+  stickyHeader = false,
   ...props
 }) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className={cn(
+        "relative w-full overflow-x-auto",
+        stickyHeader && "overflow-visible [&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-background [&_th]:shadow-[inset_0_-1px_0_var(--border)]"
+      )}
     >
       <table
         data-slot="table"

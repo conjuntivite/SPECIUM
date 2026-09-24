@@ -90,7 +90,7 @@ function RequirementOptionFields({ option, otherCategories, labelByValue, resour
           onDeleteResource={onDeleteResource}
         />
         <div className="flex w-28 flex-col gap-1">
-          <label className="text-[0.65rem] text-muted-foreground">Consumo/un.</label>
+          <label className="text-xs text-muted-foreground">Consumo/un.</label>
           <Input
             type="number" min="1" value={option.unitsPerItem}
             onChange={(e) => onChange({ ...option, unitsPerItem: e.target.value })}
@@ -124,7 +124,7 @@ function RequirementOptionFields({ option, otherCategories, labelByValue, resour
           ))}
         </div>
       ) : (
-        <p className="text-[0.65rem] text-muted-foreground">Nenhuma categoria candidata ainda.</p>
+        <p className="text-xs text-muted-foreground">Nenhuma categoria candidata ainda.</p>
       )}
     </div>
   )
@@ -227,7 +227,7 @@ export function RequirementsEditor({ requirements, otherCategories, labelByValue
                 <div className="flex flex-col gap-2 border-l-2 border-border pl-3">
                   {req.options.map((option, optIndex) => (
                     <div key={optIndex} className="flex items-start gap-2">
-                      <span className="mt-1.5 text-[0.65rem] text-muted-foreground">{optIndex === 0 ? 'Opção 1' : `OU opção ${optIndex + 1}`}</span>
+                      <span className="mt-1.5 text-xs text-muted-foreground">{optIndex === 0 ? 'Opção 1' : `OU opção ${optIndex + 1}`}</span>
                       <div className="flex-1">
                         <Select
                           value={option.type}
