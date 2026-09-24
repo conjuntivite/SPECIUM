@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCheck, faMoon, faPalette, faSun } from '@fortawesome/free-solid-svg-icons'
 import { useTheme } from '@/hooks/useTheme'
+import { cn } from '@/lib/utils'
 
 const MODES = [
   { value: 'dark', label: 'Escuro', icon: faMoon },
@@ -13,7 +14,9 @@ const MODES = [
 // acima do canvas de orçamento (BudgetView é `fixed z-40` e cobre a página inteira nessa aba, ver
 // SPEC.md "achado ao testar" na seção do cadastro de Recursos), senão fica inacessível a partir da
 // tela inicial, igual quase aconteceu com a aba Recursos.
-export function ThemeSwitcher() {
+// `inline`: versão do rodapé do menu lateral (linha do menu, popup abre pra direita); `showLabel` mostra
+// o texto ao lado do ícone quando o menu está expandido.
+export function ThemeSwitcher({ inline = false, showLabel = false }) {
   const { mode, customColor, setMode, setCustomColor } = useTheme()
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)
@@ -30,18 +33,22 @@ export function ThemeSwitcher() {
   const activeIcon = MODES.find((m) => m.value === mode)?.icon || faMoon
 
   return (
-    <div ref={rootRef} className="fixed top-4 right-4 z-50">
+    <div ref={rootRef} className={inline ? 'relative' : 'fixed top-4 right-4 z-50'}>
       <button
         type="button"
         title="Tema"
+        aria-label="Tema"
         onClick={() => setOpen((o) => !o)}
-        className="flex size-9 items-center justify-center rounded-full border border-border bg-card/90 text-foreground backdrop-blur transition-colors hover:bg-secondary"
+        className={inline
+          ? cn('flex h-10 w-full items-center gap-3 rounded-md px-3 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground', !showLabel && 'justify-center px-0')
+          : 'flex size-9 items-center justify-center rounded-full border border-border bg-card/90 text-foreground backdrop-blur transition-colors hover:bg-secondary'}
       >
         <FontAwesomeIcon icon={activeIcon} className="size-4" />
+        {inline && showLabel ? <span>Tema</span> : null}
       </button>
 
       {open ? (
-        <div className="absolute top-11 right-0 flex w-52 flex-col gap-0.5 rounded-lg border border-border bg-popover p-1.5 text-popover-foreground shadow-lg">
+        <div className={cn(inline ? 'absolute bottom-0 left-full ml-2' : 'absolute top-11 right-0', 'z-50 flex w-52 flex-col gap-0.5 rounded-lg border border-border bg-popover p-1.5 text-popover-foreground shadow-lg')}>
           {MODES.map(({ value, label, icon }) => (
             <button
               key={value}

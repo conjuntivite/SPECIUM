@@ -40,3 +40,12 @@ test('serializes the session cookie as HttpOnly and SameSite=Lax', () => {
 test('clears the session cookie with Max-Age=0', () => {
   assert.match(serializeClearSessionCookie(), /^session=;.*Max-Age=0/);
 });
+
+test('validateUserUpdateRequest: foto aceita data URL png/jpeg/webp, null remove, recusa SVG/URL/arquivo grande', () => {
+  const { validateUserUpdateRequest } = require('../lib/validators');
+  assert.deepEqual(validateUserUpdateRequest({ avatar: 'data:image/jpeg;base64,/9j/4AAQ==' }), { avatar: 'data:image/jpeg;base64,/9j/4AAQ==' });
+  assert.deepEqual(validateUserUpdateRequest({ avatar: null }), { avatar: null });
+  assert.throws(() => validateUserUpdateRequest({ avatar: 'data:image/svg+xml;base64,PHN2Zz4=' }));
+  assert.throws(() => validateUserUpdateRequest({ avatar: 'https://exemplo.com/foto.png' }));
+  assert.throws(() => validateUserUpdateRequest({ avatar: `data:image/png;base64,${'A'.repeat(200_001)}` }));
+});

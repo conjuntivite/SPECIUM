@@ -1,11 +1,10 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faLock } from '@fortawesome/free-solid-svg-icons'
-import { Brand } from './Brand'
 
+// Apresentação do sistema — só aparece na tela de login (a logo fica logo acima, no LoginView).
 export function Header() {
   return (
-    <header className="mb-5 text-center">
-      <div className="mb-4 flex justify-center"><Brand icon className="text-3xl" /></div>
+    <header className="text-center">
       <div className="mb-5 inline-flex items-center gap-1.5 rounded-full border border-red-500/25 bg-red-500/10 px-4 py-1.5 text-sm font-semibold tracking-wide text-[var(--primary)]">
         <FontAwesomeIcon icon={faLock} className="size-4" />
         Receita de Instalação para o Comercial

@@ -3,8 +3,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { UserAvatar, resizeAvatar } from './UserAvatar'
 
-const emptyForm = { name: '', email: '', password: '', role: 'user' }
+const emptyForm = { name: '', email: '', password: '', role: 'user', avatar: null }
 
 export function UserFormDialog({ open, user, onOpenChange, onSubmit }) {
   const [form, setForm] = useState(emptyForm)
@@ -13,10 +14,22 @@ export function UserFormDialog({ open, user, onOpenChange, onSubmit }) {
 
   useEffect(() => {
     if (open) {
-      setForm(user ? { name: user.name || '', email: user.email, password: '', role: user.role } : emptyForm)
+      setForm(user ? { name: user.name || '', email: user.email, password: '', role: user.role, avatar: user.avatar || null } : emptyForm)
       setError('')
     }
   }, [open, user])
+
+  async function handleAvatarFile(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    try {
+      const avatar = await resizeAvatar(file)
+      setForm((f) => ({ ...f, avatar }))
+    } catch (err) {
+      setError(err.message)
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -47,6 +60,21 @@ export function UserFormDialog({ open, user, onOpenChange, onSubmit }) {
           </DialogHeader>
 
           <div className="mt-4 flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <UserAvatar user={{ ...form }} className="size-14 text-xl" />
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" size="sm" asChild>
+                  <label className="cursor-pointer">
+                    {form.avatar ? 'Trocar foto' : 'Escolher foto'}
+                    <input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={handleAvatarFile} />
+                  </label>
+                </Button>
+                {form.avatar ? (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setForm((f) => ({ ...f, avatar: null }))}>Remover</Button>
+                ) : null}
+              </div>
+            </div>
+
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">Nome</label>
               <Input

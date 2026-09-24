@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Brand } from '@/components/layout/Brand'
 import { ThemeSwitcher } from '@/components/layout/ThemeSwitcher'
+import { Header } from '@/components/layout/Header'
 
 export function LoginView({ auth }) {
   const [mode, setMode] = useState('login')
@@ -22,11 +23,12 @@ export function LoginView({ auth }) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 py-10">
       <ThemeSwitcher />
       <img src="/logo-dark.png" alt="Logo SPECIUM" className="logo-dark w-64" />
       <img src="/logo-light.png" alt="Logo SPECIUM" className="logo-light w-64" />
       <p className="-mt-2 text-sm text-muted-foreground">Intelligent System Design</p>
+      <Header />
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>{mode === 'login' ? 'Entrar' : 'Criar conta'}</CardTitle>

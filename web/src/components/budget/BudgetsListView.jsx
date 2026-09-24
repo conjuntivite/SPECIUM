@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faPlus, faRightFromBracket, faMapLocationDot, faPenToSquare, faEye, faTrashCan } from '@fortawesome/free-solid-svg-icons'
+import { faPlus, faMapLocationDot, faPenToSquare, faEye, faTrashCan } from '@fortawesome/free-solid-svg-icons'
 import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
@@ -14,7 +14,7 @@ function formatDate(value) {
 const STATUS_LABEL = { aberto: 'Aberto', negociacao: 'Em negociação', fechado: 'Fechado' }
 const STATUS_VARIANT = { aberto: 'outline', negociacao: 'secondary', fechado: 'default' }
 
-export function BudgetsListView({ auth, onOpenBudget }) {
+export function BudgetsListView({ onOpenBudget }) {
   const [budgets, setBudgets] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -62,9 +62,6 @@ export function BudgetsListView({ auth, onOpenBudget }) {
         <div className="flex items-center gap-2">
           <Button onClick={handleCreate} disabled={creating}>
             <FontAwesomeIcon icon={faPlus} /> Novo orçamento
-          </Button>
-          <Button variant="ghost" onClick={auth.logout}>
-            <FontAwesomeIcon icon={faRightFromBracket} /> Sair
           </Button>
         </div>
       </div>

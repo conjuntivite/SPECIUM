@@ -180,3 +180,7 @@ export function createResource(data) {
 export function deleteResource(id) {
   return requestJson(`/api/resources/${id}`, { method: 'DELETE' })
 }
+
+export function askAssistant(messages) {
+  return postJson('/api/assistant', { messages })
+}

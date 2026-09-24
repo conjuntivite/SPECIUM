@@ -116,3 +116,16 @@ test('candidateModels: aceita lista separada por vírgula, mantém a ordem e põ
   assert.equal(candidateModels('a/um').filter((m) => m === 'a/um').length, 1);
   assert.ok(candidateModels('').every((m) => m.endsWith(':free')));
 });
+
+test('assistente ONE/SIAM: prompt leva todas as fichas e o histórico é validado', () => {
+  const { buildAssistantSystemPrompt, validateAssistantMessages, EQUIPMENT_KNOWLEDGE } = require('../lib/equipmentKnowledge');
+  const prompt = buildAssistantSystemPrompt();
+  for (const k of EQUIPMENT_KNOWLEDGE) assert.ok(prompt.includes(k.text));
+  assert.deepEqual(validateAssistantMessages([{ role: 'user', content: '  oi ' }]), [{ role: 'user', content: 'oi' }]);
+  assert.throws(() => validateAssistantMessages([]));
+  assert.throws(() => validateAssistantMessages([{ role: 'system', content: 'x' }]));
+  assert.throws(() => validateAssistantMessages([{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }]));
+  assert.throws(() => validateAssistantMessages([{ role: 'user', content: 'x'.repeat(2001) }]));
+  const long = Array.from({ length: 25 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', content: String(i) }));
+  assert.equal(validateAssistantMessages(long).length, 20);
+});

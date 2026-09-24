@@ -41,6 +41,7 @@ const {
   extractPdfText, classifyQuoteItems, auditQuoteWithAI, PDF_AUDIT_MAX_BYTES,
   DEFAULT_CLASSIFICATION_INSTRUCTIONS, DEFAULT_AUDIT_INSTRUCTIONS,
 } = require('./lib/quoteAudit');
+const { askEquipmentAssistant } = require('./lib/equipmentKnowledge');
 const { setShoppingFetcher } = require('./lib/providers/shoppingFetcher');
 const { excludePriceOutliers, selectTopDistinctStores, buildGoogleShoppingUrl } = require('./lib/providers/shared');
 const {
@@ -77,7 +78,7 @@ async function requestHandler(request, response) {
       if (!userDoc || !verifyPassword(password, userDoc.passwordHash)) throw new Error('E-mail ou senha inválidos.');
       const token = generateSessionToken();
       await createSession(token, userDoc._id.toString(), new Date(Date.now() + SESSION_TTL_MS));
-      const loggedInUser = { id: userDoc._id.toString(), email: userDoc.email, name: userDoc.name || null, role: userDoc.role || 'user', unrestricted: userDoc.unrestricted === true };
+      const loggedInUser = { id: userDoc._id.toString(), email: userDoc.email, name: userDoc.name || null, role: userDoc.role || 'user', unrestricted: userDoc.unrestricted === true, avatar: userDoc.avatar || null };
       return sendJson(response, 200, loggedInUser, { 'Set-Cookie': serializeSessionCookie(token) });
     }
     if (request.method === 'POST' && url.pathname === '/api/auth/logout') {
@@ -176,6 +177,12 @@ async function requestHandler(request, response) {
       const engineResult = computeCategoryMissingEssentials(cartItems, categories, resources);
       const aiAudit = await auditQuoteWithAI(items, categories, engineResult.missing, aiInstructions.audit || undefined);
       return sendJson(response, 200, { items, engineResult, aiAudit });
+    }
+    if (request.method === 'POST' && url.pathname === '/api/assistant') {
+      const user = await getAuthenticatedUser(request);
+      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      const body = await readJson(request);
+      return sendJson(response, 200, { answer: await askEquipmentAssistant(body.messages) });
     }
     if (request.method === 'GET' && url.pathname === '/api/products/template') {
       const categories = await listCategories();
