@@ -14,6 +14,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
 import { useCategories } from '@/hooks/useCategories'
+import { displayTitle } from '@/lib/itemTitle'
 import { FlowNode, CONTAINER_GRID, CONTAINER_FOOTER_HEIGHT } from './FlowNode'
 import { ProductPickerDialog } from './ProductPickerDialog'
 
@@ -133,6 +134,7 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
     () => Object.fromEntries(catalog.flatMap((group) => group.items.map((item) => [item.value, item.icon]))),
     [catalog]
   )
+  const categoryValues = useMemo(() => catalog.flatMap((group) => group.items.map((item) => item.value)), [catalog])
   const { screenToFlowPosition, zoomIn, zoomOut, fitView, getIntersectingNodes, getNodes } = useReactFlow()
   // Posição do último clique com botão direito — usada como ponto de spawn ao adicionar item
   // pelo menu (equivalente ao ponto de solto do drag-and-drop da suggestions strip).
@@ -195,6 +197,7 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
       ...node,
       data: {
         ...node.data,
+        shownTitle: displayTitle(node.data.item.title, categoryValues),
         onRemove: () => handleNodeRemove(node.data.item.id, node.data.childCount),
         onQtyChange: budget.updateQuantity,
         onToggleContainer: handleToggleContainer,
@@ -212,7 +215,7 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
         readOnly,
       },
     })))
-  }, [budget.nodes, handleNodeRemove, budget.updateQuantity, handleToggleContainer, budget.removeFromContainer, budget.moveToContainer, budget.resizeContainer, handleAddCategoryToContainer, looseItems, readOnly])
+  }, [budget.nodes, handleNodeRemove, budget.updateQuantity, handleToggleContainer, budget.removeFromContainer, budget.moveToContainer, budget.resizeContainer, handleAddCategoryToContainer, looseItems, readOnly, categoryValues])
 
   const onNodesChange = useCallback((changes) => {
     setNodes((nds) => applyNodeChanges(changes, nds))

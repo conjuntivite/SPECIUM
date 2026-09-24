@@ -95,13 +95,13 @@ function QuantityRow({ item, onQtyChange, readOnly }) {
 // clamp=true limita a 2 linhas — ponytail: teto conhecido, não altura livre — porque o container
 // aberto posiciona a grade de filhos num offset fixo (CONTAINER_GRID.originY) calculado pra caber
 // exatamente 2 linhas de cabeçalho; nome maior que isso ainda corta na 2ª linha ali.
-function NodeTitle({ item, clamp = false }) {
+function NodeTitle({ item, label, clamp = false }) {
   return (
     <span className="flex min-w-0 items-center gap-1.5 text-[0.98rem]" title={item.title}>
       {item.icon ? <FontAwesomeIcon icon={getProductIcon(item.icon)} className="size-3.5 shrink-0" /> : null}
       <span className={`break-words ${clamp ? 'line-clamp-2' : ''}`}>
         {item.quantity > 1 ? `${item.quantity}× ` : ''}
-        {item.title}
+        {label}
       </span>
     </span>
   )
@@ -112,7 +112,7 @@ export function FlowNode({ data, dragging, selected }) {
     item, onRemove, onQtyChange, hasCriticalGap, isLinked,
     isContainer, containerOpen, containerSize, childCount, childQuantityTotal, childValueTotal,
     containedIn, onToggleContainer, onRemoveFromContainer, onAddCategoryToContainer, onMoveToContainer, onResizeContainer, looseItems,
-    readOnly,
+    readOnly, shownTitle,
   } = data
   const unitValue = parseBRL(item.averagePrice)
   // Seleção (clique/shift/ctrl+clique, ou caixa de seleção) tem prioridade visual sobre o alerta de
@@ -133,7 +133,7 @@ export function FlowNode({ data, dragging, selected }) {
       >
         <NodeHandles />
         <div className={`flex items-center justify-between gap-2 px-3 py-2 font-bold ${headerClass}`}>
-          <NodeTitle item={item} />
+          <NodeTitle item={item} label={shownTitle} />
           {!readOnly ? (
             <button type="button" className="nodrag flex size-5 shrink-0 items-center justify-center rounded-full bg-black/15 hover:bg-black/30" title="Remover" onClick={() => onRemove(item.id)}>
               <FontAwesomeIcon icon={faXmark} className="size-3" />
@@ -183,7 +183,7 @@ export function FlowNode({ data, dragging, selected }) {
         ) : null}
         <NodeHandles />
         <div className={`flex items-center justify-between gap-2 px-3 py-2 font-bold ${headerClass}`}>
-          <NodeTitle item={item} clamp />
+          <NodeTitle item={item} label={shownTitle} clamp />
           <span className="nodrag flex shrink-0 items-center gap-1">
             <button type="button" className="flex size-5 items-center justify-center rounded-full bg-black/15 hover:bg-black/30" title="Fechar Container" onClick={() => onToggleContainer(item.id)}>
               <FontAwesomeIcon icon={faCompress} className="size-3" />
@@ -224,7 +224,7 @@ export function FlowNode({ data, dragging, selected }) {
       <NodeHandles />
 
       <div className={`flex items-center justify-between gap-2 px-3 py-2 font-bold ${headerClass}`}>
-        <NodeTitle item={item} />
+        <NodeTitle item={item} label={shownTitle} />
         {!readOnly ? (
           <span className="nodrag flex shrink-0 items-center gap-1">
             {containedIn != null ? (
