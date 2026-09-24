@@ -63,7 +63,7 @@
 /* Tokens sem equivalente semântico no shadcn: cores de severidade do canvas de orçamento, fonte
    monoespaçada pra preços/scores, gradiente de destaque e sombra elevada dos cards. */
 @theme {
-  --font-sans: 'Outfit', sans-serif;
+  --font-sans: 'DM Sans', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
   --color-badge-green: #10b981;
