@@ -176,19 +176,16 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
 
   // Abrir um container pode fazer o card dele crescer em cima de quem está do lado — dois rAF
   // (o primeiro só garante que o commit do React já rodou, o segundo que o ResizeObserver do React
-  // Flow já mediu o DOM no tamanho novo) antes de ler `measured` e resolver a sobreposição. Fechar
-  // não passa por aqui — o retorno ao layout anterior é só o snapshot que budget.toggleContainer já
-  // devolve sozinho (ver useBudget.js).
+  // Flow já mediu o DOM no tamanho novo) antes de ler `measured` e resolver a sobreposição. Desfazer
+  // (ao fechar) e refazer (ao reabrir) esse ajuste é com budget.toggleContainer (ver useBudget.js).
   const handleToggleContainer = useCallback((itemId) => {
-    const item = budget.items.find((i) => i.id === itemId)
-    const opening = item && item.containerOpen === false
-    budget.toggleContainer(itemId)
-    if (!opening) return
+    // Só a primeira abertura na sessão precisa do auto-ajuste; fechar e reabrir volta ao layout de
+    // antes sozinho (ver toggleContainer em useBudget.js).
+    if (!budget.toggleContainer(itemId)) return
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const { positionUpdates, sizeUpdates } = resolveContainerOverlaps(getNodes())
-        if (Object.keys(positionUpdates).length) budget.updatePositions(positionUpdates)
-        if (Object.keys(sizeUpdates).length) budget.setContainerSizes(sizeUpdates)
+        budget.applyOpenAdjustments(itemId, positionUpdates, sizeUpdates)
       })
     })
   }, [budget, getNodes])

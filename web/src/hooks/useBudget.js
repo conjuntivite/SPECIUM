@@ -48,6 +48,10 @@ function sanitizeConnections(rawConnections) {
 
 // Mesma checagem de forma serve pro mapLayout (lat/lng geográfico) e pro floorPlanLayout (pixel da
 // imagem enviada) — ambos são só { markers, lines }, a diferença está no espaço de coordenadas.
+// null/undefined contam como iguais entre si ("sem valor gravado").
+const samePoint = (a, b) => (!a && !b) || (!!a && !!b && a.x === b.x && a.y === b.y)
+const sameSize = (a, b) => (!a && !b) || (!!a && !!b && a.width === b.width && a.height === b.height)
+
 function sanitizeLayout(rawLayout) {
   return rawLayout && typeof rawLayout === 'object' && !Array.isArray(rawLayout) ? rawLayout : {}
 }
@@ -319,41 +323,63 @@ export function useBudget(budgetId) {
 
   const removeFromContainer = useCallback((itemId) => moveToContainer(itemId, null), [moveToContainer])
 
-  // Memória de undo do layout — não é state (não precisa re-renderizar nada sozinha, e não persiste
-  // no servidor, é só conveniência da sessão atual). Ao abrir um container guarda como o canvas
-  // estava; BudgetCanvas.jsx empurra os vizinhos que ficarem sobrepostos logo em seguida. Ao fechar,
-  // devolve exatamente esse retrato — sem isso o auto-ajuste do "abrir" seria uma via de mão única.
-  const containerLayoutSnapshotsRef = useRef(new Map())
+  // Abrir/fechar container não pode desarrumar o que o usuário arrumou. Duas memórias da sessão
+  // (refs: não re-renderizam nem persistem no servidor):
+  // - `seenOpenRef`: containers que já estiveram abertos. Reabrir um deles volta exatamente como
+  //   estava — o auto-ajuste de sobreposição (BudgetCanvas.jsx) NÃO roda de novo, senão ele trata a
+  //   arrumação do próprio usuário (um item encostado noutro de propósito) como sobreposição e empurra.
+  // - `openAdjustmentsRef`: por container, só o que o auto-ajuste mexeu na primeira abertura —
+  //   { positions: { flowKey: { from, to } }, sizes: { itemId: { from, to } } }. Fechar desfaz isso
+  //   (o auto-ajuste não vira via de mão única) e reabrir reaplica; em ambos só mexe no que ainda está
+  //   do jeito que o ajuste deixou (se o usuário arrastou/redimensionou depois, a mão dele vence).
+  const seenOpenRef = useRef(new Set())
+  const openAdjustmentsRef = useRef(new Map())
 
+  // Devolve true quando o container está abrindo pela primeira vez na sessão e precisa do auto-ajuste
+  // (quem chama roda o ajuste e grava com `applyOpenAdjustments`).
   const toggleContainer = useCallback((itemId) => {
     const current = items.find((i) => i.id === itemId)
-    if (!current) return
+    if (!current) return false
     const opening = current.containerOpen === false
-    let restoredSizesById = null
-    if (opening) {
-      containerLayoutSnapshotsRef.current.set(itemId, {
-        positions,
-        containerSizesById: Object.fromEntries(items.filter((i) => i.containerSize).map((i) => [i.id, i.containerSize])),
+    const adjustment = openAdjustmentsRef.current.get(itemId)
+    if (!opening) seenOpenRef.current.add(itemId)
+    // Fechando: volta pro `from`; reabrindo com ajuste gravado: vai pro `to` de novo.
+    const [expected, target] = opening ? ['from', 'to'] : ['to', 'from']
+    if (adjustment) {
+      setPositions((prev) => {
+        const next = { ...prev }
+        Object.entries(adjustment.positions).forEach(([key, change]) => {
+          if (!samePoint(prev[key], change[expected])) return
+          if (change[target]) next[key] = change[target]
+          else delete next[key] // não tinha posição gravada: volta pra posição padrão da grade
+        })
+        return next
       })
-    } else {
-      const snapshot = containerLayoutSnapshotsRef.current.get(itemId)
-      if (snapshot) {
-        setPositions(snapshot.positions)
-        restoredSizesById = snapshot.containerSizesById
-        containerLayoutSnapshotsRef.current.delete(itemId)
-      }
     }
     setItems((prev) => prev.map((item) => {
-      if (item.id === itemId) return { ...item, containerOpen: !item.containerOpen }
-      if (restoredSizesById) return { ...item, containerSize: restoredSizesById[item.id] || null }
-      return item
+      const sizeChange = adjustment?.sizes[item.id]
+      const next = sizeChange && sameSize(item.containerSize, sizeChange[expected]) ? { ...item, containerSize: sizeChange[target] || null } : item
+      return item.id === itemId ? { ...next, containerOpen: !item.containerOpen } : next
     }))
-  }, [items, positions])
+    return opening && !adjustment && !seenOpenRef.current.has(itemId)
+  }, [items])
 
-  // Aplica o tamanho auto-calculado (extensão real dos filhos) em vários containers de uma vez —
-  // abrir um container aninhado pode obrigar o pai, o avô etc. a crescer no mesmo gesto.
-  const setContainerSizes = useCallback((sizesById) => {
-    setItems((prev) => prev.map((item) => (sizesById[item.id] ? { ...item, containerSize: sizesById[item.id] } : item)))
+  // Aplica o auto-ajuste da primeira abertura de `itemId` (vizinhos empurrados, containers
+  // crescidos — abrir um aninhado pode obrigar o pai, o avô etc. a crescer no mesmo gesto) e grava o
+  // antes/depois em `openAdjustmentsRef` pra fechar/reabrir desfazer e refazer só isso.
+  const applyOpenAdjustments = useCallback((itemId, positionUpdates, sizeUpdates) => {
+    const record = { positions: {}, sizes: {} }
+    openAdjustmentsRef.current.set(itemId, record)
+    setPositions((prev) => {
+      Object.entries(positionUpdates).forEach(([key, to]) => { record.positions[key] = { from: prev[key] || null, to } })
+      return { ...prev, ...positionUpdates }
+    })
+    setItems((prev) => prev.map((item) => {
+      const to = sizeUpdates[item.id]
+      if (!to) return item
+      record.sizes[item.id] = { from: item.containerSize || null, to }
+      return { ...item, containerSize: to }
+    }))
   }, [])
 
   // Tamanho manual do container (arrastar os cantos, NodeResizer do React Flow). Arrastar qualquer
@@ -595,7 +621,7 @@ export function useBudget(budgetId) {
     removeFromContainer,
     toggleContainer,
     resizeContainer,
-    setContainerSizes,
+    applyOpenAdjustments,
     clearAll,
     checkPrices,
   }
