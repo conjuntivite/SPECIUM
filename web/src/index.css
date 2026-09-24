@@ -167,3 +167,54 @@
 .logo-dark {
   mix-blend-mode: lighten;
 }
+
+/* Tela de login: painel da direita com fundo de pontos + brilho na cor primária, e o radar
+   de cobertura (ondas de pulso saindo do centro, equipamentos piscando quando a onda chega). Tudo para com
+   prefers-reduced-motion. */
+.login-dots {
+  background-image: radial-gradient(color-mix(in srgb, var(--foreground) 14%, transparent) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.login-glow {
+  background: radial-gradient(600px circle at 50% 60%, color-mix(in srgb, var(--primary) 14%, transparent), transparent 65%);
+}
+/* Onda: anel com um leve preenchimento que cresce do centro até a borda e some. Linear de propósito —
+   o atraso do blip de cada equipamento (inline) conta com a onda chegando no raio dele na proporção. */
+.radar-pulse {
+  border: 2px solid color-mix(in srgb, var(--primary) 60%, transparent);
+  background: radial-gradient(circle, transparent 55%, color-mix(in srgb, var(--primary) 12%, transparent) 100%);
+  transform: scale(0);
+  opacity: 0;
+  animation: radar-pulse linear infinite backwards;
+}
+@keyframes radar-pulse {
+  0% { transform: scale(0); opacity: 0.9; }
+  80% { opacity: 0.35; }
+  100% { transform: scale(1); opacity: 0; }
+}
+/* Anel que se expande a partir do ícone do equipamento; o atraso (inline) casa com a distância dele. */
+.radar-blip::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid var(--primary);
+  opacity: 0;
+  animation: inherit;
+  animation-name: radar-blip;
+}
+.radar-blip { animation: radar-blip-host linear infinite; }
+@keyframes radar-blip-host { from { opacity: 1; } to { opacity: 1; } }
+@keyframes radar-blip {
+  0% { transform: scale(1); opacity: 0.9; }
+  25% { transform: scale(2.4); opacity: 0; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+.radar-core { animation: radar-core 3s ease-in-out infinite; }
+@keyframes radar-core {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .radar-pulse, .radar-blip, .radar-blip::after, .radar-core { animation: none; }
+}
