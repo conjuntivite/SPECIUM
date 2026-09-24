@@ -32,9 +32,7 @@
 }
 
 /* Tema claro — mesmos tokens semânticos, valores alternativos. Ativado via [data-theme="light"] no
-   <html> (ver useTheme.js). O tema "personalizado" usa esta mesma base escura e só sobrescreve
-   --primary/--primary-foreground/--ring inline (ver applyTheme em useTheme.js) — por isso não tem
-   bloco próprio aqui, herda o :root de cima. --color-flow-canvas/--color-flow-grid (definidos no
+   <html> (ver useTheme.js). --color-flow-canvas/--color-flow-grid (definidos no
    @theme abaixo) também são sobrescritos aqui: o canvas do orçamento muda de cor junto, só não um
    branco puro — um cinza suave, mais confortável pra quem fica olhando o quadro por muito tempo. */
 :root[data-theme="light"] {
@@ -159,7 +157,7 @@
   }
 }
 
-/* Logo com wordmark: versão escura por padrão (inclui o tema personalizado, que usa a base escura). */
+/* Logo com wordmark: versão escura por padrão, clara no tema claro. */
 :root[data-theme="light"] .logo-dark,
 :root:not([data-theme="light"]) .logo-light {
   display: none;

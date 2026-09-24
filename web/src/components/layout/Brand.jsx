@@ -1,5 +1,4 @@
-// Wordmark do sistema: "SPECIUM" em negrito, com "SPEC" na cor primária (vermelho padrão, ou a cor
-// escolhida no tema personalizado — --primary é recalculado em useTheme.js) e "IUM" na cor do texto.
+// Wordmark do sistema: "SPECIUM" em negrito, com "SPEC" na cor primária (vermelho) e "IUM" na cor do texto.
 // `icon` põe o gato da logo (web/public/logo-cat.png) à esquerda do nome.
 export function Brand({ className = '', icon = false }) {
   return (

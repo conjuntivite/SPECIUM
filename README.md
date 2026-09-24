@@ -8,7 +8,7 @@ Também compara a ficha técnica de até 3 produtos selecionados: quando a ofert
 
 ## Identidade visual
 
-O sistema se chama **SPECIUM** ("Intelligent System Design"), wordmark em negrito com "SPEC" na cor primária (acompanha o tema personalizado). O estilo segue o [shadcn/ui](https://ui.shadcn.com/): tokens semânticos em `web/src/index.css` com base neutra (zinc) e cor primária vermelha (`--primary: #dc2626`, mantida do rebrand anterior), tema escuro por padrão e tema claro/personalizado pelo botão de tema. O componente `web/src/components/layout/Brand.jsx` renderiza o wordmark (com o olho da logo à esquerda na tela inicial). Arquivos em `web/public/`: `logo.png` (logo completa, usada no login e aqui), `logo-eye.png` (só o olho) e `favicon.png`; todos com fundo transparente, gerados a partir das artes originais em fundo branco.
+O sistema se chama **SPECIUM** ("Intelligent System Design"), wordmark em negrito com "SPEC" na cor primária. O estilo segue o [shadcn/ui](https://ui.shadcn.com/): tokens semânticos em `web/src/index.css` com base neutra (zinc) e cor primária vermelha (`--primary: #dc2626`, mantida do rebrand anterior), tema escuro por padrão e tema claro pelo botão de tema. O componente `web/src/components/layout/Brand.jsx` renderiza o wordmark (com o olho da logo à esquerda na tela inicial). Arquivos em `web/public/`: `logo.png` (logo completa, usada no login e aqui), `logo-eye.png` (só o olho) e `favicon.png`; todos com fundo transparente, gerados a partir das artes originais em fundo branco.
 
 ## Categorias cobertas
 
