@@ -27,6 +27,8 @@ function composeProductTitle(product) {
   return `${product.category} ${product.brand} ${product.model}`.trim()
 }
 
+const noop = () => {}
+
 // Quantos níveis de parentId até a raiz — usado pra desempatar containers aninhados que se
 // sobrepõem (um Rack com um DVR container dentro): o mais profundo (mais interno) é sempre o alvo
 // certo quando o ponto/node também está dentro do(s) mais externo(s).
@@ -356,6 +358,10 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
             nodesDraggable={!readOnly}
             nodesConnectable={!readOnly}
             elementsSelectable={!readOnly}
+            // Sem arrastar nem selecionar (orçamento fechado), o React Flow põe pointer-events:none
+            // no node inteiro e mata os botões de dentro ("Abrir/Fechar Container"). Um onNodeClick,
+            // mesmo vazio, é o que ele usa pra manter o node clicável.
+            onNodeClick={noop}
           >
             <Background variant={BackgroundVariant.Lines} gap={90} color="var(--color-flow-grid)" />
           </ReactFlow>
