@@ -158,3 +158,35 @@ test('assistente: prompt leva todas as fichas e fórmulas e o histórico é vali
   const long = Array.from({ length: 25 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', content: String(i) }));
   assert.equal(validateAssistantMessages(long).length, 20);
 });
+
+test('assistente → orçamento: já nasce com as ligações pertinentes (periférico → controladora → switch → roteador) e cards em fileiras', () => {
+  const { buildBudgetFromClassified } = require('../lib/equipmentKnowledge');
+  const cat = (value) => ({ value, icon: null });
+  const names = ['Botoeira', 'Botoeira', 'Terminal Facial', 'Controladora de Acesso', 'Controladora de Acesso', 'Câmera IP PoE', 'Switch Fast 8 Portas', 'Switch PoE Giga 8 Portas', 'Mikrotik', 'Nobreak', 'Fonte 12V'];
+  const { items, positions, connections } = buildBudgetFromClassified(names.map((n) => ({ name: n, quantity: 1, category: n })), names.map(cat));
+  const idOf = (title, nth = 0) => items.filter((i) => i.title === title)[nth].id;
+  const has = (a, b) => connections.some((c) => c.source === `item-${a}` && c.target === `item-${b}`);
+
+  // Botoeiras repartidas entre as duas controladoras (uma para cada); facial e fonte na primeira.
+  assert.ok(has(idOf('Botoeira', 0), idOf('Controladora de Acesso', 0)));
+  assert.ok(has(idOf('Botoeira', 1), idOf('Controladora de Acesso', 1)));
+  assert.ok(has(idOf('Terminal Facial'), idOf('Controladora de Acesso', 0)));
+  assert.ok(has(idOf('Fonte 12V'), idOf('Controladora de Acesso', 0)));
+  // Controladora → switch; câmera prefere o switch PoE; switch → roteador. Nobreak fica solto.
+  assert.ok(has(idOf('Controladora de Acesso', 0), idOf('Switch Fast 8 Portas')));
+  assert.ok(has(idOf('Câmera IP PoE'), idOf('Switch PoE Giga 8 Portas')));
+  assert.ok(!has(idOf('Câmera IP PoE'), idOf('Switch Fast 8 Portas')));
+  assert.ok(has(idOf('Switch Fast 8 Portas'), idOf('Mikrotik')));
+  assert.ok(!connections.some((c) => c.source === `item-${idOf('Nobreak')}` || c.target === `item-${idOf('Nobreak')}`));
+
+  // Formato aceito pelo canvas; ids únicos; lados coerentes com a posição (origem acima do destino -> bottom/top).
+  assert.equal(new Set(connections.map((c) => c.id)).size, connections.length);
+  const c = connections.find((x) => x.source === `item-${idOf('Botoeira', 0)}`);
+  assert.deepEqual([c.sourceHandle, c.targetHandle], ['bottom', 'top']);
+  assert.match(c.id, /^manual-item-\d+\(bottom\)->item-\d+\(top\)$/);
+  assert.ok(positions[`item-${idOf('Botoeira', 0)}`].y < positions[`item-${idOf('Controladora de Acesso', 0)}`].y);
+  assert.ok(positions[`item-${idOf('Controladora de Acesso', 0)}`].y < positions[`item-${idOf('Switch Fast 8 Portas')}`].y);
+
+  // Sem destino no orçamento, não inventa ligação.
+  assert.deepEqual(buildBudgetFromClassified([{ name: 'x', quantity: 1, category: 'Botoeira' }], [cat('Botoeira')]).connections, []);
+});
