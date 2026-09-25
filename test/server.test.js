@@ -1116,6 +1116,7 @@ test('POST /api/assistant/budget exige Assistente E Orçamento, e recusa respost
 
 test('recuperação de senha: e-mail com link, troca a senha, derruba sessões antigas, token é de uso único e expira; e-mail sem conta não envia nada', async (t) => {
   const { setMailTransport } = require('../lib/mailer');
+  const { clearResetRateLimit } = require('../lib/passwordReset');
   const sent = [];
   setMailTransport({ sendMail: async (m) => sent.push(m) });
   t.after(() => setMailTransport(null));
@@ -1136,6 +1137,7 @@ test('recuperação de senha: e-mail com link, troca a senha, derruba sessões a
   assert.equal(sent.length, 0);
 
   assert.equal((await post('/api/auth/forgot', { email })).status, 200);
+  assert.equal((await post('/api/auth/forgot', { email })).status, 200); // duplo clique: não reenvia
   assert.equal(sent.length, 1);
   const token = sent[0].text.match(/\?reset=([0-9a-f]{64})/)[1];
 
@@ -1148,6 +1150,7 @@ test('recuperação de senha: e-mail com link, troca a senha, derruba sessões a
   assert.equal((await post('/api/auth/login', { email, password: 'senha12345' })).status, 400);
   assert.equal((await post('/api/auth/reset', { token, password: 'outrasenha123' })).status, 400);
 
+  clearResetRateLimit();
   await post('/api/auth/forgot', { email });
   const expiredToken = sent[1].text.match(/\?reset=([0-9a-f]{64})/)[1];
   await db.collection('password_resets').updateMany({}, { $set: { expiresAt: new Date(Date.now() - 1000) } });

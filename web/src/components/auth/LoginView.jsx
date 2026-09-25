@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, MotionConfig } from 'motion/react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -15,6 +15,8 @@ import { cn } from '@/lib/utils'
 // levam PULSE_S pra chegar à borda (expansão linear); cada equipamento "acende" quando uma onda
 // chega no raio dele — `angle` em graus no sentido horário a partir do topo, `radius` em % do
 // raio. Com as ondas defasadas, uma chega a cada PULSE_S / PULSE_WAVES (ver index.css).
+// Intervalo até poder pedir outro e-mail de recuperação — igual ao RESEND_COOLDOWN_MS do servidor (lib/passwordReset.js).
+const RESEND_SECONDS = 60
 const PULSE_S = 3
 const PULSE_WAVES = 3
 const DEVICES = [
@@ -90,6 +92,15 @@ export function LoginView({ auth }) {
   const [showPassword, setShowPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [forgotSent, setForgotSent] = useState(false)
+  const [cooldown, setCooldown] = useState(0)
+  // Ref (não state): dois cliques no mesmo instante chegam antes de `submitting` re-renderizar.
+  const inFlight = useRef(false)
+
+  useEffect(() => {
+    if (cooldown <= 0) return undefined
+    const id = setTimeout(() => setCooldown((c) => c - 1), 1000)
+    return () => clearTimeout(id)
+  }, [cooldown])
   const isLogin = mode === 'login'
   const showEmail = mode !== 'reset'
   const showPasswordField = mode !== 'forgot'
@@ -106,20 +117,24 @@ export function LoginView({ auth }) {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (inFlight.current || (mode === 'forgot' && cooldown > 0)) return
+    inFlight.current = true
     setSubmitting(true)
     try {
       if (mode === 'forgot') {
-        if (await auth.forgot(email)) setForgotSent(true)
+        if (await auth.forgot(email)) { setForgotSent(true); setCooldown(RESEND_SECONDS) }
       } else if (mode === 'reset') {
         if (await auth.reset(resetToken, password)) window.history.replaceState(null, '', '/')
       } else {
         await (isLogin ? auth.login(email, password) : auth.register(email, password))
       }
     } finally {
+      inFlight.current = false
       setSubmitting(false)
     }
   }
 
+  const waiting = mode === 'forgot' && cooldown > 0
   const copy = {
     login: ['Bem-vindo de volta', 'Entre para continuar seus projetos.', 'Entrar', 'Entrando…'],
     register: ['Crie sua conta', 'Use seu e-mail e uma senha de no mínimo 8 caracteres.', 'Criar conta', 'Criando conta…'],
@@ -243,9 +258,9 @@ export function LoginView({ auth }) {
               ) : null}
 
               <motion.div variants={rise} className="mt-2">
-                <Button type="submit" disabled={submitting || (needsConfirm && password !== confirm)} className="h-11 w-full text-base">
+                <Button type="submit" disabled={submitting || waiting || (needsConfirm && password !== confirm)} className="h-11 w-full text-base">
                   <FontAwesomeIcon icon={submitting ? faSpinner : isLogin ? faRightToBracket : faUserPlus} spin={submitting} />
-                  {submitting ? copy[3] : copy[2]}
+                  {submitting ? copy[3] : waiting ? `Reenviar em ${cooldown}s` : mode === 'forgot' && forgotSent ? 'Reenviar link' : copy[2]}
                 </Button>
                 {mode === 'forgot' || mode === 'reset' ? (
                   <button type="button" onClick={() => switchMode('login')} className="mt-3 w-full text-center text-sm text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">

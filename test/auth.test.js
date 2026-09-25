@@ -64,16 +64,22 @@ test('permissão por tela: admin e conta sem lista acessam tudo; lista restringe
   assert.throws(() => validateUserUpdateRequest({ screens: 'budget' }));
 });
 
-test('token de redefinição: 64 hex, só o hash vai pro banco, e o pedido é limitado a 3 por e-mail a cada 15 min', () => {
+test('token de redefinição: 64 hex, só o hash vai pro banco; pedido tem intervalo mínimo de 60 s e limite de 3 por 15 min', () => {
   const { generateResetToken, hashResetToken, allowResetRequest } = require('../lib/passwordReset');
   const { token, tokenHash } = generateResetToken();
   assert.match(token, /^[0-9a-f]{64}$/);
   assert.equal(tokenHash, hashResetToken(token));
   assert.notEqual(tokenHash, token);
   const t0 = 1_000_000;
-  assert.deepEqual([1, 2, 3, 4].map(() => allowResetRequest('a@x.com', t0)), [true, true, true, false]);
+  const s = 1000;
+  assert.equal(allowResetRequest('a@x.com', t0), true);
+  assert.equal(allowResetRequest('a@x.com', t0), false); // duplo clique
+  assert.equal(allowResetRequest('a@x.com', t0 + 59 * s), false);
+  assert.equal(allowResetRequest('a@x.com', t0 + 60 * s), true);
+  assert.equal(allowResetRequest('a@x.com', t0 + 120 * s), true);
+  assert.equal(allowResetRequest('a@x.com', t0 + 180 * s), false); // 4º na janela de 15 min
   assert.equal(allowResetRequest('b@x.com', t0), true);
-  assert.equal(allowResetRequest('a@x.com', t0 + 15 * 60 * 1000 + 1), true);
+  assert.equal(allowResetRequest('a@x.com', t0 + 15 * 60 * s + 1), true);
 });
 
 test('validateResetRequest exige token de 64 hex e senha de 8+ caracteres', () => {
