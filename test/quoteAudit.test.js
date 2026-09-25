@@ -120,7 +120,10 @@ test('candidateModels: aceita lista separada por vírgula, mantém a ordem e põ
 test('assistente → orçamento: só linhas "- Nx" entram, cada linha vira um card e item sem categoria é pulado', () => {
   const { extractBudgetLines, buildBudgetFromClassified } = require('../lib/equipmentKnowledge');
   const answer = 'Sugestão:\n- 2x Endpoint 4 Portas (portas sociais)\n- **1x** Receptor FULL\n* 3X Leitor Wiegand\n- Cabo blindado até 30 m\nPremissa: 2x mais barato';
-  assert.deepEqual(extractBudgetLines(answer), ['2x Endpoint 4 Portas (portas sociais)', '1x Receptor FULL', '3x Leitor Wiegand']);
+  // O comentário entre parênteses é anotação do Assistente, não o nome do equipamento: fora da linha, senão
+  // "(ligado no Endpoint 4 Portas)" casa o produto cadastrado Endpoint 4 Portas com um leitor facial.
+  assert.deepEqual(extractBudgetLines(answer), ['2x Endpoint 4 Portas', '1x Receptor FULL', '3x Leitor Wiegand']);
+  assert.deepEqual(extractBudgetLines('- 2x ONE Leitor Facial (1 por porta, ligado no Endpoint 4 Portas via Wiegand)'), ['2x ONE Leitor Facial']);
   assert.deepEqual(extractBudgetLines('sem orçamento aqui'), []);
 
   const categories = [{ value: 'Controladora de Acesso', icon: 'door' }, { value: 'Leitor', icon: '' }];
