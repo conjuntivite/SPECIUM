@@ -152,7 +152,7 @@ export function AssistantView({ onOpenBudget }) {
   const empty = !messages.length
 
   return (
-    <div className="relative flex h-[calc(100svh-10rem)] min-h-[480px] gap-4">
+    <div className="relative flex h-full min-h-[480px] gap-4">
       <ChatSidebar
         chats={chats}
         activeId={activeId}

@@ -21,6 +21,7 @@ export function ViewTabs({
   usersPanel, showUsersTab, aiSettingsPanel, showAiSettingsTab, smtpPanel, showSmtpTab,
 }) {
   const [collapsed, setCollapsed] = useState(readCollapsed)
+  const fullBleed = value === 'assistant'
 
   function toggleCollapsed() {
     setCollapsed((c) => {
@@ -106,8 +107,9 @@ export function ViewTabs({
       </aside>
 
       <div className={cn('min-w-0 flex-1 transition-[padding] duration-200', collapsed ? 'pl-16' : 'pl-60')}>
-        <div className="mx-auto max-w-[1100px] px-6 py-7">
-          {allowed.map((screen) => <TabsContent key={screen} value={screen}>{panels[screen]}</TabsContent>)}
+        {/* Assistente (estilo chat) usa a área toda ao lado do menu, em altura de tela cheia; as demais telas seguem centradas em 1100px. */}
+        <div className={fullBleed ? 'h-svh p-4' : 'mx-auto max-w-[1100px] px-6 py-7'}>
+          {allowed.map((screen) => <TabsContent key={screen} value={screen} className={screen === 'assistant' ? 'h-full' : undefined}>{panels[screen]}</TabsContent>)}
           {!items.length ? (
             <p className="py-20 text-center text-sm text-muted-foreground">
               Sua conta ainda não tem acesso a nenhuma tela. Fale com um administrador.
@@ -116,7 +118,7 @@ export function ViewTabs({
           {showUsersTab ? <TabsContent value="users">{usersPanel}</TabsContent> : null}
           {showAiSettingsTab ? <TabsContent value="ai-settings">{aiSettingsPanel}</TabsContent> : null}
           {showSmtpTab ? <TabsContent value="smtp-settings">{smtpPanel}</TabsContent> : null}
-          {footer}
+          {fullBleed ? null : footer}
         </div>
       </div>
     </Tabs>
