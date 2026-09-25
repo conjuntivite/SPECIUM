@@ -445,6 +445,57 @@ async function logAssistantExchange({ userId, userEmail, question, answer, model
   await db.collection('assistant_logs').insertOne({ userId, userEmail, question, answer, model, createdAt: new Date() });
 }
 
+// Conversas do Assistente salvas por usuário (tela estilo chat). Ao criar a 11ª, a de menor
+// updatedAt é apagada — o comercial nunca fica "travado" sem poder começar outra.
+const MAX_ASSISTANT_CHATS = 10;
+
+async function getAssistantChatsCollection() {
+  const db = await getDb();
+  const chats = db.collection('assistant_chats');
+  await chats.createIndex({ userId: 1, updatedAt: -1 });
+  return chats;
+}
+
+function assistantChatTitle(messages) {
+  const first = (messages.find((m) => m.role === 'user') || messages[0]).content.replace(/\s+/g, ' ').trim();
+  return first.length > 40 ? `${first.slice(0, 40).trimEnd()}…` : first;
+}
+
+async function listAssistantChats(userId) {
+  const chats = await getAssistantChatsCollection();
+  const docs = await chats.find({ userId }).project({ title: 1, updatedAt: 1 }).sort({ updatedAt: -1 }).toArray();
+  return docs.map((d) => ({ id: d._id.toString(), title: d.title, updatedAt: d.updatedAt }));
+}
+
+async function getAssistantChat(userId, id) {
+  if (!ObjectId.isValid(id)) return null;
+  const chats = await getAssistantChatsCollection();
+  const doc = await chats.findOne({ _id: new ObjectId(id), userId });
+  return doc ? { id: doc._id.toString(), title: doc.title, messages: doc.messages } : null;
+}
+
+// Sem `id`: cria (e poda as antigas). Com `id`: só atualiza as mensagens; null se não for do usuário.
+async function saveAssistantChat(userId, { id, messages }) {
+  const chats = await getAssistantChatsCollection();
+  const now = new Date();
+  if (id) {
+    if (!ObjectId.isValid(id)) return null;
+    const updated = await chats.findOneAndUpdate({ _id: new ObjectId(id), userId }, { $set: { messages, updatedAt: now } }, { returnDocument: 'after' });
+    return updated ? { id, title: updated.title } : null;
+  }
+  const title = assistantChatTitle(messages);
+  const { insertedId } = await chats.insertOne({ userId, title, messages, createdAt: now, updatedAt: now });
+  const stale = await chats.find({ userId }).project({ _id: 1 }).sort({ updatedAt: -1 }).skip(MAX_ASSISTANT_CHATS).toArray();
+  if (stale.length) await chats.deleteMany({ _id: { $in: stale.map((d) => d._id) } });
+  return { id: insertedId.toString(), title };
+}
+
+async function deleteAssistantChat(userId, id) {
+  if (!ObjectId.isValid(id)) return false;
+  const chats = await getAssistantChatsCollection();
+  return (await chats.deleteOne({ _id: new ObjectId(id), userId })).deletedCount > 0;
+}
+
 async function updateAiInstructions({ classification, audit }) {
   const settings = await getSettingsCollection();
   await settings.updateOne(
@@ -713,6 +764,7 @@ module.exports = {
   listGroups, createGroup, deleteGroup,
   listResources, createResource, updateResource, deleteResource,
   getAiInstructions, updateAiInstructions, getSmtpSettings, saveSmtpSettings, logAssistantExchange,
+  listAssistantChats, getAssistantChat, saveAssistantChat, deleteAssistantChat,
   createUser, findUserByEmail, findUserById, createPasswordReset, consumePasswordReset, resetUserPassword, listUsers, updateUser, seedDevAdmin,
   createSession, findSessionUser, deleteSession,
   createBudget, listBudgetsForUser, getBudgetForUser, updateBudgetForUser, setBudgetAddressForUser, deleteBudgetForUser,

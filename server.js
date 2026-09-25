@@ -6,6 +6,7 @@ const {
   listGroups, createGroup, deleteGroup,
   listResources, createResource, updateResource, deleteResource,
   getAiInstructions, updateAiInstructions, getSmtpSettings, saveSmtpSettings, logAssistantExchange,
+  listAssistantChats, getAssistantChat, saveAssistantChat, deleteAssistantChat,
   createUser, findUserByEmail, createPasswordReset, consumePasswordReset, resetUserPassword, listUsers, updateUser, seedDevAdmin,
   createSession, findSessionUser, deleteSession,
   createBudget, listBudgetsForUser, getBudgetForUser, updateBudgetForUser, setBudgetAddressForUser, deleteBudgetForUser,
@@ -31,7 +32,7 @@ const { sendJson, sendCsv, readJson, readBinary, serveStatic, serveFromDirectory
 const {
   validateSearchRequest, validateCompareRequest, validateRecipeItems, validateRecipePriceItems,
   validateProductRequest, validateCategoryRequest, validateResourceRequest,
-  validateAuthRequest, validateEmailRequest, validateResetRequest, validateSmtpSettingsRequest, validateUserUpdateRequest, validateSetAddressRequest, validateBudgetSaveRequest,
+  validateAuthRequest, validateEmailRequest, validateResetRequest, validateSmtpSettingsRequest, validateAssistantChatRequest, validateUserUpdateRequest, validateSetAddressRequest, validateBudgetSaveRequest,
   validateAiInstructionsRequest,
 } = require('./lib/validators');
 const {
@@ -249,6 +250,25 @@ async function requestHandler(request, response) {
       await logAssistantExchange({ userId: user.id, userEmail: user.email, question: body.messages.at(-1).content, answer, model })
         .catch((err) => console.error('Falha ao gravar log do assistente:', err.message));
       return sendJson(response, 200, { answer });
+    }
+    // Conversas salvas do Assistente (até 10 por usuário, ver db.js). Sempre filtradas pelo dono.
+    if (url.pathname === '/api/assistant/chats' || /^\/api\/assistant\/chats\/[^/]+$/.test(url.pathname)) {
+      const user = await requireScreen(request, response, 'assistant');
+      if (!user) return;
+      const chatId = url.pathname.split('/')[4];
+      const notFound = () => sendJson(response, 404, { detail: 'Conversa não encontrada.' });
+      if (!chatId && request.method === 'GET') return sendJson(response, 200, await listAssistantChats(user.id));
+      if (!chatId && request.method === 'PUT') {
+        const saved = await saveAssistantChat(user.id, validateAssistantChatRequest(await readJson(request)));
+        return saved ? sendJson(response, 200, saved) : notFound();
+      }
+      if (chatId && request.method === 'GET') {
+        const chat = await getAssistantChat(user.id, chatId);
+        return chat ? sendJson(response, 200, chat) : notFound();
+      }
+      if (chatId && request.method === 'DELETE') {
+        return (await deleteAssistantChat(user.id, chatId)) ? sendJson(response, 200, { deleted: true }) : notFound();
+      }
     }
     if (request.method === 'POST' && url.pathname === '/api/assistant/budget') {
       const user = await requireScreen(request, response, 'assistant');

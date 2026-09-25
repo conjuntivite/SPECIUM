@@ -135,3 +135,15 @@ test('validateSmtpSettingsRequest: host, porta, segurança e remetente; senha é
   assert.throws(() => validateSmtpSettingsRequest({ ...base, user: '' }));
   assert.throws(() => validateSmtpSettingsRequest({ ...base, from: 'sem-arroba' }));
 });
+
+test('validateAssistantChatRequest: 1..40 mensagens user/assistant de até 8000 caracteres; id opcional de 24 hex', () => {
+  const { validateAssistantChatRequest } = require('../lib/validators');
+  const ok = [{ role: 'user', content: ' oi ' }, { role: 'assistant', content: 'olá' }];
+  assert.deepEqual(validateAssistantChatRequest({ messages: ok }), { id: undefined, messages: [{ role: 'user', content: 'oi' }, { role: 'assistant', content: 'olá' }] });
+  assert.equal(validateAssistantChatRequest({ id: 'a'.repeat(24), messages: ok }).id, 'a'.repeat(24));
+  assert.throws(() => validateAssistantChatRequest({ messages: [] }));
+  assert.throws(() => validateAssistantChatRequest({ messages: Array.from({ length: 41 }, () => ok[0]) }));
+  assert.throws(() => validateAssistantChatRequest({ messages: [{ role: 'system', content: 'x' }] }));
+  assert.throws(() => validateAssistantChatRequest({ messages: [{ role: 'user', content: 'x'.repeat(8001) }] }));
+  assert.throws(() => validateAssistantChatRequest({ id: 'zzz', messages: ok }));
+});

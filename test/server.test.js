@@ -1210,3 +1210,48 @@ test('configuração SMTP: só admin; a senha é gravada cifrada e nunca volta n
   assert.equal(test.status, 200);
   assert.equal(sent.at(-1).to, me.email);
 });
+
+test('conversas do assistente: só o dono acessa, PUT com id atualiza sem duplicar, a 11ª apaga a mais antiga', async (t) => {
+  const server = http.createServer(requestHandler);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const owner = await loggedInFetch(baseUrl, t);
+  const other = await loggedInFetch(baseUrl, t);
+  const json = { 'Content-Type': 'application/json' };
+  const put = (f, body) => f(`${baseUrl}/api/assistant/chats`, { method: 'PUT', headers: json, body: JSON.stringify(body) });
+  const msgs = (q) => [{ role: 'user', content: q }, { role: 'assistant', content: `resposta de ${q}` }];
+  const client = await MongoClient.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017');
+  const chats = client.db(process.env.MONGODB_DB || 'comprador_inviolavel').collection('assistant_chats');
+  const ownerId = (await (await owner(`${baseUrl}/api/auth/me`)).json()).id;
+  const otherId = (await (await other(`${baseUrl}/api/auth/me`)).json()).id;
+  t.after(async () => { await chats.deleteMany({ userId: { $in: [ownerId, otherId] } }); await client.close(); });
+
+  assert.equal((await put(owner, { messages: [] })).status, 400);
+  const first = await (await put(owner, { messages: msgs('Primeira pergunta sobre portaria remota com um título bem comprido mesmo') })).json();
+  assert.match(first.id, /^[a-f0-9]{24}$/);
+  assert.ok(first.title.length <= 41 && first.title.startsWith('Primeira pergunta'));
+
+  const updated = await (await put(owner, { id: first.id, messages: [...msgs('Primeira pergunta'), { role: 'user', content: 'mais uma' }] })).json();
+  assert.deepEqual(updated, first);
+  assert.equal((await (await owner(`${baseUrl}/api/assistant/chats`)).json()).length, 1);
+  assert.equal((await (await owner(`${baseUrl}/api/assistant/chats/${first.id}`)).json()).messages.length, 3);
+
+  assert.equal((await other(`${baseUrl}/api/assistant/chats/${first.id}`)).status, 404);
+  assert.equal((await put(other, { id: first.id, messages: msgs('invasão') })).status, 404);
+  assert.equal((await other(`${baseUrl}/api/assistant/chats/${first.id}`, { method: 'DELETE' })).status, 404);
+  assert.equal((await (await other(`${baseUrl}/api/assistant/chats`)).json()).length, 0);
+  assert.equal((await owner(`${baseUrl}/api/assistant/chats/${first.id}`)).status, 200);
+
+  for (let i = 2; i <= 11; i += 1) {
+    await put(owner, { messages: msgs(`conversa ${i}`) });
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  const list = await (await owner(`${baseUrl}/api/assistant/chats`)).json();
+  assert.equal(list.length, 10);
+  assert.ok(!list.some((c) => c.id === first.id));
+  assert.ok(list.some((c) => c.title === 'conversa 11'));
+
+  assert.equal((await owner(`${baseUrl}/api/assistant/chats/${list[0].id}`, { method: 'DELETE' })).status, 200);
+  assert.equal((await owner(`${baseUrl}/api/assistant/chats/${list[0].id}`)).status, 404);
+});

@@ -144,6 +144,14 @@ test('assistente: prompt leva todas as fichas e fórmulas e o histórico é vali
   assert.throws(() => validateAssistantMessages([{ role: 'system', content: 'x' }]));
   assert.throws(() => validateAssistantMessages([{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }]));
   assert.throws(() => validateAssistantMessages([{ role: 'user', content: 'x'.repeat(2001) }]));
+  // Resposta longa do assistente no histórico não pode barrar a pergunta seguinte (o limite de 2000
+  // é só da pergunta nova); no histórico ela entra, limitada a 8000 caracteres.
+  const withLongAnswer = validateAssistantMessages([
+    { role: 'user', content: 'pergunta' }, { role: 'assistant', content: 'r'.repeat(9000) }, { role: 'user', content: 'ok, confirmo' },
+  ]);
+  assert.equal(withLongAnswer[1].content.length, 8000);
+  assert.equal(withLongAnswer[2].content, 'ok, confirmo');
+  assert.throws(() => validateAssistantMessages([{ role: 'assistant', content: 'a' }, { role: 'user', content: 'x'.repeat(2001) }]));
   const long = Array.from({ length: 25 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', content: String(i) }));
   assert.equal(validateAssistantMessages(long).length, 20);
 });
