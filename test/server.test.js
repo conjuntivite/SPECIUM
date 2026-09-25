@@ -1153,3 +1153,57 @@ test('recuperação de senha: e-mail com link, troca a senha, derruba sessões a
   await db.collection('password_resets').updateMany({}, { $set: { expiresAt: new Date(Date.now() - 1000) } });
   assert.equal((await post('/api/auth/reset', { token: expiredToken, password: 'outrasenha123' })).status, 400);
 });
+
+test('configuração SMTP: só admin; a senha é gravada cifrada e nunca volta na API; PUT sem senha mantém a anterior; teste envia ao admin', async (t) => {
+  const { setMailTransport } = require('../lib/mailer');
+  const sent = [];
+  setMailTransport({ sendMail: async (m) => sent.push(m) });
+  t.after(() => setMailTransport(null));
+  const previousSecret = process.env.SETTINGS_SECRET;
+  process.env.SETTINGS_SECRET = 'segredo-de-teste-com-16+';
+  t.after(() => { if (previousSecret === undefined) delete process.env.SETTINGS_SECRET; else process.env.SETTINGS_SECRET = previousSecret; });
+  const server = http.createServer(requestHandler);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const userFetch = await loggedInFetch(baseUrl, t);
+
+  const client = await MongoClient.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017');
+  const db = client.db(process.env.MONGODB_DB || 'comprador_inviolavel');
+  // Mesma base do app: guarda a configuração SMTP real (se houver) e restaura no fim.
+  const previous = await db.collection('settings').findOne({ _id: 'smtp' });
+  t.after(async () => {
+    await db.collection('settings').deleteOne({ _id: 'smtp' });
+    if (previous) await db.collection('settings').insertOne(previous);
+    await client.close();
+  });
+
+  const body = { host: 'mail.invicco.com.br', port: 465, security: 'ssl', user: 'sistema@invicco.com.br', from: '', password: 'senha-secreta-123' };
+  const put = (f, b) => f(`${baseUrl}/api/smtp-settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+  assert.equal((await userFetch(`${baseUrl}/api/smtp-settings`)).status, 403);
+  assert.equal((await put(userFetch, body)).status, 403);
+
+  const me = await (await userFetch(`${baseUrl}/api/auth/me`)).json();
+  await db.collection('users').updateOne({ email: me.email }, { $set: { role: 'admin' } });
+
+  const saved = await put(userFetch, body);
+  assert.equal(saved.status, 200);
+  const savedText = await saved.text();
+  assert.doesNotMatch(savedText, /senha-secreta-123/);
+  assert.equal(JSON.parse(savedText).hasPassword, true);
+  const listedText = await (await userFetch(`${baseUrl}/api/smtp-settings`)).text();
+  assert.doesNotMatch(listedText, /senha-secreta-123/);
+  assert.equal(JSON.parse(listedText).host, 'mail.invicco.com.br');
+  const stored = await db.collection('settings').findOne({ _id: 'smtp' });
+  assert.doesNotMatch(JSON.stringify(stored), /senha-secreta-123/);
+
+  const keepPass = await put(userFetch, { ...body, port: 587, security: 'starttls', password: '' });
+  assert.equal(keepPass.status, 200);
+  assert.equal((await db.collection('settings').findOne({ _id: 'smtp' })).pass, stored.pass);
+  await db.collection('settings').deleteOne({ _id: 'smtp' });
+  assert.equal((await put(userFetch, { ...body, password: '' })).status, 400);
+
+  const test = await userFetch(`${baseUrl}/api/smtp-settings/test`, { method: 'POST' });
+  assert.equal(test.status, 200);
+  assert.equal(sent.at(-1).to, me.email);
+});

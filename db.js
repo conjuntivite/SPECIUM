@@ -421,6 +421,23 @@ async function getAiInstructions() {
   return { classification: doc?.classification || null, audit: doc?.audit || null };
 }
 
+// SMTP do envio de e-mails (tela "E-mail (SMTP)", admin). `pass` fica CIFRADO (lib/secretBox.js);
+// este doc cru só é lido por lib/mailer.js e por server.js — nunca vai pro navegador.
+async function getSmtpSettings() {
+  const settings = await getSettingsCollection();
+  const doc = await settings.findOne({ _id: 'smtp' });
+  return doc ? { host: doc.host, port: doc.port, security: doc.security, user: doc.user, from: doc.from, pass: doc.pass } : null;
+}
+
+async function saveSmtpSettings({ host, port, security, user, from, pass }) {
+  const settings = await getSettingsCollection();
+  await settings.updateOne(
+    { _id: 'smtp' },
+    { $set: { host, port, security, user, from, pass, updatedAt: new Date() } },
+    { upsert: true },
+  );
+}
+
 // Histórico do Assistente (só escrita por enquanto): serve pra ler depois o que os comerciais
 // perguntam e onde a IA errou. Grava só a última pergunta + resposta, não a conversa inteira.
 async function logAssistantExchange({ userId, userEmail, question, answer, model }) {
@@ -695,7 +712,7 @@ module.exports = {
   listCategories, createCategory, updateCategory, deleteCategory,
   listGroups, createGroup, deleteGroup,
   listResources, createResource, updateResource, deleteResource,
-  getAiInstructions, updateAiInstructions, logAssistantExchange,
+  getAiInstructions, updateAiInstructions, getSmtpSettings, saveSmtpSettings, logAssistantExchange,
   createUser, findUserByEmail, findUserById, createPasswordReset, consumePasswordReset, resetUserPassword, listUsers, updateUser, seedDevAdmin,
   createSession, findSessionUser, deleteSession,
   createBudget, listBudgetsForUser, getBudgetForUser, updateBudgetForUser, setBudgetAddressForUser, deleteBudgetForUser,

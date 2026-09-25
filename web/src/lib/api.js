@@ -177,6 +177,18 @@ export function updateAiInstructions(data) {
   return requestJson('/api/ai-instructions', { method: 'PUT', body: data })
 }
 
+export function getSmtpSettings() {
+  return requestJson('/api/smtp-settings')
+}
+
+export function saveSmtpSettings(data) {
+  return requestJson('/api/smtp-settings', { method: 'PUT', body: data })
+}
+
+export function sendSmtpTest() {
+  return postJson('/api/smtp-settings/test', {})
+}
+
 export function getResources() {
   return requestJson('/api/resources')
 }

@@ -96,3 +96,36 @@ test('sendResetEmail entrega o link ao transporte configurado', async () => {
   assert.equal(sent[0].to, 'ana@exemplo.com');
   assert.match(sent[0].text, /http:\/\/x\/\?reset=abc/);
 });
+
+test('secretBox: criptografa e decifra a senha do SMTP; sem SETTINGS_SECRET (ou adulterada) falha', () => {
+  const { encryptSecret, decryptSecret } = require('../lib/secretBox');
+  const previous = process.env.SETTINGS_SECRET;
+  process.env.SETTINGS_SECRET = 'segredo-de-teste-com-16+';
+  try {
+    const stored = encryptSecret('minha-senha-smtp');
+    assert.doesNotMatch(stored, /minha-senha-smtp/);
+    assert.notEqual(stored, encryptSecret('minha-senha-smtp'));
+    assert.equal(decryptSecret(stored), 'minha-senha-smtp');
+    const [iv, tag, data] = stored.split(':');
+    assert.throws(() => decryptSecret(`${iv}:${tag}:${data.replace(/.$/, (c) => (c === '0' ? '1' : '0'))}`));
+    process.env.SETTINGS_SECRET = 'outro-segredo-de-16-chars';
+    assert.throws(() => decryptSecret(stored));
+    delete process.env.SETTINGS_SECRET;
+    assert.throws(() => encryptSecret('x'), /SETTINGS_SECRET/);
+  } finally {
+    if (previous === undefined) delete process.env.SETTINGS_SECRET; else process.env.SETTINGS_SECRET = previous;
+  }
+});
+
+test('validateSmtpSettingsRequest: host, porta, segurança e remetente; senha é opcional (vazia mantém a anterior)', () => {
+  const { validateSmtpSettingsRequest } = require('../lib/validators');
+  const base = { host: ' mail.invicco.com.br ', port: '465', security: 'ssl', user: 'sistema@invicco.com.br', from: '', password: '' };
+  assert.deepEqual(validateSmtpSettingsRequest(base), { host: 'mail.invicco.com.br', port: 465, security: 'ssl', user: 'sistema@invicco.com.br', from: 'sistema@invicco.com.br', password: '' });
+  assert.equal(validateSmtpSettingsRequest({ ...base, security: 'starttls', port: 587, password: 'abc' }).password, 'abc');
+  assert.throws(() => validateSmtpSettingsRequest({ ...base, host: '' }));
+  assert.throws(() => validateSmtpSettingsRequest({ ...base, host: 'com espaço' }));
+  assert.throws(() => validateSmtpSettingsRequest({ ...base, port: 70000 }));
+  assert.throws(() => validateSmtpSettingsRequest({ ...base, security: 'nenhuma' }));
+  assert.throws(() => validateSmtpSettingsRequest({ ...base, user: '' }));
+  assert.throws(() => validateSmtpSettingsRequest({ ...base, from: 'sem-arroba' }));
+});

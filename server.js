@@ -5,7 +5,7 @@ const {
   listCategories, createCategory, updateCategory, deleteCategory,
   listGroups, createGroup, deleteGroup,
   listResources, createResource, updateResource, deleteResource,
-  getAiInstructions, updateAiInstructions, logAssistantExchange,
+  getAiInstructions, updateAiInstructions, getSmtpSettings, saveSmtpSettings, logAssistantExchange,
   createUser, findUserByEmail, createPasswordReset, consumePasswordReset, resetUserPassword, listUsers, updateUser, seedDevAdmin,
   createSession, findSessionUser, deleteSession,
   createBudget, listBudgetsForUser, getBudgetForUser, updateBudgetForUser, setBudgetAddressForUser, deleteBudgetForUser,
@@ -17,7 +17,8 @@ const {
 // validação) mora em lib/ — ver lib/ para o detalhamento por módulo.
 const { PORT, HOST, APP_URL, UPLOADS_DIRECTORY } = require('./lib/env');
 const { RESET_TTL_MS, hashResetToken, generateResetToken, allowResetRequest } = require('./lib/passwordReset');
-const { sendResetEmail } = require('./lib/mailer');
+const { sendResetEmail, sendTestEmail } = require('./lib/mailer');
+const { encryptSecret } = require('./lib/secretBox');
 const { normalize } = require('./lib/text');
 const { FLOORPLAN_EXTENSIONS, FLOORPLAN_MAX_BYTES, saveFloorPlanFile, deleteFloorPlanFile } = require('./lib/floorPlan');
 const {
@@ -30,7 +31,7 @@ const { sendJson, sendCsv, readJson, readBinary, serveStatic, serveFromDirectory
 const {
   validateSearchRequest, validateCompareRequest, validateRecipeItems, validateRecipePriceItems,
   validateProductRequest, validateCategoryRequest, validateResourceRequest,
-  validateAuthRequest, validateEmailRequest, validateResetRequest, validateUserUpdateRequest, validateSetAddressRequest, validateBudgetSaveRequest,
+  validateAuthRequest, validateEmailRequest, validateResetRequest, validateSmtpSettingsRequest, validateUserUpdateRequest, validateSetAddressRequest, validateBudgetSaveRequest,
   validateAiInstructionsRequest,
 } = require('./lib/validators');
 const {
@@ -159,6 +160,31 @@ async function requestHandler(request, response) {
       if (user.role !== 'admin') return sendJson(response, 403, { detail: 'Só administradores podem editar as instruções da IA.' });
       const { classification, audit } = validateAiInstructionsRequest(await readJson(request));
       return sendJson(response, 200, await updateAiInstructions({ classification, audit }));
+    }
+    // Configuração SMTP (admin). A senha só entra (PUT) e nunca sai: o GET devolve `hasPassword`.
+    if (url.pathname === '/api/smtp-settings' || url.pathname === '/api/smtp-settings/test') {
+      const user = await getAuthenticatedUser(request);
+      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      if (user.role !== 'admin') return sendJson(response, 403, { detail: 'Só administradores podem configurar o SMTP.' });
+      const publicView = (cfg) => ({
+        host: cfg?.host || '', port: cfg?.port || 465, security: cfg?.security || 'ssl',
+        user: cfg?.user || '', from: cfg?.from || '', hasPassword: Boolean(cfg?.pass),
+      });
+      if (request.method === 'GET' && url.pathname === '/api/smtp-settings') {
+        return sendJson(response, 200, publicView(await getSmtpSettings()));
+      }
+      if (request.method === 'PUT' && url.pathname === '/api/smtp-settings') {
+        const { password, ...fields } = validateSmtpSettingsRequest(await readJson(request));
+        const previous = await getSmtpSettings();
+        if (!password && !previous?.pass) throw new Error('Informe a senha do SMTP.');
+        const saved = { ...fields, pass: password ? encryptSecret(password) : previous.pass };
+        await saveSmtpSettings(saved);
+        return sendJson(response, 200, publicView(saved));
+      }
+      if (request.method === 'POST' && url.pathname === '/api/smtp-settings/test') {
+        await sendTestEmail(user.email);
+        return sendJson(response, 200, { sent: true, to: user.email });
+      }
     }
     if (request.method === 'POST' && url.pathname === '/api/search') {
       if (!(await requireScreen(request, response, 'search'))) return;

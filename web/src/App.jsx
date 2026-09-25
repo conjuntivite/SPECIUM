@@ -9,6 +9,7 @@ import { QuotePdfAuditView } from '@/components/audit/QuotePdfAuditView'
 import { AssistantView } from '@/components/assistant/AssistantView'
 import { UsersView } from '@/components/users/UsersView'
 import { AiSettingsView } from '@/components/settings/AiSettingsView'
+import { SmtpSettingsView } from '@/components/settings/SmtpSettingsView'
 import { LoginView } from '@/components/auth/LoginView'
 import { useAuth } from '@/hooks/useAuth'
 import { allowedScreens } from '@/lib/screens'
@@ -30,7 +31,7 @@ function App() {
   // Aba ativa sem permissão (ou o padrão 'budget' pra quem não tem Orçamento) cai na primeira liberada;
   // atalhos entre telas (ex.: "ir pra Produtos" de dentro do orçamento) só navegam se a tela for dele.
   const allowed = allowedScreens(auth.user)
-  const adminTabs = auth.user.role === 'admin' ? ['users', 'ai-settings'] : []
+  const adminTabs = auth.user.role === 'admin' ? ['users', 'ai-settings', 'smtp-settings'] : []
   const currentTab = allowed.includes(activeTab) || adminTabs.includes(activeTab) ? activeTab : (allowed[0] || adminTabs[0] || '')
   const goTo = (tab) => { if (allowed.includes(tab)) setActiveTab(tab) }
 
@@ -69,6 +70,8 @@ function App() {
       usersPanel={<UsersView auth={auth} />}
       showAiSettingsTab={auth.user?.role === 'admin'}
       aiSettingsPanel={<AiSettingsView />}
+      showSmtpTab={auth.user?.role === 'admin'}
+      smtpPanel={<SmtpSettingsView />}
     />
   )
 }

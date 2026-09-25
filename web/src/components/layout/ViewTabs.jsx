@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faUsers, faRobot, faAnglesLeft, faAnglesRight, faRightFromBracket } from '@fortawesome/free-solid-svg-icons'
+import { faUsers, faRobot, faEnvelope, faAnglesLeft, faAnglesRight, faRightFromBracket } from '@fortawesome/free-solid-svg-icons'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { Brand } from './Brand'
@@ -18,7 +18,7 @@ function readCollapsed() {
 // z-30 de propósito: o canvas do orçamento (BudgetView, fixed z-40) continua cobrindo a tela inteira.
 export function ViewTabs({
   value, onValueChange, user, onLogout, footer, allowed, budgetPanel, searchPanel, productsPanel, categoriesPanel, quoteAuditPanel, assistantPanel,
-  usersPanel, showUsersTab, aiSettingsPanel, showAiSettingsTab,
+  usersPanel, showUsersTab, aiSettingsPanel, showAiSettingsTab, smtpPanel, showSmtpTab,
 }) {
   const [collapsed, setCollapsed] = useState(readCollapsed)
 
@@ -38,6 +38,7 @@ export function ViewTabs({
     ...SCREENS.filter((s) => allowed.includes(s.value)),
     ...(showUsersTab ? [{ value: 'users', icon: faUsers, label: 'Usuários' }] : []),
     ...(showAiSettingsTab ? [{ value: 'ai-settings', icon: faRobot, label: 'Instruções da IA' }] : []),
+    ...(showSmtpTab ? [{ value: 'smtp-settings', icon: faEnvelope, label: 'E-mail (SMTP)' }] : []),
   ]
 
   return (
@@ -114,6 +115,7 @@ export function ViewTabs({
           ) : null}
           {showUsersTab ? <TabsContent value="users">{usersPanel}</TabsContent> : null}
           {showAiSettingsTab ? <TabsContent value="ai-settings">{aiSettingsPanel}</TabsContent> : null}
+          {showSmtpTab ? <TabsContent value="smtp-settings">{smtpPanel}</TabsContent> : null}
           {footer}
         </div>
       </div>
