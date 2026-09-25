@@ -293,6 +293,15 @@ export function useBudget(budgetId) {
     setItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, quantity: clampQuantity(item.quantity + delta) } : item)))
   }, [])
 
+  // Item genérico (só a categoria, ex.: vindo do Assistente) ganha o produto escolhido: troca título
+  // e ícone e mantém quantidade, posição, ligações e container. Preço/oferta já buscados eram da
+  // categoria genérica, não do modelo — zera pra não mostrar valor de outro produto.
+  const setItemProduct = useCallback((itemId, title, icon) => {
+    setItems((prev) => prev.map((item) => (
+      item.id === itemId ? { ...item, title, icon: icon || item.icon, averagePrice: null, bestOffer: null } : item
+    )))
+  }, [])
+
   const updatePosition = useCallback((flowKey, pos) => {
     setPositions((prev) => ({ ...prev, [flowKey]: pos }))
   }, [])
@@ -613,6 +622,7 @@ export function useBudget(budgetId) {
     removeItem,
     setItemIcon,
     updateQuantity,
+    setItemProduct,
     updatePosition,
     updatePositions,
     addConnection,

@@ -198,6 +198,9 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
       data: {
         ...node.data,
         shownTitle: displayTitle(node.data.item.title, categoryValues),
+        // Título igual à própria categoria = item genérico, ainda sem marca/modelo (ver composeProductTitle).
+        needsProduct: categoryValues.includes(node.data.item.title),
+        onPickProduct: handleItemPickProduct,
         onRemove: () => handleNodeRemove(node.data.item.id, node.data.childCount),
         onQtyChange: budget.updateQuantity,
         onToggleContainer: handleToggleContainer,
@@ -215,7 +218,7 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
         readOnly,
       },
     })))
-  }, [budget.nodes, handleNodeRemove, budget.updateQuantity, handleToggleContainer, budget.removeFromContainer, budget.moveToContainer, budget.resizeContainer, handleAddCategoryToContainer, looseItems, readOnly, categoryValues])
+  }, [budget.nodes, handleNodeRemove, budget.updateQuantity, handleToggleContainer, budget.removeFromContainer, budget.moveToContainer, budget.resizeContainer, handleAddCategoryToContainer, handleItemPickProduct, looseItems, readOnly, categoryValues])
 
   const onNodesChange = useCallback((changes) => {
     setNodes((nds) => applyNodeChanges(changes, nds))
@@ -312,13 +315,22 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
     setProductPrompt({ label: item.label, categories: [item.value], fallbackTitle: item.value, position, containerId: containerAtPosition(position) })
   }
 
+  // Card genérico (só a categoria, ex.: importado do Assistente) -> escolher o produto cadastrado.
+  // `replaceItemId` faz o picker atualizar esse item em vez de criar um novo.
+  const handleItemPickProduct = useCallback((itemId) => {
+    const item = budget.items.find((it) => it.id === itemId)
+    if (!item) return
+    setProductPrompt({ label: categoryLabelByValue[item.title] || item.title, categories: [item.title], replaceItemId: itemId, skipLabel: 'Manter genérico' })
+  }, [budget.items, categoryLabelByValue])
+
   function handleProductPick(product) {
-    if (productPrompt) budget.addItem(composeProductTitle(product), 1, productPrompt.position, categoryIconByValue[product.category], productPrompt.containerId ?? null)
+    if (productPrompt?.replaceItemId != null) budget.setItemProduct(productPrompt.replaceItemId, composeProductTitle(product), categoryIconByValue[product.category])
+    else if (productPrompt) budget.addItem(composeProductTitle(product), 1, productPrompt.position, categoryIconByValue[product.category], productPrompt.containerId ?? null)
     setProductPrompt(null)
   }
 
   function handleProductSkip() {
-    if (productPrompt) budget.addItem(productPrompt.fallbackTitle, 1, productPrompt.position, categoryIconByValue[productPrompt.categories[0]], productPrompt.containerId ?? null)
+    if (productPrompt && productPrompt.replaceItemId == null) budget.addItem(productPrompt.fallbackTitle, 1, productPrompt.position, categoryIconByValue[productPrompt.categories[0]], productPrompt.containerId ?? null)
     setProductPrompt(null)
   }
 

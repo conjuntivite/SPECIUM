@@ -120,7 +120,7 @@ export function ProductPickerDialog({ prompt, onPick, onSkip, onOpenChange, onGo
 
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={onSkip}>
-            Adicionar sem produto cadastrado
+            {prompt?.skipLabel || 'Adicionar sem produto cadastrado'}
           </Button>
         </DialogFooter>
       </DialogContent>

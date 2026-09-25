@@ -95,6 +95,19 @@ function QuantityRow({ item, onQtyChange, readOnly }) {
 // clamp=true limita a 2 linhas — ponytail: teto conhecido, não altura livre — porque o container
 // aberto posiciona a grade de filhos num offset fixo (CONTAINER_GRID.originY) calculado pra caber
 // exatamente 2 linhas de cabeçalho; nome maior que isso ainda corta na 2ª linha ali.
+// Item genérico (só a categoria, ex.: importado do Assistente): botão pra escolher o produto cadastrado.
+function PickProductButton({ item, onPickProduct }) {
+  return (
+    <button
+      type="button"
+      className="nodrag mx-3 my-1.5 flex w-[calc(100%-1.5rem)] items-center justify-center gap-1.5 rounded-md border border-dashed border-foreground/30 py-1.5 text-xs font-medium text-card-foreground hover:bg-foreground/10"
+      onClick={() => onPickProduct(item.id)}
+    >
+      <FontAwesomeIcon icon={faBoxOpen} className="size-3" /> Escolher produto
+    </button>
+  )
+}
+
 function NodeTitle({ item, label, clamp = false }) {
   return (
     <span className="flex min-w-0 items-center gap-1.5 text-[0.98rem]" title={item.title}>
@@ -112,7 +125,7 @@ export function FlowNode({ data, dragging, selected }) {
     item, onRemove, onQtyChange, hasCriticalGap, isLinked,
     isContainer, containerOpen, containerSize, childCount, childQuantityTotal, childValueTotal,
     containedIn, onToggleContainer, onRemoveFromContainer, onAddCategoryToContainer, onMoveToContainer, onResizeContainer, looseItems,
-    readOnly, shownTitle,
+    readOnly, shownTitle, needsProduct, onPickProduct,
   } = data
   const unitValue = parseBRL(item.averagePrice)
   // Seleção (clique/shift/ctrl+clique, ou caixa de seleção) tem prioridade visual sobre o alerta de
@@ -141,6 +154,7 @@ export function FlowNode({ data, dragging, selected }) {
           ) : null}
         </div>
         <QuantityRow item={item} onQtyChange={onQtyChange} readOnly={readOnly} />
+        {needsProduct && !readOnly ? <div className="bg-card"><PickProductButton item={item} onPickProduct={onPickProduct} /></div> : null}
         <div className="flex flex-col gap-1 bg-card px-3 py-2 text-sm text-card-foreground">
           <span>{childCount} equipamento{childCount === 1 ? '' : 's'} interno{childCount === 1 ? '' : 's'}</span>
           {childQuantityTotal > childCount ? <span className="text-xs text-muted-foreground">{childQuantityTotal} itens no total</span> : null}
@@ -251,6 +265,8 @@ export function FlowNode({ data, dragging, selected }) {
 
       <div className="bg-card py-2">
         <QuantityRow item={item} onQtyChange={onQtyChange} readOnly={readOnly} />
+
+        {needsProduct && !readOnly ? <PickProductButton item={item} onPickProduct={onPickProduct} /> : null}
 
         {item.averagePrice ? (
           <div className="flex items-center gap-2 px-3 py-1.5 text-sm">
