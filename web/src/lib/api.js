@@ -90,6 +90,14 @@ export function login(email, password) {
   return postJson('/api/auth/login', { email, password })
 }
 
+export function forgotPassword(email) {
+  return postJson('/api/auth/forgot', { email })
+}
+
+export function resetPassword(token, password) {
+  return postJson('/api/auth/reset', { token, password })
+}
+
 export function logout() {
   return postJson('/api/auth/logout', {})
 }

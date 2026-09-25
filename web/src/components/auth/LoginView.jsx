@@ -81,22 +81,51 @@ function CoverageRadar() {
 }
 
 export function LoginView({ auth }) {
-  const [mode, setMode] = useState('login')
+  // Modos: login | register | forgot (pede o e-mail) | reset (chegou pelo link do e-mail: ?reset=<token>).
+  const [resetToken] = useState(() => new URLSearchParams(window.location.search).get('reset'))
+  const [mode, setMode] = useState(resetToken ? 'reset' : 'login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [forgotSent, setForgotSent] = useState(false)
   const isLogin = mode === 'login'
+  const showEmail = mode !== 'reset'
+  const showPasswordField = mode !== 'forgot'
+  const needsConfirm = mode === 'register' || mode === 'reset'
+  const mismatch = needsConfirm && confirm !== '' && confirm !== password
+
+  function switchMode(next) {
+    setMode(next)
+    setConfirm('')
+    setForgotSent(false)
+    auth.clearError()
+    if (resetToken) window.history.replaceState(null, '', '/')
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
     setSubmitting(true)
     try {
-      await (isLogin ? auth.login(email, password) : auth.register(email, password))
+      if (mode === 'forgot') {
+        if (await auth.forgot(email)) setForgotSent(true)
+      } else if (mode === 'reset') {
+        if (await auth.reset(resetToken, password)) window.history.replaceState(null, '', '/')
+      } else {
+        await (isLogin ? auth.login(email, password) : auth.register(email, password))
+      }
     } finally {
       setSubmitting(false)
     }
   }
+
+  const copy = {
+    login: ['Bem-vindo de volta', 'Entre para continuar seus projetos.', 'Entrar', 'Entrando…'],
+    register: ['Crie sua conta', 'Use seu e-mail e uma senha de no mínimo 8 caracteres.', 'Criar conta', 'Criando conta…'],
+    forgot: ['Recuperar senha', 'Informe seu e-mail e enviaremos um link para criar uma nova senha.', 'Enviar link', 'Enviando…'],
+    reset: ['Nova senha', 'Escolha uma nova senha de no mínimo 8 caracteres.', 'Redefinir senha', 'Salvando…'],
+  }[mode]
 
   return (
     // reducedMotion="user": quem pede menos movimento no sistema vê tudo já no lugar, sem entrada animada.
@@ -114,13 +143,12 @@ export function LoginView({ auth }) {
             animate="show"
           >
             <motion.h1 variants={rise} className="text-3xl font-semibold tracking-tight text-balance text-foreground">
-              {isLogin ? 'Bem-vindo de volta' : 'Crie sua conta'}
+              {copy[0]}
             </motion.h1>
-            <motion.p variants={rise} className="mt-2 text-sm text-muted-foreground">
-              {isLogin ? 'Entre para continuar seus projetos.' : 'Use seu e-mail e uma senha de no mínimo 8 caracteres.'}
-            </motion.p>
+            <motion.p variants={rise} className="mt-2 text-sm text-muted-foreground">{copy[1]}</motion.p>
 
-            {/* Abas Entrar/Criar conta: a pílula desliza entre elas (layoutId). */}
+            {/* Abas Entrar/Criar conta: a pílula desliza entre elas (layoutId). Ocultas em forgot/reset. */}
+            {mode === 'login' || mode === 'register' ? (
             <motion.div variants={rise} className="mt-8 grid grid-cols-2 rounded-lg bg-muted p-1" role="tablist" aria-label="Acesso">
               {[['login', 'Entrar'], ['register', 'Criar conta']].map(([value, label]) => (
                 <button
@@ -128,7 +156,7 @@ export function LoginView({ auth }) {
                   type="button"
                   role="tab"
                   aria-selected={mode === value}
-                  onClick={() => setMode(value)}
+                  onClick={() => switchMode(value)}
                   className={cn(
                     'relative rounded-md py-1.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
                     mode === value ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
@@ -141,8 +169,10 @@ export function LoginView({ auth }) {
                 </button>
               ))}
             </motion.div>
+            ) : null}
 
             <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
+              {showEmail ? (
               <motion.div variants={rise} className="flex flex-col gap-1.5">
                 <label htmlFor="login-email" className="text-sm font-medium">E-mail</label>
                 <Input
@@ -151,8 +181,17 @@ export function LoginView({ auth }) {
                   value={email} onChange={(e) => setEmail(e.target.value)}
                 />
               </motion.div>
+              ) : null}
+              {showPasswordField ? (
               <motion.div variants={rise} className="flex flex-col gap-1.5">
-                <label htmlFor="login-password" className="text-sm font-medium">Senha</label>
+                <div className="flex items-baseline justify-between">
+                  <label htmlFor="login-password" className="text-sm font-medium">{mode === 'reset' ? 'Nova senha' : 'Senha'}</label>
+                  {isLogin ? (
+                    <button type="button" onClick={() => switchMode('forgot')} className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+                      Esqueci minha senha
+                    </button>
+                  ) : null}
+                </div>
                 <div className="relative">
                   <Input
                     id="login-password" name="password" type={showPassword ? 'text' : 'password'} required minLength={8}
@@ -170,6 +209,24 @@ export function LoginView({ auth }) {
                   </button>
                 </div>
               </motion.div>
+              ) : null}
+              {needsConfirm ? (
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="login-confirm" className="text-sm font-medium">Confirmar senha</label>
+                  <Input
+                    id="login-confirm" name="confirm" type={showPassword ? 'text' : 'password'} required minLength={8}
+                    autoComplete="new-password" className="h-11" aria-invalid={mismatch}
+                    value={confirm} onChange={(e) => setConfirm(e.target.value)}
+                  />
+                  {mismatch ? <p role="alert" className="text-xs text-destructive">As senhas não coincidem.</p> : null}
+                </div>
+              ) : null}
+
+              {forgotSent ? (
+                <p role="status" className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-foreground">
+                  Se o e-mail existir, enviamos o link para redefinir a senha. Confira a caixa de entrada e o spam.
+                </p>
+              ) : null}
 
               {auth.error ? (
                 // key muda a cada tentativa -> o tremor repete mesmo se a mensagem for igual à anterior.
@@ -186,10 +243,15 @@ export function LoginView({ auth }) {
               ) : null}
 
               <motion.div variants={rise} className="mt-2">
-                <Button type="submit" disabled={submitting} className="h-11 w-full text-base">
+                <Button type="submit" disabled={submitting || (needsConfirm && password !== confirm)} className="h-11 w-full text-base">
                   <FontAwesomeIcon icon={submitting ? faSpinner : isLogin ? faRightToBracket : faUserPlus} spin={submitting} />
-                  {submitting ? (isLogin ? 'Entrando…' : 'Criando conta…') : isLogin ? 'Entrar' : 'Criar conta'}
+                  {submitting ? copy[3] : copy[2]}
                 </Button>
+                {mode === 'forgot' || mode === 'reset' ? (
+                  <button type="button" onClick={() => switchMode('login')} className="mt-3 w-full text-center text-sm text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+                    Voltar ao login
+                  </button>
+                ) : null}
               </motion.div>
             </form>
           </motion.div>
