@@ -279,11 +279,11 @@ async function requestHandler(request, response) {
       if (!lines.length) return sendJson(response, 400, { detail: 'A resposta não tem itens no formato "- 2x Equipamento".' });
       const [categories, aiInstructions, products] = await Promise.all([listCategories(), getAiInstructions(), listProducts()]);
       const classified = await classifyQuoteItems(lines.join('\n'), categories, aiInstructions.classification || undefined, products);
-      const { items, positions, connections, skipped } = buildBudgetFromClassified(classified, categories);
+      const { items, positions, connections, unclassified, skipped } = buildBudgetFromClassified(classified, categories);
       if (!items.length) return sendJson(response, 422, { detail: 'Nenhum item da resposta bateu com o catálogo de categorias.', skipped });
       const budget = await createBudget(user.id);
       await updateBudgetForUser(budget.id, user.id, { items, positions, connections });
-      return sendJson(response, 201, { budgetId: budget.id, itemCount: items.length, skipped });
+      return sendJson(response, 201, { budgetId: budget.id, itemCount: items.length, unclassified, skipped });
     }
     if (request.method === 'GET' && url.pathname === '/api/products/template') {
       if (!(await requireScreen(request, response, 'products', 'quote-audit'))) return;

@@ -124,15 +124,18 @@ test('assistente → orçamento: só linhas "- Nx" entram, cada linha vira um ca
   assert.deepEqual(extractBudgetLines('sem orçamento aqui'), []);
 
   const categories = [{ value: 'Controladora de Acesso', icon: 'door' }, { value: 'Leitor', icon: '' }];
-  const { items, positions, skipped } = buildBudgetFromClassified([
+  const { items, positions, skipped, unclassified } = buildBudgetFromClassified([
     { name: 'Endpoint 4 Portas', quantity: 2, category: 'Controladora de Acesso' },
     { name: 'Leitor Wiegand', quantity: 3, category: 'Leitor' },
     { name: 'Endpoint FULL', quantity: 1, category: 'Controladora de Acesso' },
-    { name: 'Instalação', quantity: 1, category: null },
+    { name: 'ONE Córtex V6 (central da portaria remota, comodato sem custo)', quantity: 1, category: null },
+    { name: '   ', quantity: 1, category: null },
   ], categories);
-  assert.deepEqual(items.map((i) => [i.id, i.title, i.quantity, i.icon]), [[1, 'Controladora de Acesso', 2, 'door'], [2, 'Leitor', 3, null], [3, 'Controladora de Acesso', 1, 'door']]);
-  assert.deepEqual(skipped, ['Instalação']);
-  assert.deepEqual(Object.keys(positions), ['item-1', 'item-2', 'item-3']);
+  // Nada some em silêncio: sem categoria no catálogo vira card livre (nome sem o comentário entre parênteses).
+  assert.deepEqual(items.map((i) => [i.id, i.title, i.quantity, i.icon]), [[1, 'Controladora de Acesso', 2, 'door'], [2, 'Leitor', 3, null], [3, 'Controladora de Acesso', 1, 'door'], [4, 'ONE Córtex V6', 1, null]]);
+  assert.deepEqual(unclassified, ['ONE Córtex V6']);
+  assert.deepEqual(skipped, ['(sem nome)']);
+  assert.deepEqual(Object.keys(positions), ['item-1', 'item-2', 'item-3', 'item-4']);
 });
 
 test('assistente: prompt leva todas as fichas e fórmulas e o histórico é validado', () => {
@@ -159,34 +162,58 @@ test('assistente: prompt leva todas as fichas e fórmulas e o histórico é vali
   assert.equal(validateAssistantMessages(long).length, 20);
 });
 
-test('assistente → orçamento: já nasce com as ligações pertinentes (periférico → controladora → switch → roteador) e cards em fileiras', () => {
+test('assistente → orçamento: ligações seguem o motor (presença, capacidade consumida, alternativas) e os cards ficam em fileiras', () => {
   const { buildBudgetFromClassified } = require('../lib/equipmentKnowledge');
-  const cat = (value) => ({ value, icon: null });
-  const names = ['Botoeira', 'Botoeira', 'Terminal Facial', 'Controladora de Acesso', 'Controladora de Acesso', 'Câmera IP PoE', 'Switch Fast 8 Portas', 'Switch PoE Giga 8 Portas', 'Mikrotik', 'Nobreak', 'Fonte 12V'];
-  const { items, positions, connections } = buildBudgetFromClassified(names.map((n) => ({ name: n, quantity: 1, category: n })), names.map(cat));
+  const presence = (id, ...candidates) => ({ id, label: id, critical: true, type: 'presence', candidates });
+  const capacity = (id, resource) => ({ id, label: id, critical: true, type: 'capacity', resource, unitsPerItem: 1 });
+  const categories = [
+    { value: 'Botoeira', requirements: [capacity('zona', 'alarm.zone')] },
+    { value: 'Controladora de Acesso', requirements: [
+      presence('fonte', 'Fonte 12V'), presence('leitor', 'Leitor RFID'),
+      { id: 'fechadura', label: 'Fechadura', critical: true, type: 'anyOf', options: [{ type: 'presence', candidates: ['Fechadura Elétrica'] }, { type: 'presence', candidates: ['Fechadura Magnética'] }] },
+      presence('nobreak', 'Nobreak'),
+    ] },
+    { value: 'Fonte 12V' }, { value: 'Leitor RFID' }, { value: 'Fechadura Elétrica' }, { value: 'Fechadura Magnética' }, { value: 'Nobreak' },
+    { value: 'Câmera IP', requirements: [capacity('rede', 'network.gigabit_port'), capacity('gravacao', 'recording.ip_channel')] },
+    { value: 'Switch Giga 8 Portas', provides: [{ resource: 'network.gigabit_port', amount: 7 }] },
+    { value: 'NVR 16 Canais', provides: [{ resource: 'recording.ip_channel', amount: 16 }] },
+  ];
+  const entries = [
+    ['Botoeira', 2], ['Controladora de Acesso', 1], ['Controladora de Acesso', 1], ['Fonte 12V', 1], ['Fonte 12V', 1], ['Leitor RFID', 2],
+    ['Fechadura Elétrica', 2], ['Fechadura Magnética', 2], ['Nobreak', 1], ['Câmera IP', 5], ['Câmera IP', 4],
+    ['Switch Giga 8 Portas', 1], ['Switch Giga 8 Portas', 1], ['NVR 16 Canais', 1],
+  ];
+  const { items, positions, connections } = buildBudgetFromClassified(entries.map(([category, quantity]) => ({ name: category, quantity, category })), categories);
   const idOf = (title, nth = 0) => items.filter((i) => i.title === title)[nth].id;
   const has = (a, b) => connections.some((c) => c.source === `item-${a}` && c.target === `item-${b}`);
+  const row = (id) => positions[`item-${id}`].y;
 
-  // Botoeiras repartidas entre as duas controladoras (uma para cada); facial e fonte na primeira.
-  assert.ok(has(idOf('Botoeira', 0), idOf('Controladora de Acesso', 0)));
-  assert.ok(has(idOf('Botoeira', 1), idOf('Controladora de Acesso', 1)));
-  assert.ok(has(idOf('Terminal Facial'), idOf('Controladora de Acesso', 0)));
-  assert.ok(has(idOf('Fonte 12V'), idOf('Controladora de Acesso', 0)));
-  // Controladora → switch; câmera prefere o switch PoE; switch → roteador. Nobreak fica solto.
-  assert.ok(has(idOf('Controladora de Acesso', 0), idOf('Switch Fast 8 Portas')));
-  assert.ok(has(idOf('Câmera IP PoE'), idOf('Switch PoE Giga 8 Portas')));
-  assert.ok(!has(idOf('Câmera IP PoE'), idOf('Switch Fast 8 Portas')));
-  assert.ok(has(idOf('Switch Fast 8 Portas'), idOf('Mikrotik')));
-  assert.ok(!connections.some((c) => c.source === `item-${idOf('Nobreak')}` || c.target === `item-${idOf('Nobreak')}`));
+  // Presença: cada controladora pega a sua fonte (1ª→1ª, 2ª→2ª); leitor, nobreak e AS DUAS fechaduras (alternativas presentes).
+  assert.ok(has(idOf('Controladora de Acesso', 0), idOf('Fonte 12V', 0)));
+  assert.ok(has(idOf('Controladora de Acesso', 1), idOf('Fonte 12V', 1)));
+  assert.ok(has(idOf('Controladora de Acesso', 0), idOf('Leitor RFID')));
+  assert.ok(has(idOf('Controladora de Acesso', 0), idOf('Fechadura Elétrica')));
+  assert.ok(has(idOf('Controladora de Acesso', 0), idOf('Fechadura Magnética')));
+  assert.ok(has(idOf('Controladora de Acesso', 1), idOf('Nobreak')));
+  // Capacidade consumida: 5 câmeras cabem nas 7 portas do 1º switch; as 4 seguintes estouram e vão pro 2º. Gravação: NVR.
+  assert.ok(has(idOf('Câmera IP', 0), idOf('Switch Giga 8 Portas', 0)));
+  assert.ok(!has(idOf('Câmera IP', 0), idOf('Switch Giga 8 Portas', 1)));
+  assert.ok(has(idOf('Câmera IP', 1), idOf('Switch Giga 8 Portas', 0)) && has(idOf('Câmera IP', 1), idOf('Switch Giga 8 Portas', 1)));
+  assert.ok(has(idOf('Câmera IP', 0), idOf('NVR 16 Canais')) && has(idOf('Câmera IP', 1), idOf('NVR 16 Canais')));
+  // Sem fornecedor no orçamento (zona de alarme) e sem exigência (fonte, nobreak): nada de ligação inventada.
+  assert.ok(!connections.some((c) => c.source === `item-${idOf('Botoeira')}` || c.target === `item-${idOf('Botoeira')}`));
+  assert.ok(!connections.some((c) => c.source === `item-${idOf('Nobreak')}`));
 
-  // Formato aceito pelo canvas; ids únicos; lados coerentes com a posição (origem acima do destino -> bottom/top).
+  // Formato do canvas, ids únicos, sem auto-ligação; quem exige fica acima de quem fornece; solto vai pra última fileira.
   assert.equal(new Set(connections.map((c) => c.id)).size, connections.length);
-  const c = connections.find((x) => x.source === `item-${idOf('Botoeira', 0)}`);
-  assert.deepEqual([c.sourceHandle, c.targetHandle], ['bottom', 'top']);
-  assert.match(c.id, /^manual-item-\d+\(bottom\)->item-\d+\(top\)$/);
-  assert.ok(positions[`item-${idOf('Botoeira', 0)}`].y < positions[`item-${idOf('Controladora de Acesso', 0)}`].y);
-  assert.ok(positions[`item-${idOf('Controladora de Acesso', 0)}`].y < positions[`item-${idOf('Switch Fast 8 Portas')}`].y);
+  assert.ok(connections.every((c) => c.source !== c.target));
+  const link = connections.find((c) => c.source === `item-${idOf('Câmera IP', 0)}` && c.target === `item-${idOf('NVR 16 Canais')}`);
+  assert.deepEqual([link.sourceHandle, link.targetHandle], ['bottom', 'top']);
+  assert.match(link.id, /^manual-item-\d+\(bottom\)->item-\d+\(top\)$/);
+  assert.ok(row(idOf('Câmera IP', 0)) < row(idOf('Switch Giga 8 Portas', 0)));
+  assert.ok(row(idOf('Controladora de Acesso', 0)) < row(idOf('Fonte 12V', 0)));
+  assert.ok(row(idOf('Botoeira')) > row(idOf('Fonte 12V', 0)));
 
-  // Sem destino no orçamento, não inventa ligação.
-  assert.deepEqual(buildBudgetFromClassified([{ name: 'x', quantity: 1, category: 'Botoeira' }], [cat('Botoeira')]).connections, []);
+  // Sem categoria conhecida ou sem catálogo, não há como ligar: só posições.
+  assert.deepEqual(buildBudgetFromClassified([{ name: 'x', quantity: 1, category: 'Botoeira' }], [categories[0]]).connections, []);
 });
