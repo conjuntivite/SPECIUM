@@ -6,7 +6,7 @@ const {
   listGroups, createGroup, deleteGroup,
   listResources, createResource, updateResource, deleteResource,
   getAiInstructions, updateAiInstructions, logAssistantExchange,
-  createUser, findUserByEmail, listUsers, updateUser, seedDevAdmin,
+  createUser, findUserByEmail, createPasswordReset, consumePasswordReset, resetUserPassword, listUsers, updateUser, seedDevAdmin,
   createSession, findSessionUser, deleteSession,
   createBudget, listBudgetsForUser, getBudgetForUser, updateBudgetForUser, setBudgetAddressForUser, deleteBudgetForUser,
   closeDb,
@@ -15,7 +15,9 @@ const {
 // server.js é só a composição: boot de ambiente, o router HTTP puro e o start do processo. Toda
 // regra de negócio (extração de specs, motor de recursos/capacidade, provedores de busca,
 // validação) mora em lib/ — ver lib/ para o detalhamento por módulo.
-const { PORT, HOST, UPLOADS_DIRECTORY } = require('./lib/env');
+const { PORT, HOST, APP_URL, UPLOADS_DIRECTORY } = require('./lib/env');
+const { RESET_TTL_MS, hashResetToken, generateResetToken, allowResetRequest } = require('./lib/passwordReset');
+const { sendResetEmail } = require('./lib/mailer');
 const { normalize } = require('./lib/text');
 const { FLOORPLAN_EXTENSIONS, FLOORPLAN_MAX_BYTES, saveFloorPlanFile, deleteFloorPlanFile } = require('./lib/floorPlan');
 const {
@@ -28,7 +30,7 @@ const { sendJson, sendCsv, readJson, readBinary, serveStatic, serveFromDirectory
 const {
   validateSearchRequest, validateCompareRequest, validateRecipeItems, validateRecipePriceItems,
   validateProductRequest, validateCategoryRequest, validateResourceRequest,
-  validateAuthRequest, validateUserUpdateRequest, validateSetAddressRequest, validateBudgetSaveRequest,
+  validateAuthRequest, validateEmailRequest, validateResetRequest, validateUserUpdateRequest, validateSetAddressRequest, validateBudgetSaveRequest,
   validateAiInstructionsRequest,
 } = require('./lib/validators');
 const {
@@ -89,6 +91,27 @@ async function requestHandler(request, response) {
       await createSession(token, userDoc._id.toString(), new Date(Date.now() + SESSION_TTL_MS));
       const loggedInUser = { id: userDoc._id.toString(), email: userDoc.email, name: userDoc.name || null, role: userDoc.role || 'user', unrestricted: userDoc.unrestricted === true, avatar: userDoc.avatar || null, screens: Array.isArray(userDoc.screens) ? userDoc.screens : null };
       return sendJson(response, 200, loggedInUser, { 'Set-Cookie': serializeSessionCookie(token) });
+    }
+    // Sempre 200 (não revela quais e-mails têm conta). O envio não é aguardado: o tempo de resposta
+    // não diferencia e-mail existente de inexistente; falha de SMTP só vai pro log.
+    if (request.method === 'POST' && url.pathname === '/api/auth/forgot') {
+      const { email } = validateEmailRequest(await readJson(request));
+      const userDoc = await findUserByEmail(email);
+      if (userDoc && allowResetRequest(email)) {
+        const { token, tokenHash } = generateResetToken();
+        await createPasswordReset(userDoc._id.toString(), tokenHash, new Date(Date.now() + RESET_TTL_MS));
+        sendResetEmail(email, `${APP_URL}/?reset=${token}`).catch((err) => console.error('[mailer] falha ao enviar:', err.message));
+      }
+      return sendJson(response, 200, { sent: true });
+    }
+    if (request.method === 'POST' && url.pathname === '/api/auth/reset') {
+      const { token, password } = validateResetRequest(await readJson(request));
+      const userId = await consumePasswordReset(hashResetToken(token));
+      if (!userId) throw new Error('Link inválido ou expirado.');
+      const user = await resetUserPassword(userId, hashPassword(password));
+      const sessionToken = generateSessionToken();
+      await createSession(sessionToken, user.id, new Date(Date.now() + SESSION_TTL_MS));
+      return sendJson(response, 200, user, { 'Set-Cookie': serializeSessionCookie(sessionToken) });
     }
     if (request.method === 'POST' && url.pathname === '/api/auth/logout') {
       const token = parseCookies(request)[SESSION_COOKIE_NAME];

@@ -543,6 +543,37 @@ async function deleteSession(token) {
   await sessions.deleteOne({ _id: token });
 }
 
+// Recuperação de senha: _id é o SHA-256 do token (lib/passwordReset.js). O índice TTL limpa
+// os vencidos; consumePasswordReset ainda confere expiresAt porque o TTL roda só a cada ~60 s.
+async function getPasswordResetsCollection() {
+  const db = await getDb();
+  const resets = db.collection('password_resets');
+  await resets.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  return resets;
+}
+
+async function createPasswordReset(userId, tokenHash, expiresAt) {
+  const resets = await getPasswordResetsCollection();
+  await resets.deleteMany({ userId: new ObjectId(userId) });
+  await resets.insertOne({ _id: tokenHash, userId: new ObjectId(userId), expiresAt });
+}
+
+// Uso único: apaga ao ler. Devolve o userId (string) ou null se inexistente/expirado.
+async function consumePasswordReset(tokenHash) {
+  const resets = await getPasswordResetsCollection();
+  const doc = await resets.findOneAndDelete({ _id: tokenHash });
+  return doc && doc.expiresAt > new Date() ? doc.userId.toString() : null;
+}
+
+// Troca a senha e derruba todas as sessões da conta (quem entrou com a senha antiga sai).
+async function resetUserPassword(userId, passwordHash) {
+  const users = await getUsersCollection();
+  await users.updateOne({ _id: new ObjectId(userId) }, { $set: { passwordHash } });
+  const sessions = await getSessionsCollection();
+  await sessions.deleteMany({ userId: new ObjectId(userId) });
+  return findUserById(userId);
+}
+
 async function getBudgetsCollection() {
   const db = await getDb();
   return db.collection('budgets');
@@ -665,7 +696,7 @@ module.exports = {
   listGroups, createGroup, deleteGroup,
   listResources, createResource, updateResource, deleteResource,
   getAiInstructions, updateAiInstructions, logAssistantExchange,
-  createUser, findUserByEmail, findUserById, listUsers, updateUser, seedDevAdmin,
+  createUser, findUserByEmail, findUserById, createPasswordReset, consumePasswordReset, resetUserPassword, listUsers, updateUser, seedDevAdmin,
   createSession, findSessionUser, deleteSession,
   createBudget, listBudgetsForUser, getBudgetForUser, updateBudgetForUser, setBudgetAddressForUser, deleteBudgetForUser,
   closeDb,

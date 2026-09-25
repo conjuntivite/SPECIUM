@@ -1113,3 +1113,43 @@ test('POST /api/assistant/budget exige Assistente E Orçamento, e recusa respost
   const both = await loggedInFetch(baseUrl, t, ['assistant', 'budget']);
   assert.equal((await both(`${baseUrl}/api/assistant/budget`, json({ answer: 'Só texto, sem itens.' }))).status, 400);
 });
+
+test('recuperação de senha: e-mail com link, troca a senha, derruba sessões antigas, token é de uso único e expira; e-mail sem conta não envia nada', async (t) => {
+  const { setMailTransport } = require('../lib/mailer');
+  const sent = [];
+  setMailTransport({ sendMail: async (m) => sent.push(m) });
+  t.after(() => setMailTransport(null));
+  const server = http.createServer(requestHandler);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const email = `__teste__reset-${Date.now()}@example.com`;
+  const post = (path, body) => fetch(`${baseUrl}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const client = await MongoClient.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017');
+  const db = client.db(process.env.MONGODB_DB || 'comprador_inviolavel');
+  t.after(async () => { await db.collection('users').deleteOne({ email }); await client.close(); });
+
+  const registered = await post('/api/auth/register', { email, password: 'senha12345' });
+  const oldCookie = registered.headers.getSetCookie()[0].split(';')[0];
+
+  assert.equal((await post('/api/auth/forgot', { email: `__teste__nao-existe-${Date.now()}@example.com` })).status, 200);
+  assert.equal(sent.length, 0);
+
+  assert.equal((await post('/api/auth/forgot', { email })).status, 200);
+  assert.equal(sent.length, 1);
+  const token = sent[0].text.match(/\?reset=([0-9a-f]{64})/)[1];
+
+  assert.equal((await post('/api/auth/reset', { token, password: 'curta' })).status, 400);
+  const reset = await post('/api/auth/reset', { token, password: 'novasenha123' });
+  assert.equal(reset.status, 200);
+  assert.equal((await fetch(`${baseUrl}/api/auth/me`, { headers: { Cookie: oldCookie } })).status, 401);
+  assert.equal((await fetch(`${baseUrl}/api/auth/me`, { headers: { Cookie: reset.headers.getSetCookie()[0].split(';')[0] } })).status, 200);
+  assert.equal((await post('/api/auth/login', { email, password: 'novasenha123' })).status, 200);
+  assert.equal((await post('/api/auth/login', { email, password: 'senha12345' })).status, 400);
+  assert.equal((await post('/api/auth/reset', { token, password: 'outrasenha123' })).status, 400);
+
+  await post('/api/auth/forgot', { email });
+  const expiredToken = sent[1].text.match(/\?reset=([0-9a-f]{64})/)[1];
+  await db.collection('password_resets').updateMany({}, { $set: { expiresAt: new Date(Date.now() - 1000) } });
+  assert.equal((await post('/api/auth/reset', { token: expiredToken, password: 'outrasenha123' })).status, 400);
+});

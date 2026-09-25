@@ -63,3 +63,36 @@ test('permissão por tela: admin e conta sem lista acessam tudo; lista restringe
   assert.throws(() => validateUserUpdateRequest({ screens: ['users'] }));
   assert.throws(() => validateUserUpdateRequest({ screens: 'budget' }));
 });
+
+test('token de redefinição: 64 hex, só o hash vai pro banco, e o pedido é limitado a 3 por e-mail a cada 15 min', () => {
+  const { generateResetToken, hashResetToken, allowResetRequest } = require('../lib/passwordReset');
+  const { token, tokenHash } = generateResetToken();
+  assert.match(token, /^[0-9a-f]{64}$/);
+  assert.equal(tokenHash, hashResetToken(token));
+  assert.notEqual(tokenHash, token);
+  const t0 = 1_000_000;
+  assert.deepEqual([1, 2, 3, 4].map(() => allowResetRequest('a@x.com', t0)), [true, true, true, false]);
+  assert.equal(allowResetRequest('b@x.com', t0), true);
+  assert.equal(allowResetRequest('a@x.com', t0 + 15 * 60 * 1000 + 1), true);
+});
+
+test('validateResetRequest exige token de 64 hex e senha de 8+ caracteres', () => {
+  const { validateResetRequest, validateEmailRequest } = require('../lib/validators');
+  const token = 'a'.repeat(64);
+  assert.deepEqual(validateResetRequest({ token, password: 'senha12345' }), { token, password: 'senha12345' });
+  assert.throws(() => validateResetRequest({ token, password: 'curta' }));
+  assert.throws(() => validateResetRequest({ token: 'xyz', password: 'senha12345' }));
+  assert.deepEqual(validateEmailRequest({ email: ' Ana@Exemplo.com ' }), { email: 'ana@exemplo.com' });
+  assert.throws(() => validateEmailRequest({ email: 'sem-arroba' }));
+});
+
+test('sendResetEmail entrega o link ao transporte configurado', async () => {
+  const { sendResetEmail, setMailTransport } = require('../lib/mailer');
+  const sent = [];
+  setMailTransport({ sendMail: async (m) => sent.push(m) });
+  await sendResetEmail('ana@exemplo.com', 'http://x/?reset=abc');
+  setMailTransport(null);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].to, 'ana@exemplo.com');
+  assert.match(sent[0].text, /http:\/\/x\/\?reset=abc/);
+});
