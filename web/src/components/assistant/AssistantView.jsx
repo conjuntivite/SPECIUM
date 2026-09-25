@@ -12,10 +12,13 @@ const toHtml = (text) => formatMarkdownLike(text.replace(/^#+\s*(.+)$/gm, '**$1*
 const BUDGET_LINE = /^\s*[-*•]\s*(\d+)\s*x\s+.+$/im
 const hasBudgetLines = (text) => BUDGET_LINE.test(text.replace(/\*\*/g, ''))
 
+// Uma de cada tipo que o comercial pergunta: orçamento pronto (vira botão de importar), equipamento
+// de terceiros no sistema ONE, limite SIAM e conta de dimensionamento.
 const EXAMPLES = [
-  'O que preciso para uma portaria remota ONE com 4 portas e 1 portão?',
-  'Quantos dispositivos cabem numa iDBM+ e qual a distância máxima do cabo?',
-  'Qual a diferença entre o Endpoint 4 Portas e o Endpoint FULL?',
+  'Monte um orçamento de portaria remota ONE: 2 portas sociais, 1 portão deslizante de garagem e 6 câmeras.',
+  'Onde ligo uma antena de tag veicular Control iD num condomínio ONE?',
+  'Quantos dispositivos cabem numa iDBM+ e qual a distância máxima do cabo RAS?',
+  'Quanto tempo um nobreak 1200VA segura um Córtex V6, 2 Endpoints 4 Portas e um switch?',
 ]
 
 export function AssistantView({ onOpenBudget }) {
@@ -68,9 +71,9 @@ export function AssistantView({ onOpenBudget }) {
     <div className="mx-auto flex max-w-3xl flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Assistente ONE / SIAM</h2>
+          <h2 className="text-lg font-semibold">Assistente técnico-comercial</h2>
           <p className="text-sm text-muted-foreground">
-            Pergunte sobre projeto, ligação e limites dos equipamentos ONE PORTARIA e SIAM. A IA responde com base nas fichas técnicas cadastradas no sistema.
+            Especialista em ONE PORTARIA e SIAM: projeto, ligação, limites e orçamento. Também ajuda com CFTV, rede, energia e cabeamento, mostrando as contas. Passe os requisitos do cliente e ele monta um orçamento que você importa para a tela de Orçamentos.
           </p>
         </div>
         {messages.length ? (
@@ -110,7 +113,7 @@ export function AssistantView({ onOpenBudget }) {
             <Button size="sm" onClick={() => onOpenBudget(created.budgetId)}>Abrir orçamento</Button>
           </div>
         ) : null}
-        {loading ? <p className="text-sm text-muted-foreground">Consultando as fichas...</p> : null}
+        {loading ? <p className="text-sm text-muted-foreground">Preparando a resposta...</p> : null}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <div ref={bottomRef} />
       </div>

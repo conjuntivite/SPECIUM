@@ -8,7 +8,7 @@ export const SCREENS = [
   { value: 'products', icon: faBox, label: 'Produtos' },
   { value: 'categories', icon: faTag, label: 'Categorias' },
   { value: 'quote-audit', icon: faFileShield, label: 'Validar orçamento (PDF)' },
-  { value: 'assistant', icon: faComments, label: 'Assistente ONE/SIAM' },
+  { value: 'assistant', icon: faComments, label: 'Assistente' },
 ]
 
 // Admin e conta sem lista (criada antes das permissões) veem todas.
