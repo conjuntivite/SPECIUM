@@ -205,6 +205,23 @@ export function askAssistant(messages) {
   return postJson('/api/assistant', { messages })
 }
 
+export function listAssistantChats() {
+  return requestJson('/api/assistant/chats')
+}
+
+export function getAssistantChat(id) {
+  return requestJson(`/api/assistant/chats/${id}`)
+}
+
+// Sem id cria a conversa (o servidor apaga a mais antiga passando de 10); com id só atualiza.
+export function saveAssistantChat(id, messages) {
+  return requestJson('/api/assistant/chats', { method: 'PUT', body: { id: id || undefined, messages } })
+}
+
+export function deleteAssistantChat(id) {
+  return requestJson(`/api/assistant/chats/${id}`, { method: 'DELETE' })
+}
+
 export function createBudgetFromAssistant(answer) {
   return postJson('/api/assistant/budget', { answer })
 }
