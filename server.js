@@ -41,7 +41,7 @@ const {
   extractPdfText, classifyQuoteItems, auditQuoteWithAI, PDF_AUDIT_MAX_BYTES,
   DEFAULT_CLASSIFICATION_INSTRUCTIONS, DEFAULT_AUDIT_INSTRUCTIONS,
 } = require('./lib/quoteAudit');
-const { askEquipmentAssistant } = require('./lib/equipmentKnowledge');
+const { askEquipmentAssistant, extractBudgetLines, buildBudgetFromClassified } = require('./lib/equipmentKnowledge');
 const { setShoppingFetcher } = require('./lib/providers/shoppingFetcher');
 const { excludePriceOutliers, selectTopDistinctStores, buildGoogleShoppingUrl } = require('./lib/providers/shared');
 const {
@@ -200,6 +200,21 @@ async function requestHandler(request, response) {
       await logAssistantExchange({ userId: user.id, userEmail: user.email, question: body.messages.at(-1).content, answer, model })
         .catch((err) => console.error('Falha ao gravar log do assistente:', err.message));
       return sendJson(response, 200, { answer });
+    }
+    if (request.method === 'POST' && url.pathname === '/api/assistant/budget') {
+      const user = await requireScreen(request, response, 'assistant');
+      if (!user) return;
+      if (!canAccessScreen(user, 'budget')) return sendJson(response, 403, { detail: 'Você não tem permissão para a tela de Orçamentos.' });
+      const { answer } = await readJson(request);
+      const lines = extractBudgetLines(answer);
+      if (!lines.length) return sendJson(response, 400, { detail: 'A resposta não tem itens no formato "- 2x Equipamento".' });
+      const [categories, aiInstructions, products] = await Promise.all([listCategories(), getAiInstructions(), listProducts()]);
+      const classified = await classifyQuoteItems(lines.join('\n'), categories, aiInstructions.classification || undefined, products);
+      const { items, positions, skipped } = buildBudgetFromClassified(classified, categories);
+      if (!items.length) return sendJson(response, 422, { detail: 'Nenhum item da resposta bateu com o catálogo de categorias.', skipped });
+      const budget = await createBudget(user.id);
+      await updateBudgetForUser(budget.id, user.id, { items, positions });
+      return sendJson(response, 201, { budgetId: budget.id, itemCount: items.length, skipped });
     }
     if (request.method === 'GET' && url.pathname === '/api/products/template') {
       if (!(await requireScreen(request, response, 'products', 'quote-audit'))) return;

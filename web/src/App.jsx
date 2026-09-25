@@ -64,7 +64,7 @@ function App() {
       productsPanel={<ProductsView />}
       categoriesPanel={<CategoriesView />}
       quoteAuditPanel={<QuotePdfAuditView />}
-      assistantPanel={<AssistantView />}
+      assistantPanel={<AssistantView onOpenBudget={(id) => { openBudget(id); goTo('budget') }} />}
       showUsersTab={auth.user?.role === 'admin'}
       usersPanel={<UsersView auth={auth} />}
       showAiSettingsTab={auth.user?.role === 'admin'}

@@ -117,6 +117,24 @@ test('candidateModels: aceita lista separada por vírgula, mantém a ordem e põ
   assert.ok(candidateModels('').every((m) => m.endsWith(':free')));
 });
 
+test('assistente → orçamento: só linhas "- Nx" entram, cada linha vira um card e item sem categoria é pulado', () => {
+  const { extractBudgetLines, buildBudgetFromClassified } = require('../lib/equipmentKnowledge');
+  const answer = 'Sugestão:\n- 2x Endpoint 4 Portas (portas sociais)\n- **1x** Receptor FULL\n* 3X Leitor Wiegand\n- Cabo blindado até 30 m\nPremissa: 2x mais barato';
+  assert.deepEqual(extractBudgetLines(answer), ['2x Endpoint 4 Portas (portas sociais)', '1x Receptor FULL', '3x Leitor Wiegand']);
+  assert.deepEqual(extractBudgetLines('sem orçamento aqui'), []);
+
+  const categories = [{ value: 'Controladora de Acesso', icon: 'door' }, { value: 'Leitor', icon: '' }];
+  const { items, positions, skipped } = buildBudgetFromClassified([
+    { name: 'Endpoint 4 Portas', quantity: 2, category: 'Controladora de Acesso' },
+    { name: 'Leitor Wiegand', quantity: 3, category: 'Leitor' },
+    { name: 'Endpoint FULL', quantity: 1, category: 'Controladora de Acesso' },
+    { name: 'Instalação', quantity: 1, category: null },
+  ], categories);
+  assert.deepEqual(items.map((i) => [i.id, i.title, i.quantity, i.icon]), [[1, 'Controladora de Acesso', 2, 'door'], [2, 'Leitor', 3, null], [3, 'Controladora de Acesso', 1, 'door']]);
+  assert.deepEqual(skipped, ['Instalação']);
+  assert.deepEqual(Object.keys(positions), ['item-1', 'item-2', 'item-3']);
+});
+
 test('assistente: prompt leva todas as fichas e fórmulas e o histórico é validado', () => {
   const { buildAssistantSystemPrompt, validateAssistantMessages, EQUIPMENT_KNOWLEDGE, SIZING_FORMULAS } = require('../lib/equipmentKnowledge');
   const prompt = buildAssistantSystemPrompt();

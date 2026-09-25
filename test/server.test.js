@@ -1093,8 +1093,23 @@ test('permissão por tela: usuário só com Orçamento é barrado em Produtos/Bu
   assert.equal((await fetch(`${baseUrl}/api/categories`, json({ group: 'x', label: 'x' }))).status, 403);
   assert.equal((await fetch(`${baseUrl}/api/search`, json({ item_name: 'camera' }))).status, 403);
   assert.equal((await fetch(`${baseUrl}/api/assistant`, json({ messages: [{ role: 'user', content: 'oi' }] }))).status, 403);
+  assert.equal((await fetch(`${baseUrl}/api/assistant/budget`, json({ answer: '- 1x Câmera IP' }))).status, 403);
   // Sem login nenhum: 401, não 403.
   assert.equal((await globalThis.fetch(`${baseUrl}/api/products`, json({}))).status, 401);
   // Editar permissões é só de admin — usuário comum não edita nem a própria conta.
   assert.equal((await fetch(`${baseUrl}/api/users/${me.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ screens: ['budget', 'products'] }) })).status, 403);
+});
+
+test('POST /api/assistant/budget exige Assistente E Orçamento, e recusa resposta sem linhas "- Nx"', async (t) => {
+  const server = http.createServer(requestHandler);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const json = (body) => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+  const onlyAssistant = await loggedInFetch(baseUrl, t, ['assistant']);
+  assert.equal((await onlyAssistant(`${baseUrl}/api/assistant/budget`, json({ answer: '- 1x Câmera IP' }))).status, 403);
+
+  const both = await loggedInFetch(baseUrl, t, ['assistant', 'budget']);
+  assert.equal((await both(`${baseUrl}/api/assistant/budget`, json({ answer: 'Só texto, sem itens.' }))).status, 400);
 });

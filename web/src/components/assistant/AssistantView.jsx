@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { askAssistant } from '@/lib/api'
+import { askAssistant, createBudgetFromAssistant } from '@/lib/api'
 import { formatMarkdownLike } from '@/lib/markdown'
 
 // formatMarkdownLike só entende **negrito**: título (##) vira negrito e citação (>) perde o marcador.
 const toHtml = (text) => formatMarkdownLike(text.replace(/^#+\s*(.+)$/gm, '**$1**').replace(/^>\s?/gm, ''))
+
+// Mesma regex do back (lib/equipmentKnowledge.js, BUDGET_LINE): só mostra o botão quando a resposta
+// tem ao menos uma linha de orçamento "- 2x Equipamento".
+const BUDGET_LINE = /^\s*[-*•]\s*(\d+)\s*x\s+.+$/im
+const hasBudgetLines = (text) => BUDGET_LINE.test(text.replace(/\*\*/g, ''))
 
 const EXAMPLES = [
   'O que preciso para uma portaria remota ONE com 4 portas e 1 portão?',
@@ -13,11 +18,15 @@ const EXAMPLES = [
   'Qual a diferença entre o Endpoint 4 Portas e o Endpoint FULL?',
 ]
 
-export function AssistantView() {
+export function AssistantView({ onOpenBudget }) {
   const [messages, setMessages] = useState([])
   const [draft, setDraft] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [importingIndex, setImportingIndex] = useState(null)
+  // Orçamento criado mas com itens que não bateram com o catálogo: fica na tela pra o comercial ver
+  // o que não entrou antes de abrir (sem pendência, abre direto).
+  const [created, setCreated] = useState(null)
   const bottomRef = useRef(null)
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
@@ -40,6 +49,21 @@ export function AssistantView() {
     }
   }
 
+  async function importBudget(index) {
+    setImportingIndex(index)
+    setError('')
+    setCreated(null)
+    try {
+      const result = await createBudgetFromAssistant(messages[index].content)
+      if (result.skipped.length) setCreated(result)
+      else onOpenBudget(result.budgetId)
+    } catch (err) {
+      setError(err.message || 'Não foi possível criar o orçamento.')
+    } finally {
+      setImportingIndex(null)
+    }
+  }
+
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
@@ -50,7 +74,7 @@ export function AssistantView() {
           </p>
         </div>
         {messages.length ? (
-          <Button variant="outline" size="sm" onClick={() => { setMessages([]); setError('') }} disabled={loading}>Nova conversa</Button>
+          <Button variant="outline" size="sm" onClick={() => { setMessages([]); setError(''); setCreated(null) }} disabled={loading}>Nova conversa</Button>
         ) : null}
       </div>
 
@@ -64,14 +88,28 @@ export function AssistantView() {
 
       <div className="flex flex-col gap-3">
         {messages.map((m, i) => (
-          <div
-            key={i}
-            className={m.role === 'user'
-              ? 'ml-auto max-w-[85%] rounded-xl bg-primary px-3 py-2 text-sm text-primary-foreground whitespace-pre-line'
-              : 'max-w-[95%] rounded-xl border border-border bg-card/60 p-3 text-sm whitespace-pre-line'}
-            dangerouslySetInnerHTML={{ __html: toHtml(m.content) }}
-          />
+          <div key={i} className={m.role === 'user' ? 'ml-auto max-w-[85%]' : 'flex max-w-[95%] flex-col items-start gap-2'}>
+            <div
+              className={m.role === 'user'
+                ? 'rounded-xl bg-primary px-3 py-2 text-sm text-primary-foreground whitespace-pre-line'
+                : 'rounded-xl border border-border bg-card/60 p-3 text-sm whitespace-pre-line'}
+              dangerouslySetInnerHTML={{ __html: toHtml(m.content) }}
+            />
+            {m.role === 'assistant' && hasBudgetLines(m.content) ? (
+              <Button size="sm" variant="secondary" onClick={() => importBudget(i)} disabled={importingIndex !== null}>
+                {importingIndex === i ? 'Criando orçamento...' : 'Criar orçamento com estes itens'}
+              </Button>
+            ) : null}
+          </div>
         ))}
+        {created ? (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card/60 p-3 text-sm" role="status">
+            <span>
+              Orçamento criado com {created.itemCount} {created.itemCount === 1 ? 'item' : 'itens'}. Não entraram (sem categoria no catálogo): {created.skipped.join('; ')}.
+            </span>
+            <Button size="sm" onClick={() => onOpenBudget(created.budgetId)}>Abrir orçamento</Button>
+          </div>
+        ) : null}
         {loading ? <p className="text-sm text-muted-foreground">Consultando as fichas...</p> : null}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <div ref={bottomRef} />

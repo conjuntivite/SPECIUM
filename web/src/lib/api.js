@@ -184,3 +184,7 @@ export function deleteResource(id) {
 export function askAssistant(messages) {
   return postJson('/api/assistant', { messages })
 }
+
+export function createBudgetFromAssistant(answer) {
+  return postJson('/api/assistant/budget', { answer })
+}
