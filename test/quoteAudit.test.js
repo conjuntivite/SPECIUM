@@ -139,6 +139,9 @@ test('assistente: prompt leva todas as fichas e fórmulas e o histórico é vali
   const { buildAssistantSystemPrompt, validateAssistantMessages, EQUIPMENT_KNOWLEDGE, SIZING_FORMULAS } = require('../lib/equipmentKnowledge');
   const prompt = buildAssistantSystemPrompt();
   for (const k of [...EQUIPMENT_KNOWLEDGE.map((e) => e.text), ...SIZING_FORMULAS]) assert.ok(prompt.includes(k));
+  // Regressão: a IA repetia perguntas já respondidas nas rodadas seguintes (achado em teste real).
+  assert.match(prompt, /TUDO que o comercial já respondeu é FATO/);
+  assert.match(prompt, /LEMBRETE FINAL: não repita pergunta/);
   assert.deepEqual(validateAssistantMessages([{ role: 'user', content: '  oi ' }]), [{ role: 'user', content: 'oi' }]);
   assert.throws(() => validateAssistantMessages([]));
   assert.throws(() => validateAssistantMessages([{ role: 'system', content: 'x' }]));
