@@ -363,7 +363,7 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
             // mesmo vazio, é o que ele usa pra manter o node clicável.
             onNodeClick={noop}
           >
-            <Background variant={BackgroundVariant.Lines} gap={90} color="var(--color-flow-grid)" />
+            <Background variant={BackgroundVariant.Dots} gap={22} size={2} color="var(--color-flow-grid)" />
           </ReactFlow>
         </div>
       </ContextMenuTrigger>
