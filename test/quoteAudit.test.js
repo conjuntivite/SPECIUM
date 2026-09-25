@@ -117,10 +117,10 @@ test('candidateModels: aceita lista separada por vírgula, mantém a ordem e põ
   assert.ok(candidateModels('').every((m) => m.endsWith(':free')));
 });
 
-test('assistente ONE/SIAM: prompt leva todas as fichas e o histórico é validado', () => {
-  const { buildAssistantSystemPrompt, validateAssistantMessages, EQUIPMENT_KNOWLEDGE } = require('../lib/equipmentKnowledge');
+test('assistente: prompt leva todas as fichas e fórmulas e o histórico é validado', () => {
+  const { buildAssistantSystemPrompt, validateAssistantMessages, EQUIPMENT_KNOWLEDGE, SIZING_FORMULAS } = require('../lib/equipmentKnowledge');
   const prompt = buildAssistantSystemPrompt();
-  for (const k of EQUIPMENT_KNOWLEDGE) assert.ok(prompt.includes(k.text));
+  for (const k of [...EQUIPMENT_KNOWLEDGE.map((e) => e.text), ...SIZING_FORMULAS]) assert.ok(prompt.includes(k));
   assert.deepEqual(validateAssistantMessages([{ role: 'user', content: '  oi ' }]), [{ role: 'user', content: 'oi' }]);
   assert.throws(() => validateAssistantMessages([]));
   assert.throws(() => validateAssistantMessages([{ role: 'system', content: 'x' }]));

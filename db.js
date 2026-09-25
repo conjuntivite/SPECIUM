@@ -421,6 +421,13 @@ async function getAiInstructions() {
   return { classification: doc?.classification || null, audit: doc?.audit || null };
 }
 
+// Histórico do Assistente (só escrita por enquanto): serve pra ler depois o que os comerciais
+// perguntam e onde a IA errou. Grava só a última pergunta + resposta, não a conversa inteira.
+async function logAssistantExchange({ userId, userEmail, question, answer, model }) {
+  const db = await getDb();
+  await db.collection('assistant_logs').insertOne({ userId, userEmail, question, answer, model, createdAt: new Date() });
+}
+
 async function updateAiInstructions({ classification, audit }) {
   const settings = await getSettingsCollection();
   await settings.updateOne(
@@ -657,7 +664,7 @@ module.exports = {
   listCategories, createCategory, updateCategory, deleteCategory,
   listGroups, createGroup, deleteGroup,
   listResources, createResource, updateResource, deleteResource,
-  getAiInstructions, updateAiInstructions,
+  getAiInstructions, updateAiInstructions, logAssistantExchange,
   createUser, findUserByEmail, findUserById, listUsers, updateUser, seedDevAdmin,
   createSession, findSessionUser, deleteSession,
   createBudget, listBudgetsForUser, getBudgetForUser, updateBudgetForUser, setBudgetAddressForUser, deleteBudgetForUser,

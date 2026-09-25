@@ -5,7 +5,7 @@ const {
   listCategories, createCategory, updateCategory, deleteCategory,
   listGroups, createGroup, deleteGroup,
   listResources, createResource, updateResource, deleteResource,
-  getAiInstructions, updateAiInstructions,
+  getAiInstructions, updateAiInstructions, logAssistantExchange,
   createUser, findUserByEmail, listUsers, updateUser, seedDevAdmin,
   createSession, findSessionUser, deleteSession,
   createBudget, listBudgetsForUser, getBudgetForUser, updateBudgetForUser, setBudgetAddressForUser, deleteBudgetForUser,
@@ -195,7 +195,11 @@ async function requestHandler(request, response) {
       const user = await requireScreen(request, response, 'assistant');
       if (!user) return;
       const body = await readJson(request);
-      return sendJson(response, 200, { answer: await askEquipmentAssistant(body.messages) });
+      const { answer, model } = await askEquipmentAssistant(body.messages);
+      // Log é só pra análise: se o Mongo falhar aqui, o comercial ainda recebe a resposta.
+      await logAssistantExchange({ userId: user.id, userEmail: user.email, question: body.messages.at(-1).content, answer, model })
+        .catch((err) => console.error('Falha ao gravar log do assistente:', err.message));
+      return sendJson(response, 200, { answer });
     }
     if (request.method === 'GET' && url.pathname === '/api/products/template') {
       if (!(await requireScreen(request, response, 'products', 'quote-audit'))) return;
