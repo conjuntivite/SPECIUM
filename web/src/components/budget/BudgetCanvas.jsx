@@ -157,6 +157,14 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
   // que o item nasce dentro de um container em vez de solto no canvas.
   const [productPrompt, setProductPrompt] = useState(null)
 
+  // Card genérico (só a categoria, ex.: importado do Assistente) -> escolher o produto cadastrado.
+  // `replaceItemId` faz o picker atualizar esse item em vez de criar um novo.
+  const handleItemPickProduct = useCallback((itemId) => {
+    const item = budget.items.find((it) => it.id === itemId)
+    if (!item) return
+    setProductPrompt({ label: categoryLabelByValue[item.title] || item.title, categories: [item.title], replaceItemId: itemId, skipLabel: 'Manter genérico' })
+  }, [budget.items, categoryLabelByValue])
+
   // "+ Novo equipamento" dentro de um container aberto (ContainerAddPanel, via FlowNode).
   const handleAddCategoryToContainer = useCallback((containerId, item) => {
     setProductPrompt({ label: item.label, categories: [item.value], fallbackTitle: item.value, position: undefined, containerId })
@@ -314,14 +322,6 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
     const position = screenToFlowPosition(lastContextPosRef.current)
     setProductPrompt({ label: item.label, categories: [item.value], fallbackTitle: item.value, position, containerId: containerAtPosition(position) })
   }
-
-  // Card genérico (só a categoria, ex.: importado do Assistente) -> escolher o produto cadastrado.
-  // `replaceItemId` faz o picker atualizar esse item em vez de criar um novo.
-  const handleItemPickProduct = useCallback((itemId) => {
-    const item = budget.items.find((it) => it.id === itemId)
-    if (!item) return
-    setProductPrompt({ label: categoryLabelByValue[item.title] || item.title, categories: [item.title], replaceItemId: itemId, skipLabel: 'Manter genérico' })
-  }, [budget.items, categoryLabelByValue])
 
   function handleProductPick(product) {
     if (productPrompt?.replaceItemId != null) budget.setItemProduct(productPrompt.replaceItemId, composeProductTitle(product), categoryIconByValue[product.category])
