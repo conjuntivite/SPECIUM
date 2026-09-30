@@ -220,3 +220,30 @@ test('assistente → orçamento: ligações seguem o motor (presença, capacidad
   // Sem categoria conhecida ou sem catálogo, não há como ligar: só posições.
   assert.deepEqual(buildBudgetFromClassified([{ name: 'x', quantity: 1, category: 'Botoeira' }], [categories[0]]).connections, []);
 });
+
+test('fichas Intelbras (datasheets oficiais): AMT 4010 expande até 64 zonas e o item certo puxa a ficha certa', () => {
+  const { relevantKnowledge } = require('../lib/equipmentKnowledge');
+  const amt = relevantKnowledge([{ name: 'CENTRAL DE ALARME INTELBRAS AMT4010 SMART' }]);
+  assert.match(amt, /até 64 zonas/);
+  assert.match(amt, /XEZ 4008/);
+  assert.match(amt, /XAR 4000/);
+  assert.match(relevantKnowledge([{ name: 'CENTRAL DE ALARME INTELBRAS AMT2018E 18Z ETHERNET' }]), /máximo de 24/);
+  // sensor sem fio da linha 8000 só conversa com a AMT 8000; o da linha SMART precisa do receptor XAR 4000
+  assert.match(relevantKnowledge([{ name: 'SENSOR MAGNETICO SEM FIO XAS 8000' }]), /só funcionam com a AMT 8000/);
+  assert.match(relevantKnowledge([{ name: 'SENSOR MAGNETICO XAS 4010 SMART SF' }]), /precisa do receptor XAR 4000/);
+  assert.match(relevantKnowledge([{ name: 'CAMERA IP BULLET VIP 1230FC+' }]), /PoE 802\.3af/);
+  assert.match(relevantKnowledge([{ name: 'SWITCH 8 PORTA SG 800Q+ 10/100/1000' }]), /Gigabit/);
+  assert.equal(relevantKnowledge([{ name: 'CABO DE REDE CAT6' }]), '');
+});
+
+test('fichas Intelbras (2ª leva): fechadura é eletroímã, transmissor universal não é controle remoto, porteiro é IP de áudio', () => {
+  const { relevantKnowledge } = require('../lib/equipmentKnowledge');
+  assert.match(relevantKnowledge([{ name: 'FECHADURA INTELBRAS FE 21150' }]), /eletroímã de 150 kgf/);
+  assert.match(relevantKnowledge([{ name: 'BOTOEIRA INOX SOBREPOR CAIXA BT 3000 INTELBRAS' }]), /acionador de saída/);
+  assert.match(relevantKnowledge([{ name: 'PORTEIRO EXTERNO XPE 1001 IP' }]), /áudio/);
+  assert.match(relevantKnowledge([{ name: 'MONOFONE INTELBRAS IPR 8000 IN' }]), /até 3 extensões/);
+  assert.match(relevantKnowledge([{ name: 'MODULO INTELBRAS DE LINHA TELEFONICA FXO 8000' }]), /linha telefônica/);
+  assert.match(relevantKnowledge([{ name: 'TAG INTELBRAS TH 2000 125 KHZ' }]), /125 kHz/);
+  assert.match(relevantKnowledge([{ name: 'ROTEADOR INTELBRAS WIRELESS W5 1200G' }]), /Wi-Fi 5/);
+  assert.match(relevantKnowledge([{ name: 'TRANSMISSOR SF INTELBRAS UNIVERSAL 4020' }]), /não é controle remoto/);
+});
