@@ -250,6 +250,7 @@ async function requestHandler(request, response) {
       // Orçamento no texto passa pela conferência do motor (lib/budgetCheck.js) antes de ir pra tela.
       let catalog;
       const { answer, problems } = await reviewAssistantAnswer({
+        messages: body.messages,
         answer: first.answer,
         loadCatalog: async () => {
           const [categories, resources, aiInstructions, products] = await Promise.all([listCategories(), listResources(), getAiInstructions(), listProducts()]);

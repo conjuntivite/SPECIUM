@@ -40,3 +40,28 @@ test('falha na conferência nunca bloqueia: devolve a resposta original', async 
   assert.equal(r.answer, rascunho(4));
   assert.deepEqual(r.problems, []);
 });
+
+const semFacial = rascunho(2).replace('- 4x Terminal Facial\n', '');
+const pedido = (content) => [{ role: 'user', content }];
+
+test('pedido cita facial e a lista não tem: avisa', async () => {
+  const r = await reviewAssistantAnswer({ ...base, messages: pedido('4 portas com faciais'), answer: semFacial });
+  assert.match(r.answer, /Conferência automática/);
+  assert.match(r.answer, /facial/i);
+});
+
+test('pedido cita facial e a lista tem: sem aviso de facial', async () => {
+  const r = await reviewAssistantAnswer({ ...base, messages: pedido('4 portas com faciais'), answer: rascunho(2) });
+  assert.deepEqual(r.problems, []);
+});
+
+test('pedido não cita facial: lista sem facial não gera aviso', async () => {
+  const r = await reviewAssistantAnswer({ ...base, messages: pedido('4 portas com leitor de tag'), answer: semFacial });
+  assert.deepEqual(r.problems, []);
+});
+
+test('facial citado em mensagem anterior da conversa também vale', async () => {
+  const messages = [...pedido('quero faciais'), { role: 'assistant', content: 'ok' }, { role: 'user', content: 'pode montar' }];
+  const r = await reviewAssistantAnswer({ ...base, messages, answer: semFacial });
+  assert.match(r.answer, /facial/i);
+});
