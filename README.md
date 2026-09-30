@@ -127,6 +127,25 @@ node --check server.js      # checagem rápida de sintaxe
 - `POST /api/search` — busca ofertas de um item específico. Corpo: `{ item_name, brand, model, provider? }`.
 - `POST /api/compare` — compara ficha técnica de 2–3 ofertas. Corpo: `{ items: [{ url, title }] }`.
 
+## Catálogo versionado (exportar / importar)
+
+Categorias, recursos, grupos, produtos e as instruções da IA vivem no Mongo, não no código. Para não
+perder isso ao trocar de máquina ou reinstalar, o script `scripts/catalog-sync.js` guarda tudo em
+`data/catalog-snapshot.json` (versionado no Git):
+
+```bash
+node scripts/catalog-sync.js export                      # banco -> data/catalog-snapshot.json
+node scripts/catalog-sync.js import                      # SIMULA: mostra o que mudaria, não grava
+node scripts/catalog-sync.js import --apply              # grava (cria o que falta, atualiza o que mudou)
+node scripts/catalog-sync.js import --apply --with-instructions   # inclui as instruções da IA
+```
+
+- O import **nunca apaga** nada: itens que existem só no banco ficam como estão (o script avisa quantos).
+- As instruções da IA só são substituídas com `--with-instructions` (elas podem ter sido editadas pela tela).
+- É idempotente: rodar duas vezes seguidas na segunda dá "nada a fazer".
+- Rode `export` e commite o arquivo depois de mudar categorias/produtos/instruções pela tela.
+- Não entram: usuários, orçamentos, chats do assistente, SMTP e a memória de classificação (é cache e se reconstrói).
+
 ## Segurança
 
 - **Chaves de API nunca ficam no código**: são lidas exclusivamente de `process.env` (via `.env`, ignorado pelo Git). Nenhuma chave real está commitada — `.env.example` só traz os nomes das variáveis, vazios.
