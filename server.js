@@ -46,6 +46,7 @@ const {
   DEFAULT_CLASSIFICATION_INSTRUCTIONS, DEFAULT_AUDIT_INSTRUCTIONS,
 } = require('./lib/quoteAudit');
 const { askEquipmentAssistant, extractBudgetLines, buildBudgetFromClassified } = require('./lib/equipmentKnowledge');
+const { reviewAssistantAnswer } = require('./lib/budgetCheck');
 const { setShoppingFetcher } = require('./lib/providers/shoppingFetcher');
 const { excludePriceOutliers, selectTopDistinctStores, buildGoogleShoppingUrl } = require('./lib/providers/shared');
 const {
@@ -245,9 +246,20 @@ async function requestHandler(request, response) {
       const user = await requireScreen(request, response, 'assistant');
       if (!user) return;
       const body = await readJson(request);
-      const { answer, model } = await askEquipmentAssistant(body.messages);
+      const first = await askEquipmentAssistant(body.messages);
+      // Orçamento no texto passa pela conferência do motor (lib/budgetCheck.js) antes de ir pra tela.
+      let catalog;
+      const { answer, problems } = await reviewAssistantAnswer({
+        answer: first.answer,
+        loadCatalog: async () => {
+          const [categories, resources, aiInstructions, products] = await Promise.all([listCategories(), listResources(), getAiInstructions(), listProducts()]);
+          catalog = { categories, aiInstructions, products };
+          return { categories, resources };
+        },
+        classify: (lines) => classifyQuoteItems(lines.join('\n'), catalog.categories, catalog.aiInstructions.classification || undefined, catalog.products),
+      });
       // Log é só pra análise: se o Mongo falhar aqui, o comercial ainda recebe a resposta.
-      await logAssistantExchange({ userId: user.id, userEmail: user.email, question: body.messages.at(-1).content, answer, model })
+      await logAssistantExchange({ userId: user.id, userEmail: user.email, question: body.messages.at(-1).content, answer, model: first.model, review: { problems } })
         .catch((err) => console.error('Falha ao gravar log do assistente:', err.message));
       return sendJson(response, 200, { answer });
     }
@@ -279,11 +291,11 @@ async function requestHandler(request, response) {
       if (!lines.length) return sendJson(response, 400, { detail: 'A resposta não tem itens no formato "- 2x Equipamento".' });
       const [categories, aiInstructions, products] = await Promise.all([listCategories(), getAiInstructions(), listProducts()]);
       const classified = await classifyQuoteItems(lines.join('\n'), categories, aiInstructions.classification || undefined, products);
-      const { items, positions, connections, unclassified, skipped } = buildBudgetFromClassified(classified, categories);
+      const { items, positions, connections, unclassified, skipped, adjustments } = buildBudgetFromClassified(classified, categories);
       if (!items.length) return sendJson(response, 422, { detail: 'Nenhum item da resposta bateu com o catálogo de categorias.', skipped });
       const budget = await createBudget(user.id);
       await updateBudgetForUser(budget.id, user.id, { items, positions, connections });
-      return sendJson(response, 201, { budgetId: budget.id, itemCount: items.length, unclassified, skipped });
+      return sendJson(response, 201, { budgetId: budget.id, itemCount: items.length, unclassified, skipped, adjustments });
     }
     if (request.method === 'GET' && url.pathname === '/api/products/template') {
       if (!(await requireScreen(request, response, 'products', 'quote-audit'))) return;

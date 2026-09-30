@@ -140,7 +140,7 @@ export function AssistantView({ onOpenBudget }) {
     setCreated(null)
     try {
       const result = await createBudgetFromAssistant(messages[index].content)
-      if (result.unclassified.length || result.skipped.length) setCreated(result)
+      if (result.unclassified.length || result.skipped.length || result.adjustments?.length) setCreated(result)
       else onOpenBudget(result.budgetId)
     } catch (err) {
       setError(err.message || 'Não foi possível criar o orçamento.')
@@ -218,6 +218,7 @@ export function AssistantView({ onOpenBudget }) {
                     Orçamento criado com {created.itemCount} {created.itemCount === 1 ? 'item' : 'itens'}.
                     {created.unclassified.length ? ` Entraram como item livre, sem categoria no catálogo (sem ligações automáticas): ${created.unclassified.join('; ')}.` : ''}
                     {created.skipped.length ? ` Não entraram: ${created.skipped.join('; ')}.` : ''}
+                    {created.adjustments?.length ? ` Corrigido no orçamento pela conta do motor: ${created.adjustments.join(' ')}` : ''}
                   </span>
                   <Button size="sm" onClick={() => onOpenBudget(created.budgetId)}>Abrir orçamento</Button>
                 </div>

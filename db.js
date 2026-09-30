@@ -465,9 +465,9 @@ async function saveSmtpSettings({ host, port, security, user, from, pass }) {
 
 // Histórico do Assistente (só escrita por enquanto): serve pra ler depois o que os comerciais
 // perguntam e onde a IA errou. Grava só a última pergunta + resposta, não a conversa inteira.
-async function logAssistantExchange({ userId, userEmail, question, answer, model }) {
+async function logAssistantExchange({ userId, userEmail, question, answer, model, review = null }) {
   const db = await getDb();
-  await db.collection('assistant_logs').insertOne({ userId, userEmail, question, answer, model, createdAt: new Date() });
+  await db.collection('assistant_logs').insertOne({ userId, userEmail, question, answer, model, review, createdAt: new Date() });
 }
 
 // Conversas do Assistente salvas por usuário (tela estilo chat). Ao criar a 11ª, a de menor
