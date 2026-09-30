@@ -249,7 +249,7 @@ async function requestHandler(request, response) {
       const first = await askEquipmentAssistant(body.messages);
       // Orçamento no texto passa pela conferência do motor (lib/budgetCheck.js) antes de ir pra tela.
       let catalog;
-      const { answer, problems } = await reviewAssistantAnswer({
+      const { answer, problems, dropped } = await reviewAssistantAnswer({
         messages: body.messages,
         answer: first.answer,
         loadCatalog: async () => {
@@ -260,7 +260,7 @@ async function requestHandler(request, response) {
         classify: (lines) => classifyQuoteItems(lines.join('\n'), catalog.categories, catalog.aiInstructions.classification || undefined, catalog.products),
       });
       // Log é só pra análise: se o Mongo falhar aqui, o comercial ainda recebe a resposta.
-      await logAssistantExchange({ userId: user.id, userEmail: user.email, question: body.messages.at(-1).content, answer, model: first.model, review: { problems } })
+      await logAssistantExchange({ userId: user.id, userEmail: user.email, question: body.messages.at(-1).content, answer, model: first.model, review: { problems, dropped } })
         .catch((err) => console.error('Falha ao gravar log do assistente:', err.message));
       return sendJson(response, 200, { answer });
     }

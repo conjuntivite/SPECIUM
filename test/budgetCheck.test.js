@@ -65,3 +65,63 @@ test('facial citado em mensagem anterior da conversa também vale', async () => 
   const r = await reviewAssistantAnswer({ ...base, messages, answer: semFacial });
   assert.match(r.answer, /facial/i);
 });
+
+// Pergunta de "como se distribui" uma quantidade que o comercial já informou (ex.: "4 antenas = 2 por
+// portão ou 4 portões?") não muda a conta e só atrasa: a conferência tira da seção "Falta confirmar".
+const comPerguntas = (...bullets) => `${rascunho(2)}\n\n**Falta confirmar:**\n${bullets.map((b) => `- ${b}`).join('\n')}`;
+const PERGUNTA_ANTENA = 'As 4 antenas iDUHF são 2 por portão ou 1 por porta?';
+
+test('pergunta de distribuição de quantidade já informada sai de Falta confirmar; as outras ficam', async () => {
+  const r = await reviewAssistantAnswer({ ...base, messages: pedido('4 antenas Control iD nos portões'), answer: comPerguntas(PERGUNTA_ANTENA, 'Quantas câmeras?') });
+  assert.doesNotMatch(r.answer, /antenas iDUHF/);
+  assert.match(r.answer, /Quantas câmeras\?/);
+  assert.deepEqual(r.dropped, [`- ${PERGUNTA_ANTENA}`]);
+});
+
+test('sem a quantidade no pedido, a pergunta é legítima e fica', async () => {
+  const r = await reviewAssistantAnswer({ ...base, messages: pedido('antenas Control iD nos portões'), answer: comPerguntas(PERGUNTA_ANTENA) });
+  assert.match(r.answer, /antenas iDUHF/);
+  assert.deepEqual(r.dropped, []);
+});
+
+test('pergunta sem "ou/por" não é de distribuição e fica', async () => {
+  const r = await reviewAssistantAnswer({ ...base, messages: pedido('4 antenas'), answer: comPerguntas('Qual a distância até as 4 antenas?') });
+  assert.match(r.answer, /distância/);
+});
+
+test('tirou todas as perguntas: o título "Falta confirmar" também sai', async () => {
+  const r = await reviewAssistantAnswer({ ...base, messages: pedido('4 antenas'), answer: comPerguntas(PERGUNTA_ANTENA) });
+  assert.doesNotMatch(r.answer, /Falta confirmar/);
+});
+
+test('"Quantas antenas por portão?" com o total de antenas já informado também sai', async () => {
+  const pergunta = 'Quantas antenas por portão? Considerei 2 por portão (4 no total) — se for 1 por portão, ajustar para 2.';
+  const r = await reviewAssistantAnswer({ ...base, messages: pedido('4 antenas Control iD'), answer: comPerguntas(pergunta, 'Quantas câmeras?') });
+  assert.doesNotMatch(r.answer, /antenas por portão/);
+  assert.match(r.answer, /Quantas câmeras\?/);
+});
+
+test('"Quantas antenas por portão?" sem o total no pedido é pergunta legítima e fica', async () => {
+  const r = await reviewAssistantAnswer({ ...base, messages: pedido('antenas nos portões'), answer: comPerguntas('Quantas antenas por portão?') });
+  assert.match(r.answer, /antenas por portão/);
+});
+
+test('pergunta de quantidade de algo cujo total o pedido já trouxe sai, qualquer que seja a frase', async () => {
+  for (const pergunta of ['Quantidade exata de antenas (4 para 2 portões? Ou 2?).', 'Quantas antenas iDUHF no total: 2 ou 4? (mudei a conta assumindo 2)']) {
+    const r = await reviewAssistantAnswer({ ...base, messages: pedido('4 antenas Control iD'), answer: comPerguntas(pergunta, 'Quantas câmeras?') });
+    assert.doesNotMatch(r.answer, /antenas/, pergunta);
+    assert.match(r.answer, /Quantas câmeras\?/);
+  }
+});
+
+test('pergunta de quantidade de OUTRA coisa (não informada) fica, mesmo citando uma coisa informada', async () => {
+  const r = await reviewAssistantAnswer({ ...base, messages: pedido('faciais nas 4 portas'), answer: comPerguntas('Quantos faciais por porta?') });
+  assert.match(r.answer, /Quantos faciais por porta\?/);
+});
+
+test('falso positivo real: "6 portas" no pedido não torna legítima a pergunta de quantos faciais', async () => {
+  const pergunta = 'Quantos faciais serão? (6 portas = 6 faciais, ou 1 por porta + saída?)';
+  const r = await reviewAssistantAnswer({ ...base, messages: pedido('6 portas com eletroímã e faciais'), answer: comPerguntas(pergunta) });
+  assert.match(r.answer, /Quantos faciais serão\?/);
+  assert.deepEqual(r.dropped, []);
+});
