@@ -105,7 +105,7 @@ test('relevantKnowledge: nomes reais dos orçamentos ONE/SIAM (com erro de digit
   assert.match(k('INTERFACE SENSOR DE TENSAO 110/220V SIAM'), /IMU Tensão/);
   assert.match(k('CONTROLADOR ENDPOINT ONEPORTARIA'), /Todo endpoint precisa de fonte/);
   assert.equal(k('RADIO FULL DXNET CONTACT ID'), '');
-  assert.equal(k('CATRACA DSK3G411LX / PG COMBO'), '');
+  assert.doesNotMatch(k('CATRACA DSK3G411LX / PG COMBO'), /SIAM|ONE/); // catraca Hikvision não puxa ficha da SIAM/ONE
 });
 
 test('candidateModels: aceita lista separada por vírgula, mantém a ordem e põe os gratuitos depois', () => {
@@ -144,7 +144,8 @@ test('assistente → orçamento: só linhas "- Nx" entram, cada linha vira um ca
 test('assistente: prompt leva todas as fichas e fórmulas e o histórico é validado', () => {
   const { buildAssistantSystemPrompt, validateAssistantMessages, EQUIPMENT_KNOWLEDGE, SIZING_FORMULAS } = require('../lib/equipmentKnowledge');
   const prompt = buildAssistantSystemPrompt();
-  for (const k of [...EQUIPMENT_KNOWLEDGE.map((e) => e.text), ...SIZING_FORMULAS]) assert.ok(prompt.includes(k));
+  // sempre no prompt: fichas ONE/SIAM (foco do assistente); as de outras marcas só quando citadas (test/assistantKnowledge.test.js)
+  for (const k of [...EQUIPMENT_KNOWLEDGE.filter((e) => !e.brand).map((e) => e.text), ...SIZING_FORMULAS]) assert.ok(prompt.includes(k));
   // Regressão: a IA repetia perguntas já respondidas nas rodadas seguintes (achado em teste real).
   assert.match(prompt, /TUDO que o comercial já respondeu é FATO/);
   assert.match(prompt, /LEMBRETE FINAL: não repita pergunta/);
@@ -246,4 +247,17 @@ test('fichas Intelbras (2ª leva): fechadura é eletroímã, transmissor univers
   assert.match(relevantKnowledge([{ name: 'TAG INTELBRAS TH 2000 125 KHZ' }]), /125 kHz/);
   assert.match(relevantKnowledge([{ name: 'ROTEADOR INTELBRAS WIRELESS W5 1200G' }]), /Wi-Fi 5/);
   assert.match(relevantKnowledge([{ name: 'TRANSMISSOR SF INTELBRAS UNIVERSAL 4020' }]), /não é controle remoto/);
+});
+
+test('fichas Hikvision (datasheets oficiais): câmera IP aceita PoE ou 12V, analógica só 12V, PTZ pede PoE+, switch e NVR corretos', () => {
+  const { relevantKnowledge } = require('../lib/equipmentKnowledge');
+  assert.match(relevantKnowledge([{ name: 'CAMERA IP HIKVISON DS-2CD1021G0-I' }]), /12 Vdc ou PoE 802\.3af/);
+  assert.match(relevantKnowledge([{ name: 'CAMERA IP 4 MEGA BULLET 2.8MM DS- 2CD2047G2-LU COLORVU' }]), /12 Vdc ou PoE 802\.3af/);
+  assert.match(relevantKnowledge([{ name: 'DS-2DE5425IW-AE' }]), /802\.3at/);
+  assert.match(relevantKnowledge([{ name: 'CAMERA COLORVU BULLET FULL HD 1080P DS-2CE10DF0T 2.8' }]), /só 12 Vdc/);
+  assert.match(relevantKnowledge([{ name: 'DVR HIKVISION 16 CANAL 720/P 1MP DS-7216HGHI-F1/N' }]), /HDTVI/);
+  assert.match(relevantKnowledge([{ name: 'DS-7632NI-K2' }]), /sem PoE/);
+  assert.match(relevantKnowledge([{ name: 'SWITCH HIKVISION DS3E0518PEM 18 PORTAS GIGABIT 16 POE' }]), /16 portas Gigabit PoE/);
+  assert.match(relevantKnowledge([{ name: 'TERMINAL DE VIDEO PORTEIRO DS-K1T343EWX HIKVISION' }]), /terminal de reconhecimento facial/);
+  assert.match(relevantKnowledge([{ name: 'TELA PARA VIDEO PORTEIRO DS-KH6350-TE1(O-STD' }]), /tela interna/);
 });
