@@ -30,6 +30,18 @@
       "label": "Vaga de endpoint na Central ONE"
     },
     {
+      "key": "one.relay",
+      "label": "Relé de comando no Endpoint ONE"
+    },
+    {
+      "key": "one.sensor_input",
+      "label": "Entrada de sensor (contato seco) no Endpoint ONE"
+    },
+    {
+      "key": "one.wiegand_input",
+      "label": "Entrada Wiegand no Endpoint ONE"
+    },
+    {
       "key": "ponto_de_energia",
       "label": "Ponto de Energia"
     },
@@ -85,6 +97,48 @@
       "canBeContainer": false,
       "capacity": null,
       "coverage": null,
+      "group": "Controle de acesso e alarme",
+      "icon": "tag",
+      "label": "Antena UHF Veicular",
+      "provides": [],
+      "requirements": [
+        {
+          "candidates": [
+            "Fonte 12V"
+          ],
+          "critical": true,
+          "id": "fonte",
+          "label": "Fonte 12V (própria, ~300 mA)",
+          "type": "presence"
+        },
+        {
+          "critical": true,
+          "id": "wiegand",
+          "label": "Entrada Wiegand (Endpoint ONE ou controladora)",
+          "options": [
+            {
+              "candidates": [
+                "Controladora de Acesso",
+                "Controladora SIAM (RAS)",
+                "IP Controller SIAM (IPC)"
+              ],
+              "type": "presence"
+            },
+            {
+              "resource": "one.wiegand_input",
+              "type": "capacity",
+              "unitsPerItem": 1
+            }
+          ],
+          "type": "anyOf"
+        }
+      ],
+      "value": "Antena UHF Veicular"
+    },
+    {
+      "canBeContainer": false,
+      "capacity": null,
+      "coverage": null,
       "group": "Cerca Elétrica",
       "icon": "bolt-lightning",
       "label": "Arame/Fio de Aço para Cerca",
@@ -120,7 +174,29 @@
       "icon": "",
       "label": "Automação de Portão",
       "provides": [],
-      "requirements": [],
+      "requirements": [
+        {
+          "critical": true,
+          "id": "rele",
+          "label": "Relé (Endpoint ONE ou controladora)",
+          "options": [
+            {
+              "candidates": [
+                "Controladora de Acesso",
+                "Controladora SIAM (RAS)",
+                "IP Controller SIAM (IPC)"
+              ],
+              "type": "presence"
+            },
+            {
+              "resource": "one.relay",
+              "type": "capacity",
+              "unitsPerItem": 1
+            }
+          ],
+          "type": "anyOf"
+        }
+      ],
       "value": "Automação de Portão"
     },
     {
@@ -202,11 +278,15 @@
             {
               "candidates": [
                 "Controladora de Acesso",
-                "Endpoint ONE",
                 "Controladora SIAM (RAS)",
                 "IP Controller SIAM (IPC)"
               ],
               "type": "presence"
+            },
+            {
+              "resource": "one.sensor_input",
+              "type": "capacity",
+              "unitsPerItem": 1
             },
             {
               "resource": "alarm.zone",
@@ -778,7 +858,10 @@
         },
         {
           "candidates": [
-            "Endpoint ONE"
+            "Endpoint ONE",
+            "Endpoint ONE 4 Portas",
+            "Endpoint ONE FULL",
+            "Endpoint ONE Multi-IO"
           ],
           "critical": false,
           "id": "endpoint",
@@ -831,7 +914,10 @@
         },
         {
           "candidates": [
-            "Endpoint ONE"
+            "Endpoint ONE",
+            "Endpoint ONE 4 Portas",
+            "Endpoint ONE FULL",
+            "Endpoint ONE Multi-IO"
           ],
           "critical": false,
           "id": "endpoint",
@@ -3007,6 +3093,209 @@
       "capacity": null,
       "coverage": null,
       "group": "Controle de acesso e alarme",
+      "icon": "microchip",
+      "label": "Endpoint ONE 4 Portas",
+      "provides": [
+        {
+          "amount": 4,
+          "resource": "one.relay"
+        },
+        {
+          "amount": 4,
+          "resource": "one.sensor_input"
+        },
+        {
+          "amount": 4,
+          "resource": "one.wiegand_input"
+        }
+      ],
+      "requirements": [
+        {
+          "candidates": [
+            "Fonte 12V"
+          ],
+          "critical": true,
+          "id": "fonte",
+          "label": "Fonte 12V (uma por endpoint)",
+          "type": "presence"
+        },
+        {
+          "critical": true,
+          "id": "central",
+          "label": "Central ONE (Córtex)",
+          "resource": "one.endpoint",
+          "type": "capacity",
+          "unitsPerItem": 1
+        },
+        {
+          "critical": true,
+          "id": "rede",
+          "label": "Rede (switch Giga ou Fast)",
+          "options": [
+            {
+              "resource": "network.gigabit_port",
+              "type": "capacity",
+              "unitsPerItem": 1
+            },
+            {
+              "resource": "network.fast_port",
+              "type": "capacity",
+              "unitsPerItem": 1
+            }
+          ],
+          "type": "anyOf"
+        },
+        {
+          "candidates": [
+            "Nobreak"
+          ],
+          "critical": false,
+          "id": "nobreak",
+          "label": "Nobreak (opcional)",
+          "type": "presence"
+        }
+      ],
+      "value": "Endpoint ONE 4 Portas"
+    },
+    {
+      "canBeContainer": false,
+      "capacity": null,
+      "coverage": null,
+      "group": "Controle de acesso e alarme",
+      "icon": "microchip",
+      "label": "Endpoint ONE FULL",
+      "provides": [
+        {
+          "amount": 4,
+          "resource": "one.relay"
+        },
+        {
+          "amount": 8,
+          "resource": "one.sensor_input"
+        },
+        {
+          "amount": 2,
+          "resource": "one.wiegand_input"
+        }
+      ],
+      "requirements": [
+        {
+          "candidates": [
+            "Fonte 12V"
+          ],
+          "critical": true,
+          "id": "fonte",
+          "label": "Fonte 12V (uma por endpoint)",
+          "type": "presence"
+        },
+        {
+          "critical": true,
+          "id": "central",
+          "label": "Central ONE (Córtex)",
+          "resource": "one.endpoint",
+          "type": "capacity",
+          "unitsPerItem": 1
+        },
+        {
+          "critical": true,
+          "id": "rede",
+          "label": "Rede (switch Giga ou Fast)",
+          "options": [
+            {
+              "resource": "network.gigabit_port",
+              "type": "capacity",
+              "unitsPerItem": 1
+            },
+            {
+              "resource": "network.fast_port",
+              "type": "capacity",
+              "unitsPerItem": 1
+            }
+          ],
+          "type": "anyOf"
+        },
+        {
+          "candidates": [
+            "Nobreak"
+          ],
+          "critical": false,
+          "id": "nobreak",
+          "label": "Nobreak (opcional)",
+          "type": "presence"
+        }
+      ],
+      "value": "Endpoint ONE FULL"
+    },
+    {
+      "canBeContainer": false,
+      "capacity": null,
+      "coverage": null,
+      "group": "Controle de acesso e alarme",
+      "icon": "microchip",
+      "label": "Endpoint ONE Multi-IO",
+      "provides": [
+        {
+          "amount": 4,
+          "resource": "one.relay"
+        },
+        {
+          "amount": 4,
+          "resource": "one.sensor_input"
+        }
+      ],
+      "requirements": [
+        {
+          "candidates": [
+            "Fonte 12V"
+          ],
+          "critical": true,
+          "id": "fonte",
+          "label": "Fonte 12V (uma por endpoint)",
+          "type": "presence"
+        },
+        {
+          "critical": true,
+          "id": "central",
+          "label": "Central ONE (Córtex)",
+          "resource": "one.endpoint",
+          "type": "capacity",
+          "unitsPerItem": 1
+        },
+        {
+          "critical": true,
+          "id": "rede",
+          "label": "Rede (switch Giga ou Fast)",
+          "options": [
+            {
+              "resource": "network.gigabit_port",
+              "type": "capacity",
+              "unitsPerItem": 1
+            },
+            {
+              "resource": "network.fast_port",
+              "type": "capacity",
+              "unitsPerItem": 1
+            }
+          ],
+          "type": "anyOf"
+        },
+        {
+          "candidates": [
+            "Nobreak"
+          ],
+          "critical": false,
+          "id": "nobreak",
+          "label": "Nobreak (opcional)",
+          "type": "presence"
+        }
+      ],
+      "value": "Endpoint ONE Multi-IO"
+    },
+    {
+      "canBeContainer": false,
+      "capacity": null,
+      "coverage": null,
+      "group": "Controle de acesso e alarme",
       "icon": "bell",
       "label": "Endpoint Sound",
       "provides": [],
@@ -3131,6 +3420,27 @@
           "id": "fonte",
           "label": "Fonte 12V",
           "type": "presence"
+        },
+        {
+          "critical": true,
+          "id": "rele",
+          "label": "Relé (Endpoint ONE ou controladora)",
+          "options": [
+            {
+              "candidates": [
+                "Controladora de Acesso",
+                "Controladora SIAM (RAS)",
+                "IP Controller SIAM (IPC)"
+              ],
+              "type": "presence"
+            },
+            {
+              "resource": "one.relay",
+              "type": "capacity",
+              "unitsPerItem": 1
+            }
+          ],
+          "type": "anyOf"
         }
       ],
       "value": "Fechadura Elétrica"
@@ -3152,6 +3462,27 @@
           "id": "fonte",
           "label": "Fonte 12V",
           "type": "presence"
+        },
+        {
+          "critical": true,
+          "id": "rele",
+          "label": "Relé (Endpoint ONE ou controladora)",
+          "options": [
+            {
+              "candidates": [
+                "Controladora de Acesso",
+                "Controladora SIAM (RAS)",
+                "IP Controller SIAM (IPC)"
+              ],
+              "type": "presence"
+            },
+            {
+              "resource": "one.relay",
+              "type": "capacity",
+              "unitsPerItem": 1
+            }
+          ],
+          "type": "anyOf"
         }
       ],
       "value": "Fechadura Magnética"
@@ -3369,7 +3700,29 @@
       "icon": "tag",
       "label": "Leitor RFID",
       "provides": [],
-      "requirements": [],
+      "requirements": [
+        {
+          "critical": true,
+          "id": "wiegand",
+          "label": "Entrada Wiegand (Endpoint ONE ou controladora)",
+          "options": [
+            {
+              "candidates": [
+                "Controladora de Acesso",
+                "Controladora SIAM (RAS)",
+                "IP Controller SIAM (IPC)"
+              ],
+              "type": "presence"
+            },
+            {
+              "resource": "one.wiegand_input",
+              "type": "capacity",
+              "unitsPerItem": 1
+            }
+          ],
+          "type": "anyOf"
+        }
+      ],
       "value": "Leitor RFID"
     },
     {
@@ -4532,11 +4885,15 @@
             {
               "candidates": [
                 "Controladora de Acesso",
-                "Endpoint ONE",
                 "Controladora SIAM (RAS)",
                 "IP Controller SIAM (IPC)"
               ],
               "type": "presence"
+            },
+            {
+              "resource": "one.sensor_input",
+              "type": "capacity",
+              "unitsPerItem": 1
             },
             {
               "resource": "alarm.zone",
@@ -4706,6 +5063,36 @@
         }
       ],
       "value": "Sirene Sem Fio"
+    },
+    {
+      "canBeContainer": false,
+      "capacity": null,
+      "coverage": null,
+      "group": "Controle de acesso e alarme",
+      "icon": "lock",
+      "label": "Solenoide de Backup",
+      "provides": [],
+      "requirements": [
+        {
+          "candidates": [
+            "Fonte 12V"
+          ],
+          "critical": false,
+          "id": "fonte",
+          "label": "Fonte 12V (própria)",
+          "type": "presence"
+        },
+        {
+          "candidates": [
+            "Fechadura Magnética"
+          ],
+          "critical": false,
+          "id": "fechadura",
+          "label": "Fechadura Magnética (aciona junto, no mesmo relé)",
+          "type": "presence"
+        }
+      ],
+      "value": "Solenoide de Backup"
     },
     {
       "canBeContainer": false,
@@ -6631,7 +7018,7 @@
       "model": "ELETRODUTO DE 1/2 GALVANIZADO"
     },
     {
-      "category": "Endpoint ONE",
+      "category": "Endpoint ONE 4 Portas",
       "brand": "ONE PORTARIA",
       "model": "ENDPOINT 4 PORTAS"
     },
@@ -6641,12 +7028,12 @@
       "model": "ENDPOINT AQUAMONITOR"
     },
     {
-      "category": "Endpoint ONE",
+      "category": "Endpoint ONE FULL",
       "brand": "ONE PORTARIA",
       "model": "ENDPOINT FULL"
     },
     {
-      "category": "Endpoint ONE",
+      "category": "Endpoint ONE Multi-IO",
       "brand": "ONE PORTARIA",
       "model": "ENDPOINT MULTI-IO"
     },
