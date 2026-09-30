@@ -5,7 +5,7 @@ const {
   listCategories, createCategory, updateCategory, deleteCategory,
   listGroups, createGroup, deleteGroup,
   listResources, createResource, updateResource, deleteResource,
-  getAiInstructions, updateAiInstructions, getSmtpSettings, saveSmtpSettings, logAssistantExchange,
+  loadClassificationVotes, recordClassificationVotes, getAiInstructions, updateAiInstructions, getSmtpSettings, saveSmtpSettings, logAssistantExchange,
   listAssistantChats, getAssistantChat, saveAssistantChat, deleteAssistantChat,
   createUser, findUserByEmail, createPasswordReset, consumePasswordReset, resetUserPassword, listUsers, updateUser, seedDevAdmin,
   createSession, findSessionUser, deleteSession,
@@ -235,7 +235,7 @@ async function requestHandler(request, response) {
       // a IA nunca vê o PDF cru de novo nem as seções (erradas) do sistema de origem. Produto já
       // cadastrado (aba Produtos) vence o palpite da IA quando o nome do item bate com um modelo
       // conhecido (ver applyRegisteredProductOverrides em lib/quoteAudit.js).
-      const items = await classifyQuoteItems(pdfText, categories, aiInstructions.classification || undefined, products);
+      const items = await classifyQuoteItems(pdfText, categories, aiInstructions.classification || undefined, products, { load: loadClassificationVotes, record: recordClassificationVotes });
       const cartItems = items.filter((i) => i.category).map((i) => ({ title: i.category, quantity: i.quantity }));
       const engineResult = computeCategoryMissingEssentials(cartItems, categories, resources);
       const aiAudit = await auditQuoteWithAI(items, categories, engineResult.missing, aiInstructions.audit || undefined);

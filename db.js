@@ -415,6 +415,31 @@ async function getSettingsCollection() {
 // Documento único (_id fixo, sem ObjectId — não é uma lista) com as instruções de negócio das
 // etapas de IA (ver lib/quoteAudit.js). Campo ausente/null = tela ainda não sobrescreveu; quem
 // decide o texto padrão nesse caso é o próprio lib/quoteAudit.js (DEFAULT_*_INSTRUCTIONS).
+// Memória de classificação da IA (lib/classificationMemory.js): um doc por (código do produto,
+// primeira linha do nome, categoria) com quantas vezes a IA respondeu isso. _id composto = upsert atômico.
+async function getClassificationVotesCollection() {
+  const db = await getDb();
+  return db.collection('classification_votes');
+}
+
+async function loadClassificationVotes(codes) {
+  if (!codes.length) return [];
+  const votes = await getClassificationVotesCollection();
+  return votes.find({ code: { $in: codes } }).toArray();
+}
+
+async function recordClassificationVotes(entries) {
+  if (!entries.length) return;
+  const votes = await getClassificationVotesCollection();
+  await votes.bulkWrite(entries.map(({ code, firstLine, name, category }) => ({
+    updateOne: {
+      filter: { _id: `${code}|${firstLine}|${category}` },
+      update: { $inc: { count: 1 }, $set: { code, firstLine, name, category, updatedAt: new Date() } },
+      upsert: true,
+    },
+  })));
+}
+
 async function getAiInstructions() {
   const settings = await getSettingsCollection();
   const doc = await settings.findOne({ _id: 'ai_instructions' });
@@ -763,6 +788,7 @@ module.exports = {
   listCategories, createCategory, updateCategory, deleteCategory,
   listGroups, createGroup, deleteGroup,
   listResources, createResource, updateResource, deleteResource,
+  loadClassificationVotes, recordClassificationVotes,
   getAiInstructions, updateAiInstructions, getSmtpSettings, saveSmtpSettings, logAssistantExchange,
   listAssistantChats, getAssistantChat, saveAssistantChat, deleteAssistantChat,
   createUser, findUserByEmail, findUserById, createPasswordReset, consumePasswordReset, resetUserPassword, listUsers, updateUser, seedDevAdmin,
