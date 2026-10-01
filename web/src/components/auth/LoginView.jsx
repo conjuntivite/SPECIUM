@@ -199,14 +199,7 @@ export function LoginView({ auth }) {
               ) : null}
               {showPasswordField ? (
               <motion.div variants={rise} className="flex flex-col gap-1.5">
-                <div className="flex items-baseline justify-between">
-                  <label htmlFor="login-password" className="text-sm font-medium">{mode === 'reset' ? 'Nova senha' : 'Senha'}</label>
-                  {isLogin ? (
-                    <button type="button" onClick={() => switchMode('forgot')} className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-                      Esqueci minha senha
-                    </button>
-                  ) : null}
-                </div>
+                <label htmlFor="login-password" className="text-sm font-medium">{mode === 'reset' ? 'Nova senha' : 'Senha'}</label>
                 <div className="relative">
                   <Input
                     id="login-password" name="password" type={showPassword ? 'text' : 'password'} required minLength={8}
@@ -223,6 +216,11 @@ export function LoginView({ auth }) {
                     <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} className="size-4" />
                   </button>
                 </div>
+                {isLogin ? (
+                  <button type="button" onClick={() => switchMode('forgot')} className="self-end text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+                    Esqueci minha senha
+                  </button>
+                ) : null}
               </motion.div>
               ) : null}
               {needsConfirm ? (
