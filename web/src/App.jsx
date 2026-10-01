@@ -19,8 +19,10 @@ function App() {
   const [activeTab, setActiveTab] = useState('budget')
   const [currentBudgetId, setCurrentBudgetId] = useState(null)
   const [initialBudgetStep, setInitialBudgetStep] = useState(null)
+  const [importNotice, setImportNotice] = useState('')
 
   function openBudget(id, step) {
+    setImportNotice('')
     setCurrentBudgetId(id)
     setInitialBudgetStep(step || null)
   }
@@ -49,7 +51,15 @@ function App() {
       onValueChange={setActiveTab}
       budgetPanel={
         currentBudgetId ? (
+          <>
+          {importNotice ? (
+            <div className="mb-3 flex items-start justify-between gap-3 rounded-xl border border-border bg-card/60 p-3 text-sm" role="status">
+              <span>Orçamento criado pelo Assistente. {importNotice}</span>
+              <button type="button" className="shrink-0 text-muted-foreground hover:text-foreground" onClick={() => setImportNotice('')}>Fechar</button>
+            </div>
+          ) : null}
           <BudgetView
+            key={currentBudgetId}
             budgetId={currentBudgetId}
             initialStep={initialBudgetStep}
             onBackToList={() => setCurrentBudgetId(null)}
@@ -57,6 +67,7 @@ function App() {
             onGoToProducts={() => goTo('products')}
             onGoToCategories={() => goTo('categories')}
           />
+          </>
         ) : (
           <BudgetsListView onOpenBudget={openBudget} />
         )
@@ -65,7 +76,7 @@ function App() {
       productsPanel={<ProductsView />}
       categoriesPanel={<CategoriesView />}
       quoteAuditPanel={<QuotePdfAuditView />}
-      assistantPanel={<AssistantView onOpenBudget={(id) => { openBudget(id); goTo('budget') }} />}
+      assistantPanel={<AssistantView onOpenBudget={(id, notice) => { openBudget(id, 'canvas'); setImportNotice(notice || ''); goTo('budget') }} />}
       showUsersTab={auth.user?.role === 'admin'}
       usersPanel={<UsersView auth={auth} />}
       showAiSettingsTab={auth.user?.role === 'admin'}

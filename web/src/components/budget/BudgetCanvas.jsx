@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
-import { ReactFlow, Background, BackgroundVariant, applyNodeChanges, applyEdgeChanges, useReactFlow } from '@xyflow/react'
+import { ReactFlow, Background, Panel, BackgroundVariant, applyNodeChanges, applyEdgeChanges, useReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSackDollar, faExpand, faPlus, faTrashCan, faMagnifyingGlassPlus, faMagnifyingGlassMinus } from '@fortawesome/free-solid-svg-icons'
@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/context-menu'
 import { useCategories } from '@/hooks/useCategories'
 import { displayTitle } from '@/lib/itemTitle'
+import { CABLES } from '@/lib/cables'
 import { FlowNode, CONTAINER_GRID, CONTAINER_FOOTER_HEIGHT } from './FlowNode'
 import { ProductPickerDialog } from './ProductPickerDialog'
 
@@ -281,9 +282,10 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
 
   // Ligação manual: o usuário arrasta de um handle a outro pra conectar dois cards — sem isso, só as
   // arestas automáticas do motor de sugestões apareciam no quadro.
+  const [cable, setCable] = useState(CABLES[0].id)
   const handleConnect = useCallback((connection) => {
-    budget.addConnection(connection.source, connection.target, connection.sourceHandle, connection.targetHandle)
-  }, [budget])
+    budget.addConnection(connection.source, connection.target, connection.sourceHandle, connection.targetHandle, cable)
+  }, [budget, cable])
 
   const handleEdgesDelete = useCallback((deleted) => {
     deleted.forEach((edge) => budget.removeConnection(edge.id))
@@ -376,6 +378,17 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
             onNodeClick={noop}
           >
             <Background variant={BackgroundVariant.Dots} gap={22} size={2} color="var(--color-flow-grid)" />
+            <Panel position="bottom-left" className="flex flex-col gap-1 rounded-lg border border-border bg-card/90 p-2 text-xs">
+              <span className="font-medium text-muted-foreground">{readOnly ? 'Cabos' : 'Cabo da próxima ligação'}</span>
+              {CABLES.map((c) => (
+                <button
+                  key={c.id} type="button" disabled={readOnly} onClick={() => setCable(c.id)} aria-pressed={cable === c.id}
+                  className={`flex items-center gap-2 rounded px-1.5 py-0.5 text-left ${cable === c.id && !readOnly ? 'bg-accent' : ''}`}
+                >
+                  <span className="h-0.5 w-5 rounded" style={{ background: c.color }} />{c.label}
+                </button>
+              ))}
+            </Panel>
           </ReactFlow>
         </div>
       </ContextMenuTrigger>

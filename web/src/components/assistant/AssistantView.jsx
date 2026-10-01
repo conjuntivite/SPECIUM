@@ -27,9 +27,6 @@ export function AssistantView({ onOpenBudget }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [importingIndex, setImportingIndex] = useState(null)
-  // Orçamento criado mas com itens que não bateram com o catálogo: fica na tela pra o comercial ver
-  // o que não entrou antes de abrir (sem pendência, abre direto).
-  const [created, setCreated] = useState(null)
   const [showList, setShowList] = useState(false)
   // Ref junto do state: o salvamento acontece depois de um await e precisa do id mais recente.
   const activeIdRef = useRef(null)
@@ -59,7 +56,6 @@ export function AssistantView({ onOpenBudget }) {
 
   function resetView() {
     setError('')
-    setCreated(null)
     setShowList(false)
   }
 
@@ -107,7 +103,6 @@ export function AssistantView({ onOpenBudget }) {
   async function generate(history) {
     setMessages(history)
     setError('')
-    setCreated(null)
     setLoading(true)
     let final = null
     try {
@@ -137,11 +132,14 @@ export function AssistantView({ onOpenBudget }) {
   async function importBudget(index) {
     setImportingIndex(index)
     setError('')
-    setCreated(null)
     try {
       const result = await createBudgetFromAssistant(messages[index].content)
-      if (result.unclassified.length || result.skipped.length || result.adjustments?.length) setCreated(result)
-      else onOpenBudget(result.budgetId)
+      // Sempre vai pro canvas; o que não bateu com o catálogo segue como aviso na tela do orçamento.
+      onOpenBudget(result.budgetId, [
+        result.unclassified.length ? `Entraram como item livre, sem categoria no catálogo (sem ligações automáticas): ${result.unclassified.join('; ')}.` : '',
+        result.skipped.length ? `Não entraram: ${result.skipped.join('; ')}.` : '',
+        result.adjustments?.length ? `Corrigido no orçamento pela conta do motor: ${result.adjustments.join(' ')}` : '',
+      ].filter(Boolean).join(' '))
     } catch (err) {
       setError(err.message || 'Não foi possível criar o orçamento.')
     } finally {
@@ -210,17 +208,6 @@ export function AssistantView({ onOpenBudget }) {
                   {[0, 1, 2].map((n) => (
                     <span key={n} className="size-2 animate-bounce rounded-full bg-muted-foreground/60" style={{ animationDelay: `${n * 0.15}s` }} />
                   ))}
-                </div>
-              ) : null}
-              {created ? (
-                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card/60 p-3 text-sm" role="status">
-                  <span>
-                    Orçamento criado com {created.itemCount} {created.itemCount === 1 ? 'item' : 'itens'}.
-                    {created.unclassified.length ? ` Entraram como item livre, sem categoria no catálogo (sem ligações automáticas): ${created.unclassified.join('; ')}.` : ''}
-                    {created.skipped.length ? ` Não entraram: ${created.skipped.join('; ')}.` : ''}
-                    {created.adjustments?.length ? ` Corrigido no orçamento pela conta do motor: ${created.adjustments.join(' ')}` : ''}
-                  </span>
-                  <Button size="sm" onClick={() => onOpenBudget(created.budgetId)}>Abrir orçamento</Button>
                 </div>
               ) : null}
             </div>

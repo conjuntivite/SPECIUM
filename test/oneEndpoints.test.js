@@ -48,3 +48,13 @@ test('no canvas, fechadura, portão e sensor ligam no Endpoint; facial e antena 
   for (const de of ['Terminal Facial', 'Antena UHF Veicular']) assert.ok(!arestas.includes(`${de} -> Endpoint ONE 4 Portas`), de);
   assert.ok(!arestas.includes('Solenoide de Backup -> Endpoint ONE 4 Portas'));
 });
+
+test('cada ligação do canvas leva um tipo de cabo', () => {
+  const items = [...CENARIO, ['Endpoint ONE 4 Portas', 2]].map(([title, quantity], i) => ({ id: i + 1, title, quantity }));
+  const nome = (id) => items.find((i) => `item-${i.id}` === id).title;
+  const cabos = new Map(layoutAndLinkItems(items, snapshot.categories).connections.map((c) => [`${nome(c.source)} -> ${nome(c.target)}`, c.cable]));
+  assert.equal(cabos.get('Fechadura Magnética -> Endpoint ONE 4 Portas'), 'duplacapa');
+  assert.equal(cabos.get('Terminal Facial -> Central ONE (Córtex)'), 'rede');
+  assert.equal(cabos.get('Fechadura Magnética -> Fonte 12V'), 'paralelo');
+  for (const c of cabos.values()) assert.ok(['rede', 'cci', 'coaxial', 'duplacapa', 'paralelo'].includes(c));
+});

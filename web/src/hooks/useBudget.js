@@ -4,6 +4,7 @@ import { parseBRL } from '@/lib/money'
 import { resolutionFromTitle } from '@/lib/coverage'
 import { CONTAINER_GRID, containerNodeSize } from '@/components/budget/FlowNode'
 import { dedupeUnsatisfiedSuggestions } from '@/lib/suggestions'
+import { cableById } from '@/lib/cables'
 
 // Nó tem 220px de largura — 300px de passo deixa ~80px de vão entre eles.
 const NODE_SPACING_X = 300
@@ -273,10 +274,10 @@ export function useBudget(budgetId) {
   // lado entrou (sourceHandle/targetHandle) — sem isso o desenho da linha ignora onde o cursor
   // realmente soltou e cai sempre no primeiro handle do node (o do topo). Ignora ligação repetida
   // entre o mesmo par de lados.
-  const addConnection = useCallback((source, target, sourceHandle, targetHandle) => {
+  const addConnection = useCallback((source, target, sourceHandle, targetHandle, cable = 'rede') => {
     if (!source || !target || source === target) return
     const id = `manual-${source}(${sourceHandle})->${target}(${targetHandle})`
-    setConnections((prev) => (prev.some((c) => c.id === id) ? prev : [...prev, { id, source, target, sourceHandle, targetHandle }]))
+    setConnections((prev) => (prev.some((c) => c.id === id) ? prev : [...prev, { id, source, target, sourceHandle, targetHandle, cable }]))
   }, [])
 
   const removeConnection = useCallback((id) => {
@@ -544,13 +545,13 @@ export function useBudget(budgetId) {
     return result
   }, [items, positions, criticalItemIds, isContainerItemIds, linkedFlowKeys])
 
-  // Arestas manuais: o usuário desenha arrastando de um handle a outro — traço sólido cyan. Ficam
+  // Arestas manuais: o usuário desenha arrastando de um handle a outro — traço sólido, cor do tipo de cabo. Ficam
   // selecionáveis/deletáveis (Delete/Backspace). As ligações não são mais inferidas automaticamente
   // pelo motor de sugestões — o usuário decide quais equipamentos conectar no canvas.
   const manualEdges = useMemo(() => connections.map((c) => ({
     id: c.id, source: c.source, target: c.target,
     sourceHandle: c.sourceHandle, targetHandle: c.targetHandle, type: 'step',
-    style: { stroke: 'rgba(34,211,238,0.85)', strokeWidth: 2 },
+    style: { stroke: cableById(c.cable).color, strokeWidth: 2 },
   })), [connections])
 
   // Reancora uma ligação manual que aponte pra um item escondido — dentro de um container fechado —
