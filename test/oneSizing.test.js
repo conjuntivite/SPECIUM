@@ -16,10 +16,16 @@ test('LLM listou 4 endpoints: o motor corrige para 2 e avisa', () => {
   assert.match(adjustments[0], /tem 4, a conta .* dá 2/);
 });
 
-test('LLM esqueceu o endpoint: o motor acrescenta', () => {
+test('sem endpoint no orçamento o motor acrescenta o FULL (8 sensores), nunca o 4 Portas sem pedido', () => {
   const { items, adjustments } = buildBudgetFromClassified(entradas([['Central ONE (Córtex)', 1], ...FECHADURAS_E_PORTOES]), categories);
-  assert.equal(qtd(items, 'Endpoint ONE 4 Portas'), 2);
-  assert.match(adjustments[0], /não tem, a conta .* dá 2/);
+  assert.equal(qtd(items, 'Endpoint ONE FULL'), 2);
+  assert.equal(qtd(items, 'Endpoint ONE 4 Portas'), undefined);
+  assert.match(adjustments[0], /Endpoint ONE FULL: o orçamento não tem, a conta .* dá 2/);
+});
+
+test('4 relés e 8 sensores cabem em 1 FULL (o 4 Portas pediria 2)', () => {
+  const { items } = buildBudgetFromClassified(entradas([['Central ONE (Córtex)', 1], ['Fechadura Magnética', 4], ['Sensor Magnético', 8]]), categories);
+  assert.equal(qtd(items, 'Endpoint ONE FULL'), 1);
 });
 
 test('quantidade já certa: nada muda e nada é avisado', () => {
@@ -36,6 +42,12 @@ test('endpoint FULL informado entra na conta: 1 FULL + 1 4 Portas cobrem 6 relé
 
 test('orçamento sem ONE (SIAM) não ganha endpoint', () => {
   const { items, adjustments } = buildBudgetFromClassified(entradas([['Controladora de Acesso', 1], ['Fechadura Magnética', 2]]), categories);
+  assert.equal(qtd(items, 'Endpoint ONE 4 Portas'), undefined);
+  assert.deepEqual(adjustments, []);
+});
+
+test('antena veicular na ONE fica na rede como o facial: não consome Wiegand nem pede Endpoint', () => {
+  const { items, adjustments } = buildBudgetFromClassified(entradas([['Central ONE (Córtex)', 1], ['Antena UHF Veicular', 4]]), categories);
   assert.equal(qtd(items, 'Endpoint ONE 4 Portas'), undefined);
   assert.deepEqual(adjustments, []);
 });

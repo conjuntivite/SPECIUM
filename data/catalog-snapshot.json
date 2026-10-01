@@ -114,7 +114,7 @@
         {
           "critical": true,
           "id": "wiegand",
-          "label": "Entrada Wiegand (Endpoint ONE ou controladora)",
+          "label": "Central ONE (antena na rede, como o facial) ou controladora com entrada Wiegand",
           "options": [
             {
               "candidates": [
@@ -125,9 +125,11 @@
               "type": "presence"
             },
             {
-              "resource": "one.wiegand_input",
-              "type": "capacity",
-              "unitsPerItem": 1
+              "candidates": [
+                "Central ONE (Córtex)",
+                "Central ONE (Córtex AG)"
+              ],
+              "type": "presence"
             }
           ],
           "type": "anyOf"

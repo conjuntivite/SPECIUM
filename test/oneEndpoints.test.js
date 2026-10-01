@@ -1,5 +1,5 @@
 // Catálogo ONE (data/catalog-snapshot.json): a contagem de endpoints sai do motor de recursos, não do
-// LLM. Cenário do diagrama de ligações: 4 portas + 2 portões = 6 relés, 6 sensores, 4 Wiegand (antenas).
+// LLM. Cenário do diagrama de ligações: 4 portas + 2 portões = 6 relés, 6 sensores; antena veicular e facial ficam na rede (sem Wiegand).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const snapshot = require('../data/catalog-snapshot.json');
@@ -16,9 +16,10 @@ const faltas = (endpoints) => computeCategoryMissingEssentials(
 ).missing.map((m) => m.label);
 const temFalta = (labels, texto) => labels.some((l) => l.includes(texto));
 
-test('2 Endpoint 4 Portas cobrem 6 relés, 6 sensores e 4 Wiegand', () => {
+test('2 Endpoint 4 Portas cobrem 6 relés e 6 sensores', () => {
   const labels = faltas(2);
-  for (const r of ['Relé de comando no Endpoint ONE', 'Entrada de sensor', 'Entrada Wiegand no Endpoint ONE']) assert.equal(temFalta(labels, r), false, r);
+  for (const r of ['Relé de comando no Endpoint ONE', 'Entrada de sensor']) assert.equal(temFalta(labels, r), false, r);
+  assert.equal(temFalta(faltas(0), 'Wiegand'), false, 'antena veicular não pede Wiegand');
 });
 
 test('1 Endpoint 4 Portas não cobre: faltam relé e entrada de sensor (facial e solenoide não entram na conta)', () => {
@@ -37,12 +38,13 @@ test('fechadura não é exclusiva da ONE: com controladora de outro fabricante o
   assert.ok(!rele.some((x) => x.severity === 'critical'));
 });
 
-test('no canvas, fechadura, portão, sensor e antena ligam no Endpoint; facial só na central', () => {
+test('no canvas, fechadura, portão e sensor ligam no Endpoint; facial e antena veicular só na central', () => {
   const items = [...CENARIO, ['Endpoint ONE 4 Portas', 2]].map(([title, quantity], i) => ({ id: i + 1, title, quantity }));
   const nome = (id) => items.find((i) => `item-${i.id}` === id).title;
   const arestas = layoutAndLinkItems(items, snapshot.categories).connections.map((c) => `${nome(c.source)} -> ${nome(c.target)}`);
-  for (const de of ['Fechadura Magnética', 'Automação de Portão', 'Sensor Magnético', 'Antena UHF Veicular']) assert.ok(arestas.includes(`${de} -> Endpoint ONE 4 Portas`), de);
+  for (const de of ['Fechadura Magnética', 'Automação de Portão', 'Sensor Magnético']) assert.ok(arestas.includes(`${de} -> Endpoint ONE 4 Portas`), de);
   assert.ok(arestas.includes('Terminal Facial -> Central ONE (Córtex)'));
-  assert.ok(!arestas.includes('Terminal Facial -> Endpoint ONE 4 Portas'));
+  assert.ok(arestas.includes('Antena UHF Veicular -> Central ONE (Córtex)'));
+  for (const de of ['Terminal Facial', 'Antena UHF Veicular']) assert.ok(!arestas.includes(`${de} -> Endpoint ONE 4 Portas`), de);
   assert.ok(!arestas.includes('Solenoide de Backup -> Endpoint ONE 4 Portas'));
 });
