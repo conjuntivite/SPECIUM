@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { listUsers, updateUser } from '@/lib/api'
+import { createUser, listUsers, updateUser } from '@/lib/api'
 import { UserFormDialog } from './UserFormDialog'
 import { SCREENS, allowedScreens } from '@/lib/screens'
 
@@ -33,7 +33,18 @@ export function UsersView({ auth }) {
     setFormOpen(true)
   }
 
+  function openCreate() {
+    setEditingUser(null)
+    setFormOpen(true)
+  }
+
   async function handleSubmit(form) {
+    if (!editingUser) {
+      await createUser(form)
+      setFormOpen(false)
+      reload()
+      return
+    }
     await updateUser(editingUser.id, form)
     setFormOpen(false)
     reload()
@@ -46,6 +57,7 @@ export function UsersView({ auth }) {
     <div className="mx-auto max-w-4xl">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">Usuários cadastrados</h2>
+        <Button type="button" size="sm" onClick={openCreate}>Novo usuário</Button>
       </div>
 
       {loading ? <p className="text-sm text-muted-foreground">Carregando...</p> : null}

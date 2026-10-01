@@ -133,6 +133,16 @@ async function requestHandler(request, response) {
       if (user.role !== 'admin') return sendJson(response, 403, { detail: 'Só administradores podem ver os usuários cadastrados.' });
       return sendJson(response, 200, { users: await listUsers() });
     }
+    if (request.method === 'POST' && url.pathname === '/api/users') {
+      const user = await getAuthenticatedUser(request);
+      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      if (user.role !== 'admin') return sendJson(response, 403, { detail: 'Só administradores podem cadastrar usuários.' });
+      const body = await readJson(request);
+      const { email, password } = validateAuthRequest(body);
+      const { email: _e, password: _p, ...rest } = validateUserUpdateRequest(body);
+      const created = await createUser({ email, passwordHash: hashPassword(password) });
+      return sendJson(response, 201, Object.keys(rest).length ? await updateUser(created.id, rest) : created);
+    }
     const userIdMatch = url.pathname.match(/^\/api\/users\/([a-f0-9]{24})$/i);
     if (userIdMatch && request.method === 'PATCH') {
       const user = await getAuthenticatedUser(request);

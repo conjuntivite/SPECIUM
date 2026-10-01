@@ -110,6 +110,10 @@ export function listUsers() {
   return requestJson('/api/users')
 }
 
+export function createUser(data) {
+  return postJson('/api/users', data)
+}
+
 export function updateUser(id, patch) {
   return requestJson(`/api/users/${id}`, { method: 'PATCH', body: patch })
 }

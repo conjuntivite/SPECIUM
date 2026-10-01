@@ -43,6 +43,10 @@ export function UserFormDialog({ open, user, onOpenChange, onSubmit }) {
       setError('Informe o e-mail.')
       return
     }
+    if (!user && form.password.length < 8) {
+      setError('A senha precisa ter pelo menos 8 caracteres.')
+      return
+    }
     setSaving(true)
     setError('')
     try {
@@ -59,9 +63,9 @@ export function UserFormDialog({ open, user, onOpenChange, onSubmit }) {
       <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Editar usuário</DialogTitle>
+            <DialogTitle>{user ? 'Editar usuário' : 'Novo usuário'}</DialogTitle>
             <DialogDescription>
-              Deixe a senha em branco pra manter a senha atual.
+              {user ? 'Deixe a senha em branco pra manter a senha atual.' : 'Informe e-mail e senha (mínimo 8 caracteres) pro novo acesso.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -101,12 +105,12 @@ export function UserFormDialog({ open, user, onOpenChange, onSubmit }) {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Nova senha</label>
+              <label className="text-sm font-medium">{user ? 'Nova senha' : 'Senha'}</label>
               <Input
                 type="password"
                 value={form.password}
                 onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                placeholder="Deixe em branco pra não alterar"
+                placeholder={user ? 'Deixe em branco pra não alterar' : 'Mínimo 8 caracteres'}
               />
             </div>
 
