@@ -1255,3 +1255,24 @@ test('conversas do assistente: só o dono acessa, PUT com id atualiza sem duplic
   assert.equal((await owner(`${baseUrl}/api/assistant/chats/${list[0].id}`, { method: 'DELETE' })).status, 200);
   assert.equal((await owner(`${baseUrl}/api/assistant/chats/${list[0].id}`)).status, 404);
 });
+
+test('GET /api/map/config exige login e devolve a chave ArcGIS do satélite (ou null sem chave)', async (t) => {
+  const previous = process.env.ARCGIS_API_KEY;
+  t.after(() => { if (previous === undefined) delete process.env.ARCGIS_API_KEY; else process.env.ARCGIS_API_KEY = previous; });
+
+  const server = http.createServer(requestHandler);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+
+  assert.equal((await globalThis.fetch(`${baseUrl}/api/map/config`)).status, 401);
+
+  const fetch = await loggedInFetch(baseUrl, t);
+  process.env.ARCGIS_API_KEY = 'chave-de-teste';
+  const withKey = await fetch(`${baseUrl}/api/map/config`);
+  assert.equal(withKey.status, 200);
+  assert.deepEqual(await withKey.json(), { arcgisKey: 'chave-de-teste' });
+
+  delete process.env.ARCGIS_API_KEY;
+  assert.deepEqual(await (await fetch(`${baseUrl}/api/map/config`)).json(), { arcgisKey: null });
+});

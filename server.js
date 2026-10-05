@@ -126,6 +126,14 @@ async function requestHandler(request, response) {
       if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
       return sendJson(response, 200, user);
     }
+    // Chave do satélite (Esri World Imagery) lida do .env a cada pedido — trocar a chave só pede
+    // restart, sem rebuild do front. Ela vai pro navegador de qualquer jeito (cada tile leva
+    // ?token=), quem protege é a restrição de Referrer URLs no painel da ArcGIS.
+    if (request.method === 'GET' && url.pathname === '/api/map/config') {
+      const user = await getAuthenticatedUser(request);
+      if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
+      return sendJson(response, 200, { arcgisKey: process.env.ARCGIS_API_KEY || null });
+    }
     // Cadastro de usuários e permissões — só administrador enxerga ou edita conta de terceiros.
     if (request.method === 'GET' && url.pathname === '/api/users') {
       const user = await getAuthenticatedUser(request);

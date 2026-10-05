@@ -106,6 +106,10 @@ export function getMe() {
   return requestJson('/api/auth/me')
 }
 
+export function getMapConfig() {
+  return requestJson('/api/map/config')
+}
+
 export function listUsers() {
   return requestJson('/api/users')
 }

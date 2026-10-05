@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { MapContainer, Marker, Polyline, Popup, useMap, useMapEvents } from 'react-leaflet'
+import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import { maplibreGL } from '@maplibre/maplibre-gl-leaflet'
 import { setWorkerUrl } from 'maplibre-gl'
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
@@ -13,6 +13,7 @@ import { getProductIcon } from '@/lib/productIcons'
 import { IconPicker } from '@/components/ui/icon-picker'
 import { CoverageFields, CoverageOverlay } from '@/components/map/CoverageOverlay'
 import { geoFrame } from '@/lib/coverage'
+import { getMapConfig } from '@/lib/api'
 
 // Dentro de um bundler, import.meta.url não resolve o worker do maplibre-gl de forma confiável —
 // precisa apontar explicitamente pro chunk que o Vite gera (?worker&url, não só ?url, senão o
@@ -27,8 +28,30 @@ setWorkerUrl(maplibreWorkerUrl)
 // hospedagem patrocinada (Cloudflare) pensada pra uso em produção, sem key/conta/limite.
 // Diferença de fundo do motor anterior: aqui os ícones ficam ancorados em lat/lng real, não em
 // posição de tela — sobrevivem a pan/zoom do mapa.
+// Satélite: Esri World Imagery via ArcGIS Location Platform (conta sem cartão; cota grátis de 2M
+// tiles/mês e, estourando, o serviço só para até o mês seguinte — sem cobrança). Chave vem de
+// GET /api/map/config (ARCGIS_API_KEY no .env); sem chave ou com falha, fica no OpenFreeMap.
 
 const OPENFREEMAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty'
+const ESRI_IMAGERY_URL = 'https://ibasemaps-api.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?token='
+// Atribuição exigida pelos termos da Esri ("Powered by Esri" + fontes da imagem).
+const ESRI_ATTRIBUTION = 'Powered by <a href="https://www.esri.com">Esri</a> | Fonte: Esri, Maxar, Earthstar Geographics, GIS User Community'
+
+// Profundidade da imagem varia por cidade (testado: São Paulo vai até 19, Chapecó só até 18 — 19
+// dá 404). maxNativeZoom 18 faz o Leaflet ampliar o 18 nos zooms 19/20 em vez de quadro vazio.
+// ponytail: perde o 19 nativo onde ele existe; fallback por tile (tenta 19, cai pro 18) se fizer falta.
+// Sem detecção de chave inválida de propósito: o servidor de tiles da Esri devolve imagem até com
+// token inválido (só recusa sem token) — não há erro confiável pra reagir.
+function EsriSatelliteLayer({ apiKey }) {
+  return (
+    <TileLayer
+      url={ESRI_IMAGERY_URL + encodeURIComponent(apiKey)}
+      attribution={ESRI_ATTRIBUTION}
+      maxNativeZoom={18}
+      maxZoom={20}
+    />
+  )
+}
 
 // Ponte maplibre-gl-leaflet: planta o mapa vetorial (MapLibre GL) dentro do mesmo Leaflet que já
 // desenha os marcadores/linhas — nenhum outro código de interação precisou mudar.
@@ -119,6 +142,13 @@ export function MapCanvas({ budgetId, lat, lng, items, coverageByItemId, onSetIt
   const [armedItemId, setArmedItemId] = useState(null) // null | number (id do item) | 'link'
   const [linkFromId, setLinkFromId] = useState(null)
   const nextIdRef = useRef(1)
+  const [arcgisKey, setArcgisKey] = useState(null)
+  const [preferSatellite, setPreferSatellite] = useState(true)
+  const showSatellite = Boolean(arcgisKey) && preferSatellite
+
+  useEffect(() => {
+    getMapConfig().then((config) => setArcgisKey(config.arcgisKey)).catch(() => setArcgisKey(null))
+  }, [])
 
   // Orçamento trocado (voltou pra lista e abriu outro) — recarrega o layout salvo dele.
   useEffect(() => {
@@ -305,7 +335,7 @@ export function MapCanvas({ budgetId, lat, lng, items, coverageByItemId, onSetIt
   return (
     <div className="relative size-full">
       <MapContainer center={[lat, lng]} zoom={19} maxZoom={20} className="size-full">
-        <OpenFreeMapLayer />
+        {showSatellite ? <EsriSatelliteLayer apiKey={arcgisKey} /> : <OpenFreeMapLayer />}
         <ClickToPlace armedItemId={armedItemId} onPlace={placeMarker} />
         {lines.map((line) => {
           const from = byId[line.fromId]
@@ -413,6 +443,27 @@ export function MapCanvas({ budgetId, lat, lng, items, coverageByItemId, onSetIt
           )
         })}
       </MapContainer>
+
+      {/* top-16: entre o "Voltar ao orçamento" (MapView, top-4) e a legenda de cores (top-28). */}
+      <div
+        className="absolute top-16 right-4 z-[1000] flex rounded-full border border-border bg-card/90 p-0.5 text-sm font-medium backdrop-blur"
+        title={arcgisKey ? undefined : 'Satélite indisponível: ARCGIS_API_KEY não configurada no servidor.'}
+      >
+        {[['Mapa', false], ['Satélite', true]].map(([label, satellite]) => (
+          <button
+            key={label}
+            type="button"
+            disabled={satellite && !arcgisKey}
+            aria-pressed={showSatellite === satellite}
+            onClick={() => setPreferSatellite(satellite)}
+            className={`rounded-full px-3 py-1 transition-colors disabled:pointer-events-none disabled:opacity-50 ${
+              showSatellite === satellite ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       <div className="pointer-events-none absolute bottom-4 left-4 z-[1000] flex max-h-[75vh] flex-col gap-2 overflow-y-auto">
         {!placeableItems.length ? (
