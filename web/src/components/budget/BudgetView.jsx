@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faBars, faBox, faEye, faFloppyDisk, faList, faLocationDot, faMagnifyingGlass, faMapLocationDot, faMap, faPenToSquare, faTag, faTriangleExclamation, faXmark } from '@fortawesome/free-solid-svg-icons'
+import { faBars, faBox, faEye, faFloppyDisk, faList, faLocationDot, faMagnifyingGlass, faMapLocationDot, faMap, faPenToSquare, faRotateLeft, faRotateRight, faTag, faTriangleExclamation, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { ReactFlowProvider } from '@xyflow/react'
 import { useBudget } from '@/hooks/useBudget'
 import { formatBRL } from '@/lib/money'
@@ -41,6 +41,24 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
   // etapa a partir daqui; o servidor também recusa (updateBudgetForUser/setBudgetAddressForUser),
   // isto aqui só evita oferecer um botão que ia dar erro.
   const readOnly = budget.status === 'fechado'
+
+  // Ctrl+Z desfaz, Ctrl+Y ou Ctrl+Shift+Z refaz (Cmd no Mac), igual Excel/Word — só no canvas e
+  // fora de campo de texto, onde o navegador já desfaz a digitação sozinho.
+  const { undo, redo } = budget
+  useEffect(() => {
+    if (step !== 'canvas' || readOnly) return
+    function onKeyDown(event) {
+      if (!(event.ctrlKey || event.metaKey)) return
+      const key = event.key.toLowerCase()
+      const action = key === 'y' || (key === 'z' && event.shiftKey) ? redo : key === 'z' ? undo : null
+      const el = event.target
+      if (!action || el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) return
+      event.preventDefault()
+      action()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [step, readOnly, undo, redo])
 
   async function handleSave() {
     setSaving(true)
@@ -208,6 +226,26 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
               </span>
             ) : (
               <>
+                <button
+                  type="button"
+                  disabled={!budget.canUndo}
+                  onClick={budget.undo}
+                  title="Desfazer (Ctrl+Z)"
+                  className={`${PILL} ${PILL_DISABLED}`}
+                >
+                  <FontAwesomeIcon icon={faRotateLeft} className="size-4" /> Desfazer
+                </button>
+
+                <button
+                  type="button"
+                  disabled={!budget.canRedo}
+                  onClick={budget.redo}
+                  title="Refazer (Ctrl+Y)"
+                  className={`${PILL} ${PILL_DISABLED}`}
+                >
+                  <FontAwesomeIcon icon={faRotateRight} className="size-4" /> Refazer
+                </button>
+
                 <button type="button" onClick={handleCancel} className={`${PILL} text-destructive`}>
                   <FontAwesomeIcon icon={faXmark} className="size-4" /> Cancelar
                 </button>

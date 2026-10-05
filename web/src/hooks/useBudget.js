@@ -11,6 +11,10 @@ const NODE_SPACING_X = 300
 // Debounce do autosave — evita um PATCH por frame de arraste (onNodeDragStop chama updatePosition
 // a cada node solto do grupo movido).
 const SAVE_DEBOUNCE_MS = 500
+// Mudanças dentro desta janela viram um passo só do Desfazer — soltar um grupo arrastado chama
+// updatePosition uma vez por node, e abrir container dispara toggle + auto-ajuste em sequência.
+const UNDO_COALESCE_MS = 300
+const UNDO_LIMIT = 100
 
 function clampQuantity(value) {
   const n = Math.trunc(Number(value))
@@ -142,6 +146,49 @@ export function useBudget(budgetId) {
     }).catch(() => { if (!cancelled) setLoaded(true) })
     return () => { cancelled = true }
   }, [budgetId])
+
+  // Desfazer/Refazer (Ctrl+Z / Ctrl+Y / botões) do canvas: pilhas de snapshots { items, positions,
+  // connections } empilhados por efeito a cada mudança, sem precisar instrumentar cada ação. Carga
+  // do orçamento, checagem de preço e o próprio desfazer/refazer pulam a pilha (`skipUndoRef`);
+  // qualquer mudança nova do usuário zera o Refazer, igual Excel/Word. ponytail: snapshot inteiro
+  // por passo — ok pro tamanho de um orçamento; vira diff se ficar pesado.
+  const [undoStack, setUndoStack] = useState([])
+  const [redoStack, setRedoStack] = useState([])
+  const undoPrevRef = useRef(null)
+  const undoLastPushRef = useRef(0)
+  const skipUndoRef = useRef(true)
+  useEffect(() => {
+    const current = { items, positions, connections }
+    const previous = undoPrevRef.current
+    undoPrevRef.current = current
+    if (!loaded) { skipUndoRef.current = true; return } // o render em que a carga chega não é passo
+    if (skipUndoRef.current || !previous) { skipUndoRef.current = false; return }
+    const now = Date.now()
+    if (now - undoLastPushRef.current > UNDO_COALESCE_MS) setUndoStack((prev) => [...prev.slice(-(UNDO_LIMIT - 1)), previous])
+    undoLastPushRef.current = now
+    setRedoStack([])
+  }, [items, positions, connections, loaded])
+  useEffect(() => { setUndoStack([]); setRedoStack([]) }, [budgetId])
+
+  // Tira o topo de `from`, guarda o estado atual em `to` e restaura o snapshot.
+  const travel = useCallback((from, setFrom, setTo) => {
+    if (!from.length) return
+    const snapshot = from[from.length - 1]
+    setFrom((prev) => prev.slice(0, -1))
+    setTo((prev) => [...prev.slice(-(UNDO_LIMIT - 1)), { items, positions, connections }])
+    skipUndoRef.current = true
+    undoLastPushRef.current = 0 // próxima mudança depois de desfazer/refazer é sempre um passo novo
+    // Preço já buscado continua valendo pro mesmo item/título — desfazer não apaga a checagem.
+    const priceById = new Map(items.map((item) => [item.id, item]))
+    setItems(snapshot.items.map((item) => {
+      const now = priceById.get(item.id)
+      return now && now.title === item.title ? { ...item, averagePrice: now.averagePrice, bestOffer: now.bestOffer } : item
+    }))
+    setPositions(snapshot.positions)
+    setConnections(snapshot.connections)
+  }, [items, positions, connections])
+  const undo = useCallback(() => travel(undoStack, setUndoStack, setRedoStack), [travel, undoStack])
+  const redo = useCallback(() => travel(redoStack, setRedoStack, setUndoStack), [travel, redoStack])
 
   // Chamado pelo BudgetView depois que POST /api/budgets/:id/address volta com sucesso — evita um
   // segundo round-trip só pra reler o que a resposta já trouxe. Não mexe em status: definir/editar
@@ -417,6 +464,7 @@ export function useBudget(budgetId) {
     try {
       const data = await getPrices(items.map((item) => ({ label: item.title, search_term: item.title })))
       const resultByLabel = new Map((data.results || []).map((result) => [result.label, result]))
+      skipUndoRef.current = true
       setItems((prev) => prev.map((item) => {
         const result = resultByLabel.get(item.title)
         return { ...item, averagePrice: result?.average_price || null, bestOffer: (result?.deals && result.deals[0]) || null }
@@ -610,6 +658,10 @@ export function useBudget(budgetId) {
     status,
     save,
     discard,
+    undo,
+    canUndo: undoStack.length > 0,
+    redo,
+    canRedo: redoStack.length > 0,
     changeStatus,
     clientName,
     address,
