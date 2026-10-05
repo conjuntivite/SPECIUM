@@ -443,7 +443,7 @@ async function recordClassificationVotes(entries) {
 async function getAiInstructions() {
   const settings = await getSettingsCollection();
   const doc = await settings.findOne({ _id: 'ai_instructions' });
-  return { classification: doc?.classification || null, audit: doc?.audit || null };
+  return { classification: doc?.classification || null, audit: doc?.audit || null, assistant: doc?.assistant || '' };
 }
 
 // SMTP do envio de e-mails (tela "E-mail (SMTP)", admin). `pass` fica CIFRADO (lib/secretBox.js);
@@ -521,14 +521,17 @@ async function deleteAssistantChat(userId, id) {
   return (await chats.deleteOne({ _id: new ObjectId(id), userId })).deletedCount > 0;
 }
 
-async function updateAiInstructions({ classification, audit }) {
+// `assistant` só é gravado quando vem: o import do catálogo (scripts/catalog-sync.js) manda só
+// classificação/auditoria e não pode apagar a instrução do chat.
+async function updateAiInstructions({ classification, audit, assistant }) {
   const settings = await getSettingsCollection();
+  const fields = { classification, audit, ...(assistant !== undefined ? { assistant } : {}) };
   await settings.updateOne(
     { _id: 'ai_instructions' },
-    { $set: { classification, audit, updatedAt: new Date() } },
+    { $set: { ...fields, updatedAt: new Date() } },
     { upsert: true },
   );
-  return { classification, audit };
+  return fields;
 }
 
 async function getUsersCollection() {

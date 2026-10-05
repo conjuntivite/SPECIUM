@@ -57,6 +57,16 @@ test('askEquipmentAssistant monta o prompt a partir do histórico enviado', asyn
   assert.ok(lastSystemPrompt.includes(intelbras.find((k) => /FE 21150/.test(k.text)).text));
 });
 
+// Caso real (out/2026): admin pediu na tela de configurações "me chame de OSCAR LIMA" e o chat ignorava,
+// porque só a classificação/auditoria do PDF liam aquela tela.
+test('instrução do administrador para o assistente entra no prompt (e vazia não entra)', async () => {
+  await askEquipmentAssistant(user('oi'), 'Chame o usuário sempre de OSCAR LIMA.');
+  assert.ok(lastSystemPrompt.includes('Chame o usuário sempre de OSCAR LIMA.'));
+  assert.ok(lastSystemPrompt.indexOf('OSCAR LIMA') > lastSystemPrompt.indexOf('Fórmulas de dimensionamento'), 'vem depois das fichas');
+  await askEquipmentAssistant(user('oi'), '');
+  assert.ok(!lastSystemPrompt.includes('Instruções do administrador'));
+});
+
 // Caso real (produção, out/2026): o assistente afirmou que a AMT 2018 E SMART não recebe evento de
 // câmera pela rede e pôs sensor extra no orçamento — o guia oficial de integração diz o contrário.
 test('falar de central AMT 1000/2018 ou de linha virtual/AcuSense puxa a ficha de integração alarme × câmera com IA', () => {

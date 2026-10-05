@@ -172,14 +172,14 @@ async function requestHandler(request, response) {
       return sendJson(response, 200, {
         classification: stored.classification || DEFAULT_CLASSIFICATION_INSTRUCTIONS,
         audit: stored.audit || DEFAULT_AUDIT_INSTRUCTIONS,
+        assistant: stored.assistant,
       });
     }
     if (request.method === 'PUT' && url.pathname === '/api/ai-instructions') {
       const user = await getAuthenticatedUser(request);
       if (!user) return sendJson(response, 401, { detail: 'Não autenticado.' });
       if (user.role !== 'admin') return sendJson(response, 403, { detail: 'Só administradores podem editar as instruções da IA.' });
-      const { classification, audit } = validateAiInstructionsRequest(await readJson(request));
-      return sendJson(response, 200, await updateAiInstructions({ classification, audit }));
+      return sendJson(response, 200, await updateAiInstructions(validateAiInstructionsRequest(await readJson(request))));
     }
     // Configuração SMTP (admin). A senha só entra (PUT) e nunca sai: o GET devolve `hasPassword`.
     if (url.pathname === '/api/smtp-settings' || url.pathname === '/api/smtp-settings/test') {
@@ -264,7 +264,7 @@ async function requestHandler(request, response) {
       const user = await requireScreen(request, response, 'assistant');
       if (!user) return;
       const body = await readJson(request);
-      const first = await askEquipmentAssistant(body.messages);
+      const first = await askEquipmentAssistant(body.messages, (await getAiInstructions()).assistant);
       // Orçamento no texto passa pela conferência do motor (lib/budgetCheck.js) antes de ir pra tela.
       let catalog;
       const { answer, problems, dropped } = await reviewAssistantAnswer({
