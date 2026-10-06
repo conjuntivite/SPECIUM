@@ -50,7 +50,7 @@ export function AddressDialog({ budgetId, open, onOpenChange, initialAddress, in
           </div>
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <DialogFooter>
-            <Button type="submit" disabled={submitting}>{isEditing ? 'Salvar endereço' : 'Definir endereço e ver mapa'}</Button>
+            <Button type="submit" disabled={submitting}>{isEditing ? 'Salvar endereço' : 'Definir endereço'}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

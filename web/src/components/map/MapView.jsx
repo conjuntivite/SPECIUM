@@ -1,19 +1,23 @@
 import { useEffect, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faArrowLeft } from '@fortawesome/free-solid-svg-icons'
+import { faArrowLeft, faLocationDot, faPenToSquare } from '@fortawesome/free-solid-svg-icons'
 import { getMapConfig } from '@/lib/api'
 import { FloorPlanView } from '@/components/floorplan/FloorPlanView'
+import { AddressDialog } from '@/components/budget/AddressDialog'
 import { MapCanvas } from './MapCanvas'
 
+const PILL = 'pointer-events-auto flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur transition-colors'
 const MODES = [['map', 'Mapa'], ['satellite', 'Satélite'], ['floorplan', 'Planta baixa']]
 
 // Tela única do local: Mapa, Satélite e Planta baixa trocam por um seletor dentro dela (antes eram
 // dois botões no orçamento + um toggle no mapa). Mapa/Satélite dependem de endereço; a planta não.
-export function MapView({ budgetId, lat, lng, items, coverageByItemId, onSetItemIcon, mapLayout, onChangeMapLayout, floorPlan, floorPlanLayout, onChangeFloorPlanLayout, onUploadFloorPlan, readOnly, onBackToCanvas }) {
+// O endereço também é definido/editado aqui (saiu da barra do canvas).
+export function MapView({ budgetId, lat, lng, address, number, onAddressSaved, items, coverageByItemId, onSetItemIcon, mapLayout, onChangeMapLayout, floorPlan, floorPlanLayout, onChangeFloorPlanLayout, onUploadFloorPlan, readOnly, onBackToCanvas }) {
   const [arcgisKey, setArcgisKey] = useState(null)
   // null = automático: satélite se tem endereço, senão planta (o orçamento carrega assíncrono, então
   // não dá pra decidir isso no primeiro render).
   const [chosenMode, setChosenMode] = useState(null)
+  const [addressDialogOpen, setAddressDialogOpen] = useState(false)
   const hasAddress = Number.isFinite(lat) && Number.isFinite(lng)
   const mode = !hasAddress ? 'floorplan' : chosenMode || 'satellite'
 
@@ -22,7 +26,7 @@ export function MapView({ budgetId, lat, lng, items, coverageByItemId, onSetItem
   }, [])
 
   function disabledReason(value) {
-    if (value !== 'floorplan' && !hasAddress) return 'Defina o endereço no orçamento para liberar o mapa.'
+    if (value !== 'floorplan' && !hasAddress) return 'Defina o endereço para liberar o mapa.'
     if (value === 'satellite' && !arcgisKey) return 'Satélite indisponível: ARCGIS_API_KEY não configurada no servidor.'
     return null
   }
@@ -48,6 +52,20 @@ export function MapView({ budgetId, lat, lng, items, coverageByItemId, onSetItem
       {/* Leaflet põe seu controle de zoom no canto superior esquerdo com z-index alto — seletor e
           voltar ficam no canto oposto (direita) pra não ficar escondidos atrás dele. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-[1100] flex flex-wrap justify-end gap-2 p-4">
+        {readOnly ? (
+          hasAddress ? (
+            <span className={`${PILL} max-w-[280px]`}>
+              <FontAwesomeIcon icon={faLocationDot} className="size-4 shrink-0 text-destructive" />
+              <span className="truncate">{address}{number ? `, ${number}` : ''}</span>
+            </span>
+          ) : null
+        ) : (
+          <button type="button" onClick={() => setAddressDialogOpen(true)} title={hasAddress ? 'Editar endereço' : 'Definir endereço'} className={`${PILL} max-w-[280px] hover:bg-secondary`}>
+            <FontAwesomeIcon icon={faLocationDot} className="size-4 shrink-0 text-destructive" />
+            <span className="truncate">{hasAddress ? `${address}${number ? `, ${number}` : ''}` : 'Definir endereço'}</span>
+            <FontAwesomeIcon icon={faPenToSquare} className="size-3.5 shrink-0 text-muted-foreground" />
+          </button>
+        )}
         <div className="pointer-events-auto flex rounded-full border border-border bg-card/90 p-0.5 text-sm font-medium backdrop-blur">
           {MODES.map(([value, label]) => {
             const reason = disabledReason(value)
@@ -78,6 +96,20 @@ export function MapView({ budgetId, lat, lng, items, coverageByItemId, onSetItem
           <FontAwesomeIcon icon={faArrowLeft} className="size-4" /> Voltar ao orçamento
         </button>
       </div>
+
+      {/* Ao definir o endereço pela primeira vez o modo automático já troca da planta pro satélite. */}
+      <AddressDialog
+        budgetId={budgetId}
+        open={addressDialogOpen}
+        onOpenChange={setAddressDialogOpen}
+        isEditing={hasAddress}
+        initialAddress={address}
+        initialNumber={number}
+        onSaved={(updatedBudget) => {
+          onAddressSaved(updatedBudget)
+          setAddressDialogOpen(false)
+        }}
+      />
     </div>
   )
 }

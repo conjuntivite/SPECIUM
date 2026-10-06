@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faBars, faBox, faEye, faFloppyDisk, faList, faLocationDot, faMagnifyingGlass, faMapLocationDot, faPenToSquare, faRotateLeft, faRotateRight, faTag, faTriangleExclamation, faXmark } from '@fortawesome/free-solid-svg-icons'
+import { faBars, faBox, faEye, faFloppyDisk, faList, faMagnifyingGlass, faMapLocationDot, faRotateLeft, faRotateRight, faTag, faTriangleExclamation, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { ReactFlowProvider } from '@xyflow/react'
 import { useBudget } from '@/hooks/useBudget'
 import { formatBRL } from '@/lib/money'
 import { FlowLegend } from './FlowLegend'
 import { SuggestionsStrip } from './SuggestionsStrip'
 import { BudgetCanvas } from './BudgetCanvas'
-import { AddressDialog } from './AddressDialog'
 import { MapView } from '@/components/map/MapView'
 
 const PILL = 'flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur transition-colors hover:bg-secondary'
@@ -31,11 +30,9 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
   // "+" passar pelo mesmo seletor de produto cadastrado que o menu de botão direito usa.
   const canvasRef = useRef(null)
   const [step, setStep] = useState(initialStep || 'canvas')
-  const [addressDialogOpen, setAddressDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
 
-  const hasAddress = Number.isFinite(budget.lat) && Number.isFinite(budget.lng)
   // Fechado = só visualização (pedido explícito) — nada de mexer em endereço, itens, ligações ou
   // etapa a partir daqui; o servidor também recusa (updateBudgetForUser/setBudgetAddressForUser),
   // isto aqui só evita oferecer um botão que ia dar erro.
@@ -83,6 +80,9 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
         items={budget.items}
         coverageByItemId={budget.coverageByItemId}
         onSetItemIcon={budget.setItemIcon}
+        address={budget.address}
+        number={budget.number}
+        onAddressSaved={budget.applyAddress}
         mapLayout={budget.mapLayout}
         onChangeMapLayout={budget.setMapLayout}
         floorPlan={budget.floorPlan}
@@ -99,20 +99,6 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
     <div className="fixed inset-0 z-40">
       <ReactFlowProvider>
         <BudgetCanvas ref={canvasRef} budget={budget} onGoToProducts={onGoToProducts} readOnly={readOnly} />
-        <AddressDialog
-          budgetId={budgetId}
-          open={addressDialogOpen}
-          onOpenChange={setAddressDialogOpen}
-          isEditing={hasAddress}
-          initialAddress={budget.address}
-          initialNumber={budget.number}
-          onSaved={(updatedBudget) => {
-            budget.applyAddress(updatedBudget)
-            setAddressDialogOpen(false)
-            if (!hasAddress) setStep('map') // primeira vez que o endereço é definido já leva pro mapa; editar depois não navega sozinho
-          }}
-        />
-
         {/* pr-16 (bem além do p-4 padrão) — o botão de tema é fixed top-4 right-4 com z-50, por cima
             de tudo; sem essa folga extra à direita, o grupo de ações (Salvar por último) encosta e
             fica parcialmente escondido atrás dele. */}
@@ -189,32 +175,8 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
               </select>
             )}
 
-            {readOnly ? (
-              hasAddress ? (
-                <span className={`${PILL} max-w-[280px]`}>
-                  <FontAwesomeIcon icon={faLocationDot} className="size-4 shrink-0 text-destructive" />
-                  <span className="truncate">{budget.address}{budget.number ? `, ${budget.number}` : ''}</span>
-                </span>
-              ) : null
-            ) : (
-              <button
-                type="button"
-                onClick={() => setAddressDialogOpen(true)}
-                title={hasAddress ? 'Editar endereço' : 'Definir endereço'}
-                className={`${PILL} max-w-[280px]`}
-              >
-                <FontAwesomeIcon icon={faLocationDot} className="size-4 shrink-0 text-destructive" />
-                {hasAddress ? (
-                  <span className="truncate">{budget.address}{budget.number ? `, ${budget.number}` : ''}</span>
-                ) : (
-                  <span>Definir endereço</span>
-                )}
-                <FontAwesomeIcon icon={faPenToSquare} className="size-3.5 shrink-0 text-muted-foreground" />
-              </button>
-            )}
-
-            {/* Uma entrada só: Mapa / Satélite / Planta baixa trocam dentro da tela (ver MapView).
-                Sem endereço abre direto na planta, que não depende dele. */}
+            {/* Uma entrada só: Mapa / Satélite / Planta baixa e o endereço ficam dentro da tela (ver
+                MapView). Sem endereço abre direto na planta, que não depende dele. */}
             <button type="button" onClick={() => setStep('map')} className={PILL}>
               <FontAwesomeIcon icon={faMapLocationDot} className="size-4" /> Mapa
             </button>
