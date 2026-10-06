@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faArrowLeft, faArrowUpFromBracket, faExternalLinkAlt } from '@fortawesome/free-solid-svg-icons'
+import { faArrowUpFromBracket, faExternalLinkAlt } from '@fortawesome/free-solid-svg-icons'
 import { FloorPlanCanvas } from './FloorPlanCanvas'
 
 // Serviço externo gratuito pra converter DWG (AutoCAD) em PDF/imagem antes do upload — o sistema
@@ -9,7 +9,7 @@ import { FloorPlanCanvas } from './FloorPlanCanvas'
 const DWG_CONVERTER_URL = 'https://www.freepdfconvert.com/pt/autocad-para-pdf'
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg']
 
-export function FloorPlanView({ budgetId, floorPlan, items, coverageByItemId, onSetItemIcon, floorPlanLayout, onChangeFloorPlanLayout, onUpload, readOnly, onBackToCanvas }) {
+export function FloorPlanView({ budgetId, floorPlan, items, coverageByItemId, onSetItemIcon, floorPlanLayout, onChangeFloorPlanLayout, onUpload, readOnly }) {
   const fileInputRef = useRef(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
@@ -74,7 +74,8 @@ export function FloorPlanView({ budgetId, floorPlan, items, coverageByItemId, on
       {/* Fora do estado "sem planta" pra servir tanto ao envio inicial quanto à troca. */}
       <input ref={fileInputRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleFileChange} />
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-[1100] flex flex-col items-end gap-2 p-4">
+      {/* top-12 + p-4 = top-16: logo abaixo da barra do MapView (seletor + "Voltar ao orçamento"). */}
+      <div className="pointer-events-none absolute inset-x-0 top-12 z-[1100] flex flex-col items-end gap-2 p-4">
         {floorPlan && !readOnly ? (
           <button
             type="button"
@@ -88,13 +89,6 @@ export function FloorPlanView({ budgetId, floorPlan, items, coverageByItemId, on
           </button>
         ) : null}
         {floorPlan && error ? <p className="pointer-events-auto rounded-lg bg-card/90 px-2 py-1 text-sm text-destructive">{error}</p> : null}
-        <button
-          type="button"
-          onClick={onBackToCanvas}
-          className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur transition-colors hover:bg-secondary"
-        >
-          <FontAwesomeIcon icon={faArrowLeft} className="size-4" /> Voltar ao orçamento
-        </button>
       </div>
     </div>
   )

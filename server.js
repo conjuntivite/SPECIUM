@@ -428,9 +428,9 @@ async function requestHandler(request, response) {
     if (budgetAddressMatch && request.method === 'POST') {
       const user = await requireScreen(request, response, 'budget');
       if (!user) return;
-      const { clientName, address, number } = validateSetAddressRequest(await readJson(request));
+      const { address, number } = validateSetAddressRequest(await readJson(request));
       const { lat, lng } = await geocodeAddress(`${address}, ${number}`);
-      const budget = await setBudgetAddressForUser(budgetAddressMatch[1], user.id, { clientName, address, number, lat, lng }, user.unrestricted);
+      const budget = await setBudgetAddressForUser(budgetAddressMatch[1], user.id, { address, number, lat, lng }, user.unrestricted);
       if (!budget) return sendJson(response, 404, { detail: 'Orçamento não encontrado.' });
       return sendJson(response, 200, budget);
     }

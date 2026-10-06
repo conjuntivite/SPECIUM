@@ -97,7 +97,7 @@ export function useBudget(budgetId) {
   // Endereço e mapLayout continuam com vida própria (têm sua própria ação/autosave), fora deste
   // snapshot.
   const lastSavedRef = useRef({ items: [], positions: {}, connections: [], status: 'aberto' })
-  const [clientName, setClientName] = useState(null)
+  const [name, setName] = useState(null)
   const [address, setAddress] = useState(null)
   const [number, setNumber] = useState(null)
   const [lat, setLat] = useState(null)
@@ -137,7 +137,7 @@ export function useBudget(budgetId) {
         connections: sanitizeConnections(data.connections),
         status: loadedStatus,
       }
-      setClientName(data.clientName || null)
+      setName(data.name || null)
       setAddress(data.address || null)
       setNumber(data.number || null)
       setLat(Number.isFinite(data.lat) ? data.lat : null)
@@ -194,7 +194,6 @@ export function useBudget(budgetId) {
   // segundo round-trip só pra reler o que a resposta já trouxe. Não mexe em status: definir/editar
   // endereço é uma ação independente da etapa do orçamento.
   const applyAddress = useCallback((updatedBudget) => {
-    setClientName(updatedBudget.clientName || null)
     setAddress(updatedBudget.address || null)
     setNumber(updatedBudget.number || null)
     setLat(Number.isFinite(updatedBudget.lat) ? updatedBudget.lat : null)
@@ -262,6 +261,12 @@ export function useBudget(budgetId) {
   // Troca de etapa é sempre uma ação explícita do consultor (seletor no canvas), nunca automática —
   // grava na hora, independente de Salvar. "fechado" trava o orçamento pra só-leitura no servidor
   // (updateBudgetForUser), então essa é a última troca possível por aqui.
+  // Nome do orçamento grava na hora, igual à etapa — não entra no Salvar/Cancelar do canvas.
+  const rename = useCallback(async (nextName) => {
+    const updated = await updateBudget(budgetId, { name: nextName })
+    setName(updated.name || null)
+  }, [budgetId])
+
   const changeStatus = useCallback(async (nextStatus) => {
     await updateBudget(budgetId, { status: nextStatus })
     lastSavedRef.current = { ...lastSavedRef.current, status: nextStatus }
@@ -663,7 +668,8 @@ export function useBudget(budgetId) {
     redo,
     canRedo: redoStack.length > 0,
     changeStatus,
-    clientName,
+    name,
+    rename,
     address,
     number,
     lat,

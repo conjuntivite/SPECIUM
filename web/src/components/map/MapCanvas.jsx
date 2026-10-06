@@ -13,7 +13,6 @@ import { getProductIcon } from '@/lib/productIcons'
 import { IconPicker } from '@/components/ui/icon-picker'
 import { CoverageFields, CoverageOverlay } from '@/components/map/CoverageOverlay'
 import { geoFrame } from '@/lib/coverage'
-import { getMapConfig } from '@/lib/api'
 
 // Dentro de um bundler, import.meta.url não resolve o worker do maplibre-gl de forma confiável —
 // precisa apontar explicitamente pro chunk que o Vite gera (?worker&url, não só ?url, senão o
@@ -131,7 +130,8 @@ function ClickToPlace({ armedItemId, onPlace }) {
   return null
 }
 
-export function MapCanvas({ budgetId, lat, lng, items, coverageByItemId, onSetItemIcon, mapLayout, onChange }) {
+// `satellite`/`arcgisKey` vêm do MapView, que agora tem o seletor único Mapa / Satélite / Planta baixa.
+export function MapCanvas({ budgetId, lat, lng, items, coverageByItemId, onSetItemIcon, mapLayout, onChange, satellite, arcgisKey }) {
   const [markers, setMarkers] = useState(() => mapLayout.markers || [])
   const [lines, setLines] = useState(() => mapLayout.lines || [])
   // Posição ajustável da flag do endereço — só existe estado próprio depois que o usuário arrasta
@@ -142,14 +142,6 @@ export function MapCanvas({ budgetId, lat, lng, items, coverageByItemId, onSetIt
   const [armedItemId, setArmedItemId] = useState(null) // null | number (id do item) | 'link'
   const [linkFromId, setLinkFromId] = useState(null)
   const nextIdRef = useRef(1)
-  const [arcgisKey, setArcgisKey] = useState(null)
-  const [preferSatellite, setPreferSatellite] = useState(true)
-  const showSatellite = Boolean(arcgisKey) && preferSatellite
-
-  useEffect(() => {
-    getMapConfig().then((config) => setArcgisKey(config.arcgisKey)).catch(() => setArcgisKey(null))
-  }, [])
-
   // Orçamento trocado (voltou pra lista e abriu outro) — recarrega o layout salvo dele.
   useEffect(() => {
     setMarkers(mapLayout.markers || [])
@@ -335,7 +327,7 @@ export function MapCanvas({ budgetId, lat, lng, items, coverageByItemId, onSetIt
   return (
     <div className="relative size-full">
       <MapContainer center={[lat, lng]} zoom={19} maxZoom={20} className="size-full">
-        {showSatellite ? <EsriSatelliteLayer apiKey={arcgisKey} /> : <OpenFreeMapLayer />}
+        {satellite && arcgisKey ? <EsriSatelliteLayer apiKey={arcgisKey} /> : <OpenFreeMapLayer />}
         <ClickToPlace armedItemId={armedItemId} onPlace={placeMarker} />
         {lines.map((line) => {
           const from = byId[line.fromId]
@@ -443,27 +435,6 @@ export function MapCanvas({ budgetId, lat, lng, items, coverageByItemId, onSetIt
           )
         })}
       </MapContainer>
-
-      {/* top-16: entre o "Voltar ao orçamento" (MapView, top-4) e a legenda de cores (top-28). */}
-      <div
-        className="absolute top-16 right-4 z-[1000] flex rounded-full border border-border bg-card/90 p-0.5 text-sm font-medium backdrop-blur"
-        title={arcgisKey ? undefined : 'Satélite indisponível: ARCGIS_API_KEY não configurada no servidor.'}
-      >
-        {[['Mapa', false], ['Satélite', true]].map(([label, satellite]) => (
-          <button
-            key={label}
-            type="button"
-            disabled={satellite && !arcgisKey}
-            aria-pressed={showSatellite === satellite}
-            onClick={() => setPreferSatellite(satellite)}
-            className={`rounded-full px-3 py-1 transition-colors disabled:pointer-events-none disabled:opacity-50 ${
-              showSatellite === satellite ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
 
       <div className="pointer-events-none absolute bottom-4 left-4 z-[1000] flex max-h-[75vh] flex-col gap-2 overflow-y-auto">
         {!placeableItems.length ? (

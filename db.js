@@ -679,7 +679,9 @@ function toBudget(doc) {
   return {
     id: doc._id.toString(),
     status: doc.status,
-    clientName: doc.clientName || null,
+    // Nome do orçamento — antes vinha do "Nome do cliente" do diálogo de endereço (clientName); os
+    // orçamentos antigos continuam mostrando esse valor até o consultor renomear.
+    name: doc.name || doc.clientName || null,
     address: doc.address || null,
     number: doc.number || null,
     lat: Number.isFinite(doc.lat) ? doc.lat : null,
@@ -697,7 +699,7 @@ function toBudget(doc) {
 
 function toBudgetSummary(doc) {
   return {
-    id: doc._id.toString(), clientName: doc.clientName || null, status: doc.status,
+    id: doc._id.toString(), name: doc.name || doc.clientName || null, status: doc.status,
     // Lista precisa saber se já dá pra abrir o mapa sem buscar o orçamento inteiro — não é mais
     // sinônimo de "fechado" (mapa libera já na etapa "criado", bem antes do orçamento fechar).
     hasAddress: Number.isFinite(doc.lat) && Number.isFinite(doc.lng),
@@ -709,7 +711,7 @@ async function createBudget(userId) {
   const budgets = await getBudgetsCollection();
   const now = new Date();
   const doc = {
-    userId: new ObjectId(userId), status: 'aberto', clientName: null, address: null, number: null, lat: null, lng: null,
+    userId: new ObjectId(userId), status: 'aberto', name: null, address: null, number: null, lat: null, lng: null,
     items: [], positions: {}, connections: [], mapLayout: {}, floorPlan: null, floorPlanLayout: {}, createdAt: now, updatedAt: now,
   };
   const { insertedId } = await budgets.insertOne(doc);
@@ -761,8 +763,8 @@ async function updateBudgetForUser(id, userId, patch, unrestricted = false) {
 // Só grava os dados do endereço/geocodificação — a etapa (status) do orçamento é uma decisão
 // separada do consultor (ver validateBudgetSaveRequest + PATCH genérico), não um efeito colateral
 // automático de informar o endereço.
-async function setBudgetAddressForUser(id, userId, { clientName, address, number, lat, lng }, unrestricted = false) {
-  return updateBudgetForUser(id, userId, { clientName, address, number, lat, lng }, unrestricted);
+async function setBudgetAddressForUser(id, userId, { address, number, lat, lng }, unrestricted = false) {
+  return updateBudgetForUser(id, userId, { address, number, lat, lng }, unrestricted);
 }
 
 // Exclusão só é permitida com o orçamento ainda "aberto" (rascunho não comprometido com endereço

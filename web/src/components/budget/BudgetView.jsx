@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faBars, faBox, faEye, faFloppyDisk, faList, faLocationDot, faMagnifyingGlass, faMapLocationDot, faMap, faPenToSquare, faRotateLeft, faRotateRight, faTag, faTriangleExclamation, faXmark } from '@fortawesome/free-solid-svg-icons'
+import { faBars, faBox, faEye, faFloppyDisk, faList, faLocationDot, faMagnifyingGlass, faMapLocationDot, faPenToSquare, faRotateLeft, faRotateRight, faTag, faTriangleExclamation, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { ReactFlowProvider } from '@xyflow/react'
 import { useBudget } from '@/hooks/useBudget'
 import { formatBRL } from '@/lib/money'
@@ -9,7 +9,6 @@ import { SuggestionsStrip } from './SuggestionsStrip'
 import { BudgetCanvas } from './BudgetCanvas'
 import { AddressDialog } from './AddressDialog'
 import { MapView } from '@/components/map/MapView'
-import { FloorPlanView } from '@/components/floorplan/FloorPlanView'
 
 const PILL = 'flex items-center gap-1.5 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm font-medium backdrop-blur transition-colors hover:bg-secondary'
 const PILL_DISABLED = 'disabled:pointer-events-none disabled:opacity-50'
@@ -86,22 +85,10 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
         onSetItemIcon={budget.setItemIcon}
         mapLayout={budget.mapLayout}
         onChangeMapLayout={budget.setMapLayout}
-        onBackToCanvas={() => setStep('canvas')}
-      />
-    )
-  }
-
-  if (step === 'floorplan') {
-    return (
-      <FloorPlanView
-        budgetId={budgetId}
         floorPlan={budget.floorPlan}
-        items={budget.items}
-        coverageByItemId={budget.coverageByItemId}
-        onSetItemIcon={budget.setItemIcon}
         floorPlanLayout={budget.floorPlanLayout}
         onChangeFloorPlanLayout={budget.setFloorPlanLayout}
-        onUpload={budget.uploadFloorPlan}
+        onUploadFloorPlan={budget.uploadFloorPlan}
         readOnly={readOnly}
         onBackToCanvas={() => setStep('canvas')}
       />
@@ -117,7 +104,6 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
           open={addressDialogOpen}
           onOpenChange={setAddressDialogOpen}
           isEditing={hasAddress}
-          initialClientName={budget.clientName}
           initialAddress={budget.address}
           initialNumber={budget.number}
           onSaved={(updatedBudget) => {
@@ -131,7 +117,7 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
             de tudo; sem essa folga extra à direita, o grupo de ações (Salvar por último) encosta e
             fica parcialmente escondido atrás dele. */}
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-center justify-between gap-3 p-4 pr-16">
-          <div className="pointer-events-auto relative">
+          <div className="pointer-events-auto relative flex items-center gap-2">
             <button
               type="button"
               onClick={() => setNavOpen((o) => !o)}
@@ -140,6 +126,25 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
             >
               <FontAwesomeIcon icon={navOpen ? faXmark : faBars} className="size-4" />
             </button>
+            {/* Nome do orçamento: grava ao sair do campo (ou Enter), sem passar pelo Salvar do canvas.
+                key = nome salvo, pra o campo recarregar quando o orçamento termina de carregar. */}
+            {readOnly ? (
+              budget.name ? <span className={`${PILL} max-w-[240px] truncate`}>{budget.name}</span> : null
+            ) : (
+              <input
+                key={budget.name || ''}
+                defaultValue={budget.name || ''}
+                placeholder="Nome do orçamento"
+                maxLength={150}
+                title="Nome do orçamento"
+                onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+                onBlur={(event) => {
+                  const next = event.currentTarget.value.trim()
+                  if (next !== (budget.name || '')) budget.rename(next).catch(() => { event.target.value = budget.name || '' })
+                }}
+                className={`${PILL} w-[240px] outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-ring`}
+              />
+            )}
             {/* Retrátil: abre de cima pra baixo por cima do resto da tela (position absolute, não
                 participa do flex da barra) — max-height animado + overflow-hidden. Fora do fluxo de
                 propósito: se entrasse no flex normal, abrir o menu empurraria o resto da barra. */}
@@ -208,16 +213,10 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
               </button>
             )}
 
-            {hasAddress ? (
-              <button type="button" onClick={() => setStep('map')} className={PILL}>
-                <FontAwesomeIcon icon={faMapLocationDot} className="size-4" /> Ver mapa
-              </button>
-            ) : null}
-
-            {/* Alternativa ao mapa — não depende de endereço, o consultor pode montar a planta
-                baixa a qualquer momento. */}
-            <button type="button" onClick={() => setStep('floorplan')} className={PILL}>
-              <FontAwesomeIcon icon={faMap} className="size-4" /> Planta baixa
+            {/* Uma entrada só: Mapa / Satélite / Planta baixa trocam dentro da tela (ver MapView).
+                Sem endereço abre direto na planta, que não depende dele. */}
+            <button type="button" onClick={() => setStep('map')} className={PILL}>
+              <FontAwesomeIcon icon={faMapLocationDot} className="size-4" /> Mapa
             </button>
 
             {readOnly ? (

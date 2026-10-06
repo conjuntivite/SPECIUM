@@ -34,7 +34,7 @@ export function BudgetsListView({ onOpenBudget }) {
   // Só orçamento "aberto" pode ser excluído (ver validação espelhada no servidor) — o backend
   // recusa qualquer outra etapa, esta confirmação aqui é só pra não disparar a chamada à toa.
   async function handleDelete(budget) {
-    if (!window.confirm(`Excluir o orçamento${budget.clientName ? ` de ${budget.clientName}` : ''}? Essa ação não pode ser desfeita.`)) return
+    if (!window.confirm(`Excluir o orçamento${budget.name ? ` "${budget.name}"` : ''}? Essa ação não pode ser desfeita.`)) return
     try {
       await deleteBudget(budget.id)
       reload()
@@ -77,7 +77,7 @@ export function BudgetsListView({ onOpenBudget }) {
         <Table stickyHeader>
           <TableHeader>
             <TableRow>
-              <TableHead>Cliente</TableHead>
+              <TableHead>Orçamento</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Criado em</TableHead>
               <TableHead>Atualizado em</TableHead>
@@ -90,15 +90,15 @@ export function BudgetsListView({ onOpenBudget }) {
               const canDelete = budget.status === 'aberto'
               return (
                 <TableRow key={budget.id} className="cursor-pointer" onClick={() => onOpenBudget(budget.id)}>
-                  <TableCell>{budget.clientName || <span className="text-muted-foreground">(sem cliente)</span>}</TableCell>
+                  <TableCell>{budget.name || <span className="text-muted-foreground">(sem nome)</span>}</TableCell>
                   <TableCell><Badge variant={STATUS_VARIANT[budget.status] || 'secondary'}>{STATUS_LABEL[budget.status] || budget.status}</Badge></TableCell>
                   <TableCell>{formatDate(budget.createdAt)}</TableCell>
                   <TableCell>{formatDate(budget.updatedAt)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                       <Button
-                        variant="ghost" size="sm" disabled={!budget.hasAddress}
-                        title={budget.hasAddress ? 'Ver no mapa' : 'Defina o endereço no orçamento para liberar o mapa'}
+                        variant="ghost" size="sm"
+                        title={budget.hasAddress ? 'Ver no mapa' : 'Sem endereço — abre na planta baixa'}
                         onClick={() => onOpenBudget(budget.id, 'map')}
                       >
                         <FontAwesomeIcon icon={faMapLocationDot} /> Mapa

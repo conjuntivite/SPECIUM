@@ -17,7 +17,7 @@ const HANDLE_ICON = L.divIcon({
 })
 
 // Legenda das cores do cone da câmera (mesmas faixas e opacidade de coverageBands). Fica sobre o canvas, fora do Leaflet.
-// top-28 = abaixo dos botões "Trocar planta baixa" / "Voltar ao orçamento" do FloorPlanView (canto superior direito, z-[1100]).
+// top-28 = abaixo da barra do MapView (top-4) e do "Trocar planta baixa" (top-16), canto superior direito, z-[1100].
 export function CoverageLegend() {
   return (
     <details open className="pointer-events-auto absolute top-28 right-4 z-[1000] rounded-lg border border-border bg-card/85 px-2 py-1 text-xs backdrop-blur">
