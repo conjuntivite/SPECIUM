@@ -100,6 +100,7 @@ export function useBudget(budgetId) {
   const [name, setName] = useState(null)
   const [address, setAddress] = useState(null)
   const [number, setNumber] = useState(null)
+  const [addressParts, setAddressParts] = useState(null)
   const [lat, setLat] = useState(null)
   const [lng, setLng] = useState(null)
   const [loaded, setLoaded] = useState(false)
@@ -140,6 +141,7 @@ export function useBudget(budgetId) {
       setName(data.name || null)
       setAddress(data.address || null)
       setNumber(data.number || null)
+      setAddressParts(data.addressParts || null)
       setLat(Number.isFinite(data.lat) ? data.lat : null)
       setLng(Number.isFinite(data.lng) ? data.lng : null)
       setLoaded(true)
@@ -194,11 +196,17 @@ export function useBudget(budgetId) {
   // segundo round-trip só pra reler o que a resposta já trouxe. Não mexe em status: definir/editar
   // endereço é uma ação independente da etapa do orçamento.
   const applyAddress = useCallback((updatedBudget) => {
+    const nextLat = Number.isFinite(updatedBudget.lat) ? updatedBudget.lat : null
+    const nextLng = Number.isFinite(updatedBudget.lng) ? updatedBudget.lng : null
+    // Endereço mudou de lugar: a flag arrastada (mapLayout.addressPoint) era do endereço antigo —
+    // descarta pra ela voltar a seguir o ponto geocodificado novo.
+    if (nextLat !== lat || nextLng !== lng) setMapLayout((prev) => ({ ...prev, addressPoint: null }))
     setAddress(updatedBudget.address || null)
     setNumber(updatedBudget.number || null)
-    setLat(Number.isFinite(updatedBudget.lat) ? updatedBudget.lat : null)
-    setLng(Number.isFinite(updatedBudget.lng) ? updatedBudget.lng : null)
-  }, [])
+    setAddressParts(updatedBudget.addressParts || null)
+    setLat(nextLat)
+    setLng(nextLng)
+  }, [lat, lng])
 
   // mapLayout continua com autosave automático (debounced) — é edição feita na tela do mapa, uma
   // jornada separada da do canvas, sem botão Salvar/Cancelar próprio. Uma mudança de posição durante
@@ -672,6 +680,7 @@ export function useBudget(budgetId) {
     rename,
     address,
     number,
+    addressParts,
     lat,
     lng,
     applyAddress,

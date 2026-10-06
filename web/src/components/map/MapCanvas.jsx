@@ -121,6 +121,18 @@ function lineWaypoints(line) {
 
 // Clique no mapa enquanto um item do orçamento está armado na paleta vira um marcador ali — mais
 // simples que soltar (drag HTML5) em cima de um mapa Leaflet.
+// MapContainer só usa `center` na montagem — endereço editado com o mapa aberto precisa mover a
+// vista na mão. Pula a primeira execução pra não brigar com o center/zoom iniciais.
+function RecenterOnAddress({ lat, lng }) {
+  const map = useMap()
+  const firstRef = useRef(true)
+  useEffect(() => {
+    if (firstRef.current) { firstRef.current = false; return }
+    map.setView([lat, lng], map.getZoom())
+  }, [map, lat, lng])
+  return null
+}
+
 function ClickToPlace({ armedItemId, onPlace }) {
   useMapEvents({
     click(e) {
@@ -151,6 +163,15 @@ export function MapCanvas({ budgetId, lat, lng, items, coverageByItemId, onSetIt
     setArmedItemId(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [budgetId])
+
+  // Endereço novo: a flag arrastada era do antigo — volta a seguir lat/lng (o useBudget já limpa o
+  // addressPoint salvo no mapLayout).
+  const coordsRef = useRef([lat, lng])
+  useEffect(() => {
+    if (coordsRef.current[0] === lat && coordsRef.current[1] === lng) return
+    coordsRef.current = [lat, lng]
+    setAddressOverride(null)
+  }, [lat, lng])
 
   const emit = useCallback(
     (nextMarkers, nextLines, nextAddressPoint) => onChange({ markers: nextMarkers, lines: nextLines, addressPoint: nextAddressPoint }),
@@ -328,6 +349,7 @@ export function MapCanvas({ budgetId, lat, lng, items, coverageByItemId, onSetIt
     <div className="relative size-full">
       <MapContainer center={[lat, lng]} zoom={19} maxZoom={20} className="size-full">
         {satellite && arcgisKey ? <EsriSatelliteLayer apiKey={arcgisKey} /> : <OpenFreeMapLayer />}
+        <RecenterOnAddress lat={lat} lng={lng} />
         <ClickToPlace armedItemId={armedItemId} onPlace={placeMarker} />
         {lines.map((line) => {
           const from = byId[line.fromId]

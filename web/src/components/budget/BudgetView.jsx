@@ -82,6 +82,7 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
         onSetItemIcon={budget.setItemIcon}
         address={budget.address}
         number={budget.number}
+        addressParts={budget.addressParts}
         onAddressSaved={budget.applyAddress}
         mapLayout={budget.mapLayout}
         onChangeMapLayout={budget.setMapLayout}

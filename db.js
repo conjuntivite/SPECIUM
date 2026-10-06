@@ -684,6 +684,7 @@ function toBudget(doc) {
     name: doc.name || doc.clientName || null,
     address: doc.address || null,
     number: doc.number || null,
+    addressParts: doc.addressParts || null,
     lat: Number.isFinite(doc.lat) ? doc.lat : null,
     lng: Number.isFinite(doc.lng) ? doc.lng : null,
     items: doc.items || [],
@@ -763,8 +764,8 @@ async function updateBudgetForUser(id, userId, patch, unrestricted = false) {
 // Só grava os dados do endereço/geocodificação — a etapa (status) do orçamento é uma decisão
 // separada do consultor (ver validateBudgetSaveRequest + PATCH genérico), não um efeito colateral
 // automático de informar o endereço.
-async function setBudgetAddressForUser(id, userId, { address, number, lat, lng }, unrestricted = false) {
-  return updateBudgetForUser(id, userId, { address, number, lat, lng }, unrestricted);
+async function setBudgetAddressForUser(id, userId, { address, number, addressParts, lat, lng }, unrestricted = false) {
+  return updateBudgetForUser(id, userId, { address, number, addressParts, lat, lng }, unrestricted);
 }
 
 // Exclusão só é permitida com o orçamento ainda "aberto" (rascunho não comprometido com endereço

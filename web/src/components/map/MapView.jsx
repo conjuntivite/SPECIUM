@@ -12,13 +12,15 @@ const MODES = [['map', 'Mapa'], ['satellite', 'Satélite'], ['floorplan', 'Plant
 // Tela única do local: Mapa, Satélite e Planta baixa trocam por um seletor dentro dela (antes eram
 // dois botões no orçamento + um toggle no mapa). Mapa/Satélite dependem de endereço; a planta não.
 // O endereço também é definido/editado aqui (saiu da barra do canvas).
-export function MapView({ budgetId, lat, lng, address, number, onAddressSaved, items, coverageByItemId, onSetItemIcon, mapLayout, onChangeMapLayout, floorPlan, floorPlanLayout, onChangeFloorPlanLayout, onUploadFloorPlan, readOnly, onBackToCanvas }) {
+export function MapView({ budgetId, lat, lng, address, number, addressParts, onAddressSaved, items, coverageByItemId, onSetItemIcon, mapLayout, onChangeMapLayout, floorPlan, floorPlanLayout, onChangeFloorPlanLayout, onUploadFloorPlan, readOnly, onBackToCanvas }) {
   const [arcgisKey, setArcgisKey] = useState(null)
   // null = automático: satélite se tem endereço, senão planta (o orçamento carrega assíncrono, então
   // não dá pra decidir isso no primeiro render).
   const [chosenMode, setChosenMode] = useState(null)
   const [addressDialogOpen, setAddressDialogOpen] = useState(false)
   const hasAddress = Number.isFinite(lat) && Number.isFinite(lng)
+  // Endereço em campos (addressParts) já vem com número na linha montada; o antigo, numa linha só, não.
+  const addressLine = addressParts ? address : `${address}${number ? `, ${number}` : ''}`
   const mode = !hasAddress ? 'floorplan' : chosenMode || 'satellite'
 
   useEffect(() => {
@@ -56,13 +58,13 @@ export function MapView({ budgetId, lat, lng, address, number, onAddressSaved, i
           hasAddress ? (
             <span className={`${PILL} max-w-[280px]`}>
               <FontAwesomeIcon icon={faLocationDot} className="size-4 shrink-0 text-destructive" />
-              <span className="truncate">{address}{number ? `, ${number}` : ''}</span>
+              <span className="truncate">{addressLine}</span>
             </span>
           ) : null
         ) : (
           <button type="button" onClick={() => setAddressDialogOpen(true)} title={hasAddress ? 'Editar endereço' : 'Definir endereço'} className={`${PILL} max-w-[280px] hover:bg-secondary`}>
             <FontAwesomeIcon icon={faLocationDot} className="size-4 shrink-0 text-destructive" />
-            <span className="truncate">{hasAddress ? `${address}${number ? `, ${number}` : ''}` : 'Definir endereço'}</span>
+            <span className="truncate">{hasAddress ? addressLine : 'Definir endereço'}</span>
             <FontAwesomeIcon icon={faPenToSquare} className="size-3.5 shrink-0 text-muted-foreground" />
           </button>
         )}
@@ -105,6 +107,7 @@ export function MapView({ budgetId, lat, lng, address, number, onAddressSaved, i
         isEditing={hasAddress}
         initialAddress={address}
         initialNumber={number}
+        initialParts={addressParts}
         onSaved={(updatedBudget) => {
           onAddressSaved(updatedBudget)
           setAddressDialogOpen(false)
