@@ -2,12 +2,12 @@ import { useCallback, useEffect, useState } from 'react'
 
 const STORAGE_KEY = 'specium:theme'
 
-// Só escuro (padrão) e claro — quem tinha o antigo "personalizado" salvo volta pro escuro.
+// Claro (padrão do Trade UI) e escuro — quem já escolheu um tema continua nele.
 function loadMode() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}').mode === 'light' ? 'light' : 'dark'
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}').mode === 'dark' ? 'dark' : 'light'
   } catch {
-    return 'dark'
+    return 'light'
   }
 }
 

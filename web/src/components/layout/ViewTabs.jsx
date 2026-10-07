@@ -51,7 +51,7 @@ export function ViewTabs({
         )}
       >
         <div className={cn('flex h-16 shrink-0 items-center border-b border-border', collapsed ? 'justify-center' : 'px-4')}>
-          {collapsed ? <img src="/logo-cat.png" alt="SPECIUM" className="h-8 w-auto" /> : <Brand icon className="text-xl" />}
+          {collapsed ? <Brand icon className="h-8" /> : <Brand className="h-11" />}
         </div>
         <TabsList variant="line" className="w-full flex-1 items-stretch justify-start gap-1 overflow-y-auto p-2">
           {items.map((item) => (

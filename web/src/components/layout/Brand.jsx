@@ -1,10 +1,11 @@
-// Wordmark do sistema: "SPECIUM" em negrito, com "SPEC" na cor primária (vermelho) e "IUM" na cor do texto.
-// `icon` põe o gato da logo (web/public/logo-cat.png) à esquerda do nome.
+// Logo do sistema (public/brand/, Trade UI): logo horizontal ou, com `icon`, só o ícone do gato.
+// Cada uma tem versão clara e escura; o CSS (.logo-light/.logo-dark) mostra só a do tema ativo.
 export function Brand({ className = '', icon = false }) {
+  const name = icon ? 'icon' : 'lockup'
   return (
-    <span className={`inline-flex items-center gap-2 font-bold tracking-tight ${className}`}>
-      {icon ? <img src="/logo-cat.png" alt="" className="h-[1.7em] w-auto" /> : null}
-      <span><span className="text-primary">SPEC</span>IUM</span>
+    <span className={`inline-flex ${className}`}>
+      <img src={`/brand/specium-${name}-light.svg`} alt="SPECIUM" className="logo-light h-full w-auto" />
+      <img src={`/brand/specium-${name}-dark.svg`} alt="SPECIUM" className="logo-dark h-full w-auto" />
     </span>
   )
 }

@@ -1,4 +1,4 @@
-<p align="center"><img src="web/public/logo-light.png" alt="Logo SPECIUM" width="220" /></p>
+<p align="center"><img src="web/public/brand/specium-lockup-light.svg" alt="Logo SPECIUM" width="320" /></p>
 
 # SPECIUM
 

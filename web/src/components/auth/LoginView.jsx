@@ -56,7 +56,7 @@ function CoverageRadar() {
 
       <motion.div variants={pop} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
         <div className="radar-core flex size-16 items-center justify-center rounded-full border border-primary/40 bg-background">
-          <img src="/logo-cat.png" alt="" width="40" height="40" className="size-10 object-contain" />
+          <Brand icon className="h-10" />
         </div>
       </motion.div>
 
@@ -149,7 +149,7 @@ export function LoginView({ auth }) {
         <ThemeSwitcher />
 
         <main className="flex flex-col px-6 py-8 sm:px-12">
-          <Brand icon className="text-2xl" />
+          <Brand className="h-12 self-start" />
 
           <motion.div
             className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center py-10"
