@@ -1,60 +1,48 @@
 # Design System Master File — SPECIUM
 
-> **LÓGICA:** ao construir uma tela, confira primeiro `design-system/specium/pages/[tela].md`.
-> Se existir, as regras de lá **sobrescrevem** este arquivo. Se não, siga as regras abaixo.
->
-> **Fonte da verdade dos valores:** `web/src/index.css`. Este arquivo explica *quando* usar cada token;
-> se um valor divergir, vale o CSS — atualize aqui.
+> **Base:** design system **Trade UI** (fonte global `~/design-systems/trade-ui/`; regras em `CLAUDE.md` e
+> `docs/brand-book.md` de lá). Este arquivo só registra como o Trade UI foi aplicado no SPECIUM.
+> Se existir `design-system/specium/pages/[tela].md`, as regras de lá sobrescrevem as daqui.
 
 ---
 
 **Projeto:** SPECIUM — ferramenta interna de orçamento/projeto de segurança eletrônica (CFTV, alarme, rede)
 **Stack:** React 19 + Vite, Tailwind v4, shadcn/ui (Radix), FontAwesome, `motion`, React Flow, Leaflet
-**Base:** gerado com `ui-ux-pro-max` (dials: variance 3, motion 3, density 8) e ajustado à identidade real
-**Estilo:** Data-Dense Dashboard + Minimalismo — denso, funcional, sem decoração
 
 ---
 
 ## Regras globais
 
-### Cores (tokens semânticos shadcn)
+### Tokens
 
-Tema escuro é o padrão (`:root`); claro via `[data-theme="light"]` (ver `useTheme.js`).
-**Nunca** use hex cru nem `white/N`/`black/N` em componente — use o token; ele troca sozinho com o tema.
-
-| Papel | Escuro | Claro | Classe |
-|-------|--------|-------|--------|
-| Background | `#09090b` | `#fafafa` | `bg-background` |
-| Foreground | `#fafafa` | `#18181b` | `text-foreground` |
-| Card | `rgba(24,24,27,.8)` | `#ffffff` | `bg-card` |
-| Primary (marca, vermelho) | `#dc2626` | `#dc2626` | `bg-primary` / `text-primary` |
-| Destructive | `#f87171` | `#991b1b` | `text-destructive` |
-| Muted foreground | `#a1a1aa` | `#71717a` | `text-muted-foreground` |
-| Border | `rgba(255,255,255,.08)` | `#e4e4e7` | `border-border` |
-| Ring (foco) | `rgba(239,68,68,.5)` | `rgba(220,38,38,.4)` | automático via `outline-ring` |
-
-- **Overlay sutil** (fundo de item, chip, zebra): `bg-foreground/4` … `/10` — nunca `bg-white/N`.
-- **Canvas do orçamento:** `flow-canvas`, `flow-grid`, `flow-green|amber|gray|red|orange` (+ `*-text`).
-- **Status/score:** `badge-green`, `badge-yellow`.
-- **Exceção:** marcadores sobre mapa/planta (Leaflet) podem usar cor fixa — o fundo é imagem, não muda com o tema.
-- **Nunca** transmitir significado só pela cor: acompanhe de ícone ou texto.
+- Cópia dos tokens: `web/src/design-system/tokens.css` (não editar à mão; se o Trade UI mudar, copie de novo).
+- `web/src/index.css` aponta os tokens do shadcn (`--background`, `--primary`, `--border`...) pros do Trade UI
+  e registra os do Trade UI como utilitários com os nomes do preset: `bg-bg-surface`, `bg-bg-elevated`,
+  `bg-bg-inverse`, `text-fg-primary|secondary|muted|inverse`, `border-border-subtle|strong`,
+  `text-positive|negative|warning|info` (texto) e `bg-*-fill` (preenchimento).
+- **Tema:** claro é o padrão; escuro via `data-theme="dark"` no `<html>` (`useTheme.js`). A variante `dark:` do Tailwind segue esse atributo.
+- **Nunca** hex cru nem `white/N`/`black/N` em componente. Overlay sutil: `bg-foreground/4` … `/10`.
+- **Canvas do orçamento:** `flow-green|amber|red|orange|gray` são só preenchimento (cabeçalho, legenda, borda);
+  valor em texto usa `text-positive`/`text-warning`. Card ainda sem vínculo: `bg-bg-inverse text-fg-inverse`.
+- **Exceção:** marcadores sobre mapa/planta (Leaflet) e cores de tipo de cabo podem usar cor fixa — o fundo é imagem.
+- **Severidade** (sugestões, auditoria de PDF): cor no ícone + texto, nunca borda lateral colorida.
 
 ### Tipografia
 
-- **Sans:** DM Sans (`font-sans`, padrão) · **Mono:** JetBrains Mono (`font-mono`) para preços, quantidades, chaves.
-- **Mínimo 12px** (`text-xs`). Nada de `text-[0.65rem]` e similares.
-- Escala: `text-xs` (rótulos, metadados) · `text-sm` (corpo/tabelas) · `text-base`+ (títulos).
-- Evite tamanhos arbitrários (`text-[0.82rem]`); exceção: nós do canvas (`FlowNode`), cujo layout depende das medidas.
-- Números em tabela já saem com `tabular-nums` (global em `td, th`).
+- Plus Jakarta Sans (`font-sans`) · Space Mono (`font-mono`), carregadas no `web/index.html`.
+- Mínimo 12px (`text-xs`). Números em tabela já saem com `tabular-nums` (global em `td, th`, e nos inputs).
 
-### Espaçamento e densidade
+### Forma
 
-Denso (dashboard): gaps de 8–12px (`gap-2`/`gap-3`), padding de card 12–16px, linha de tabela ~36–40px.
-Container de página: `max-w-[1100px] px-6 py-7` (em `ViewTabs`).
+- Botões, abas, chips e itens do menu lateral em **pílula** (`rounded-full`); aba/item ativo invertido (`bg-bg-inverse`).
+- Inputs/selects: `bg-bg-elevated`, borda `border-strong`, `rounded-md`, 40px de altura (`sm`: 32px).
+- Cards: `rounded-xl` (24px) com padding 24px; `size="sm"`: `rounded-lg` (16px) com 16px. Diálogos: `rounded-xl`, `p-6`.
+- Botão `variant="accent"` (limão) é o CTA de marca: no máximo um por tela.
 
-### Raio e sombra
+### Logos
 
-`--radius: 0.75rem` → `rounded-lg` padrão; `rounded-xl` para cards/diálogos. Sombra elevada: `shadow-elevated`.
+`web/public/brand/` (cópia de `trade-ui/brand/specium`, sem o fundo sólido do lockup). Use `<Brand />`
+(logo horizontal) ou `<Brand icon />` (ícone) — já alternam claro/escuro. Favicon por `prefers-color-scheme`.
 
 ---
 
@@ -62,7 +50,7 @@ Container de página: `max-w-[1100px] px-6 py-7` (em `ViewTabs`).
 
 Use sempre os primitivos de `web/src/components/ui/` antes de criar algo novo.
 
-- **Button:** variantes `default | outline | secondary | ghost | destructive | link`. Foco visível e transição já vêm prontos.
+- **Button:** variantes `default | outline | secondary | ghost | destructive | link | accent`. Foco visível e transição já vêm prontos.
 - **Botão só-ícone:** obrigatório `aria-label` **e** `title` (tooltip) com o mesmo texto.
 - **Table:** listas de página inteira usam `<Table stickyHeader>` (cabeçalho gruda no topo ao rolar).
   Tabelas dentro de card/rolagem lateral (ex.: `CompareTable`) ficam sem.
@@ -99,7 +87,7 @@ Use sempre os primitivos de `web/src/components/ui/` antes de criar algo novo.
 
 ## Checklist antes de entregar UI
 
-- [ ] Conferido nos **dois temas** (escuro e claro)
+- [ ] Conferido nos **dois temas** (claro e escuro)
 - [ ] Só tokens do tema, sem hex/`white/N` novos
 - [ ] Texto ≥ 12px; valores em `font-mono` ou tabela
 - [ ] Botões só-ícone com `aria-label` + `title`

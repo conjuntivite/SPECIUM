@@ -31,25 +31,60 @@
   --radius: var(--radius-lg);
 }
 
-/* Tokens sem equivalente no shadcn: canvas do orçamento (paleta própria, migra na etapa de componentes),
-   status dos cards de busca e sombra elevada. */
-@theme {
+/* Tokens do Trade UI como utilitários Tailwind, com os mesmos nomes do preset
+   (bg-bg-surface, text-fg-muted, border-border-strong, text-positive, bg-negative-fill...). */
+@theme inline {
+  --color-bg-page: var(--bg-page);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-inverse: var(--bg-inverse);
+  --color-bg-brand: var(--bg-brand);
+  --color-bg-brand-deep: var(--bg-brand-deep);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
+  --color-fg-primary: var(--fg-primary);
+  --color-fg-secondary: var(--fg-secondary);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-inverse: var(--fg-inverse);
+  --color-fg-on-brand: var(--fg-on-brand);
+  --color-action-accent: var(--action-accent);
+  --color-positive: var(--positive);
+  --color-positive-fill: var(--positive-fill);
+  --color-negative: var(--negative);
+  --color-negative-fill: var(--negative-fill);
+  --color-warning: var(--warning);
+  --color-warning-fill: var(--warning-fill);
+  --color-info: var(--info);
+  --color-info-fill: var(--info-fill);
+
+  /* Status dos cards de busca. */
   --color-badge-green: var(--positive);
   --color-badge-yellow: var(--warning);
 
-  --color-flow-green: #3ecf8e;
-  --color-flow-green-text: #063b28;
-  --color-flow-amber: #f5b93f;
-  --color-flow-amber-text: #3a2705;
-  --color-flow-gray: #9aa5b1;
-  --color-flow-gray-text: #1c2430;
-  --color-flow-red: #e5484d;
-  --color-flow-orange: #f5793f;
-  --color-flow-body: #18181b;
+  /* Canvas do orçamento: severidade só em preenchimento (fundo de cabeçalho, ponto de legenda, borda);
+     texto colorido usa text-positive/text-warning. */
+  --color-flow-green: var(--positive-fill);
+  --color-flow-green-text: var(--fg-on-brand);
+  --color-flow-amber: var(--warning-fill);
+  --color-flow-amber-text: var(--fg-on-brand);
+  --color-flow-gray: var(--border-strong);
+  --color-flow-red: var(--negative-fill);
+  --color-flow-orange: var(--info-fill);
   --color-flow-canvas: var(--bg-page);
   --color-flow-grid: color-mix(in srgb, var(--fg-primary) 14%, transparent);
 
   --shadow-elevated: var(--shadow-card);
+  --shadow-node: var(--node-shadow);
+  --shadow-node-drag: var(--node-shadow), var(--shadow-glow);
+}
+
+/* Sombra dos cards do canvas: mais marcada que a --shadow-card (o card flutua sobre a grade, precisa
+   destacar do fundo e do container onde está). No escuro a borda faz a maior parte do trabalho. */
+:root {
+  --node-shadow: 0 1px 2px color-mix(in srgb, var(--ink-900) 8%, transparent), 0 12px 28px -8px color-mix(in srgb, var(--ink-900) 24%, transparent);
+}
+:root[data-theme="dark"] {
+  --node-shadow: 0 1px 2px color-mix(in srgb, var(--ink-950) 80%, transparent), 0 12px 28px -8px color-mix(in srgb, var(--ink-950) 90%, transparent);
 }
 
 @theme inline {

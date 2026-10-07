@@ -6,7 +6,7 @@ import { getProductIcon } from '@/lib/productIcons'
 import { formatBRL, parseBRL } from '@/lib/money'
 import { ContainerAddPanel } from './ContainerAddPanel'
 
-const handleClass = '!size-2.5 !border-2 !border-flow-canvas !bg-zinc-300'
+const handleClass = '!size-2.5 !border-2 !border-flow-canvas !bg-fg-muted'
 
 // Grade simples pros filhos de um container aberto (sem posição livre no MVP — ver
 // recurso-container.txt seção 7, "priorize usabilidade e simplicidade"). Única fonte de verdade,
@@ -35,11 +35,9 @@ export function containerNodeSize(childCount) {
   }
 }
 
-// Sombra em repouso (mesma do --shadow-elevated) x sombra "levantada" enquanto arrasta — o node em
-// si já segue o cursor em tempo real (React Flow), então animar esses valores com o Motion é o que
-// dá a sensação de sombra/prévia flutuando embaixo do cursor durante o arraste.
-const restShadow = '0 20px 40px -15px rgba(0,0,0,0.5), 0 0 0 0 rgba(34,211,238,0)'
-const draggingShadow = '0 30px 60px -12px rgba(0,0,0,0.85), 0 0 0 2px rgba(34,211,238,0.7)'
+// Sombra em repouso (--shadow-node, index.css) x sombra + brilho de destaque enquanto arrasta. Vai por
+// classe com transição CSS, não pelo Motion: os valores são var() por tema, que o Motion não interpola.
+const shadowClass = (dragging) => `transition-shadow duration-200 ${dragging ? 'shadow-node-drag' : 'shadow-node'}`
 
 // Os 4 handles (topo/direita/baixo/esquerda) são iguais nos três formatos de card — todo capaz de
 // iniciar OU terminar uma ligação (isConnectableStart/End), ligação em modo "loose" no BudgetCanvas.
@@ -130,35 +128,36 @@ export function FlowNode({ data, dragging, selected }) {
   const unitValue = parseBRL(item.averagePrice)
   // Seleção (clique/shift/ctrl+clique, ou caixa de seleção) tem prioridade visual sobre o alerta de
   // lacuna crítica — o usuário precisa ver o que está selecionado antes de arrastar o grupo.
-  const borderClass = selected ? 'border-zinc-100' : hasCriticalGap ? 'border-flow-red' : 'border-transparent'
+  // Sem destaque, a borda sutil é o que separa o card do fundo — principalmente dentro de um container.
+  const borderClass = selected ? 'border-fg-primary' : hasCriticalGap ? 'border-flow-red' : 'border-border-subtle'
   // Cabeçalho só vira verde depois que o card ganha uma linha manual pra outro — antes disso fica
-  // neutro (cinza-escuro), pra não sugerir que o item já está "encaixado" no fluxo sem estar.
-  const headerClass = isLinked ? 'bg-flow-green text-flow-green-text' : 'bg-zinc-700 text-zinc-200'
+  // neutro (cor invertida do tema), pra não sugerir que o item já está "encaixado" no fluxo sem estar.
+  const headerClass = isLinked ? 'bg-flow-green text-flow-green-text' : 'bg-bg-inverse text-fg-inverse'
 
   // Container fechado: card compacto de resumo, sem os filhos ocupando espaço no canvas.
   if (isContainer && !containerOpen) {
     return (
       <motion.div
-        className={`w-[220px] overflow-hidden rounded-lg border-2 ${borderClass}`}
+        className={`w-[220px] overflow-hidden rounded-lg border-2 bg-bg-elevated ${borderClass} ${shadowClass(dragging)}`}
         title={hasCriticalGap ? 'Falta algo crítico pra este item funcionar — veja as sugestões.' : undefined}
-        animate={{ scale: dragging ? 1.04 : 1, opacity: dragging ? 0.72 : 1, boxShadow: dragging ? draggingShadow : restShadow }}
+        animate={{ scale: dragging ? 1.04 : 1, opacity: dragging ? 0.72 : 1 }}
         transition={{ type: 'spring', stiffness: 500, damping: 32, mass: 0.6 }}
       >
         <NodeHandles />
         <div className={`flex items-center justify-between gap-2 px-3 py-2 font-bold ${headerClass}`}>
           <NodeTitle item={item} label={shownTitle} />
           {!readOnly ? (
-            <button type="button" className="nodrag flex size-5 shrink-0 items-center justify-center rounded-full bg-black/15 hover:bg-black/30" title="Remover" onClick={() => onRemove(item.id)}>
+            <button type="button" className="nodrag flex size-5 shrink-0 items-center justify-center rounded-full bg-current/15 hover:bg-current/30" title="Remover" onClick={() => onRemove(item.id)}>
               <FontAwesomeIcon icon={faXmark} className="size-3" />
             </button>
           ) : null}
         </div>
         <QuantityRow item={item} onQtyChange={onQtyChange} readOnly={readOnly} />
-        {needsProduct && !readOnly ? <div className="bg-card"><PickProductButton item={item} onPickProduct={onPickProduct} /></div> : null}
-        <div className="flex flex-col gap-1 bg-card px-3 py-2 text-sm text-card-foreground">
+        {needsProduct && !readOnly ? <PickProductButton item={item} onPickProduct={onPickProduct} /> : null}
+        <div className="flex flex-col gap-1 px-3 py-2 text-sm text-card-foreground">
           <span>{childCount} equipamento{childCount === 1 ? '' : 's'} interno{childCount === 1 ? '' : 's'}</span>
           {childQuantityTotal > childCount ? <span className="text-xs text-muted-foreground">{childQuantityTotal} itens no total</span> : null}
-          {childValueTotal ? <span className="font-mono text-flow-green">{formatBRL(childValueTotal)}</span> : null}
+          {childValueTotal ? <span className="font-mono text-positive">{formatBRL(childValueTotal)}</span> : null}
           <button
             type="button"
             className="nodrag mt-1 flex items-center justify-center gap-1.5 rounded-md bg-foreground/8 py-1.5 text-xs font-medium hover:bg-foreground/15"
@@ -183,9 +182,9 @@ export function FlowNode({ data, dragging, selected }) {
     const rows = containerChildRows(childCount)
     return (
       <motion.div
-        className={`overflow-hidden rounded-lg border-2 bg-card ${borderClass}`}
+        className={`overflow-hidden rounded-lg border-2 bg-card ${borderClass} ${shadowClass(dragging)}`}
         style={{ width, height }}
-        animate={{ scale: dragging ? 1.02 : 1, boxShadow: dragging ? draggingShadow : restShadow }}
+        animate={{ scale: dragging ? 1.02 : 1 }}
         transition={{ type: 'spring', stiffness: 500, damping: 32, mass: 0.6 }}
       >
         {!readOnly ? (
@@ -199,11 +198,11 @@ export function FlowNode({ data, dragging, selected }) {
         <div className={`flex items-center justify-between gap-2 px-3 py-2 font-bold ${headerClass}`}>
           <NodeTitle item={item} label={shownTitle} clamp />
           <span className="nodrag flex shrink-0 items-center gap-1">
-            <button type="button" className="flex size-5 items-center justify-center rounded-full bg-black/15 hover:bg-black/30" title="Fechar Container" onClick={() => onToggleContainer(item.id)}>
+            <button type="button" className="flex size-5 items-center justify-center rounded-full bg-current/15 hover:bg-current/30" title="Fechar Container" onClick={() => onToggleContainer(item.id)}>
               <FontAwesomeIcon icon={faCompress} className="size-3" />
             </button>
             {!readOnly ? (
-              <button type="button" className="flex size-5 items-center justify-center rounded-full bg-black/15 hover:bg-black/30" title="Remover" onClick={() => onRemove(item.id)}>
+              <button type="button" className="flex size-5 items-center justify-center rounded-full bg-current/15 hover:bg-current/30" title="Remover" onClick={() => onRemove(item.id)}>
                 <FontAwesomeIcon icon={faXmark} className="size-3" />
               </button>
             ) : null}
@@ -226,12 +225,11 @@ export function FlowNode({ data, dragging, selected }) {
 
   return (
     <motion.div
-      className={`w-[220px] overflow-hidden rounded-lg border-2 ${borderClass}`}
+      className={`w-[220px] overflow-hidden rounded-lg border-2 bg-bg-elevated ${borderClass} ${shadowClass(dragging)}`}
       title={hasCriticalGap ? 'Falta algo crítico pra este item funcionar — veja as sugestões.' : undefined}
       animate={{
         scale: dragging ? 1.04 : 1,
         opacity: dragging ? 0.72 : 1,
-        boxShadow: dragging ? draggingShadow : restShadow,
       }}
       transition={{ type: 'spring', stiffness: 500, damping: 32, mass: 0.6 }}
     >
@@ -244,7 +242,7 @@ export function FlowNode({ data, dragging, selected }) {
             {containedIn != null ? (
               <button
                 type="button"
-                className="flex size-5 items-center justify-center rounded-full bg-black/15 hover:bg-black/30"
+                className="flex size-5 items-center justify-center rounded-full bg-current/15 hover:bg-current/30"
                 title="Remover do container"
                 onClick={() => onRemoveFromContainer(item.id)}
               >
@@ -253,7 +251,7 @@ export function FlowNode({ data, dragging, selected }) {
             ) : null}
             <button
               type="button"
-              className="flex size-5 items-center justify-center rounded-full bg-black/15 hover:bg-black/30"
+              className="flex size-5 items-center justify-center rounded-full bg-current/15 hover:bg-current/30"
               title="Remover"
               onClick={() => onRemove(item.id)}
             >
@@ -263,7 +261,7 @@ export function FlowNode({ data, dragging, selected }) {
         ) : null}
       </div>
 
-      <div className="bg-card py-2">
+      <div className="py-2">
         <QuantityRow item={item} onQtyChange={onQtyChange} readOnly={readOnly} />
 
         {needsProduct && !readOnly ? <PickProductButton item={item} onPickProduct={onPickProduct} /> : null}
@@ -289,7 +287,7 @@ export function FlowNode({ data, dragging, selected }) {
             <span className="w-4 shrink-0 text-center text-[0.82rem] text-muted-foreground">↗</span>
             <span className="flex-1 text-card-foreground">Melhor oferta</span>
             <a
-              className="nodrag shrink-0 font-mono text-[0.84rem] text-flow-green hover:underline"
+              className="nodrag shrink-0 font-mono text-[0.84rem] text-positive hover:underline"
               href={item.bestOffer.url}
               target="_blank"
               rel="noopener noreferrer"

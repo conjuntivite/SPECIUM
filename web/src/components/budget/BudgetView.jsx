@@ -156,7 +156,7 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
           <div className="pointer-events-auto flex flex-wrap items-center gap-4 rounded-full border border-border bg-card/90 px-4 py-1.5 text-sm text-muted-foreground backdrop-blur">
             <FlowLegend compact />
             {budget.total > 0 ? (
-              <span className="font-mono font-bold text-flow-green">{formatBRL(budget.total)}</span>
+              <span className="font-mono font-bold text-positive">{formatBRL(budget.total)}</span>
             ) : null}
           </div>
 
@@ -217,7 +217,7 @@ export function BudgetView({ budgetId, initialStep, onBackToList, onSwitchToSear
                   disabled={!budget.items.length || saving}
                   title={!budget.items.length ? 'Adicione ao menos um equipamento no fluxo antes' : undefined}
                   onClick={handleSave}
-                  className={`${PILL} ${PILL_DISABLED} text-flow-green`}
+                  className={`${PILL} ${PILL_DISABLED} text-positive`}
                 >
                   <FontAwesomeIcon icon={faFloppyDisk} className="size-4" /> {saving ? 'Salvando...' : 'Salvar'}
                 </button>

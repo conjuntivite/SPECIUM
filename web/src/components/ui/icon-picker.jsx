@@ -65,7 +65,7 @@ export function IconPicker({ value, onChange, compact = false }) {
         type="button"
         onClick={toggleOpen}
         title={selected?.label || 'Escolher ícone'}
-        className={`flex ${compact ? 'size-7' : 'size-9'} shrink-0 items-center justify-center rounded-lg border border-input bg-transparent text-foreground transition-colors hover:bg-secondary`}
+        className={`flex ${compact ? 'size-7' : 'size-9'} shrink-0 items-center justify-center rounded-full border border-input bg-bg-elevated text-foreground transition-colors hover:bg-secondary`}
       >
         <FontAwesomeIcon icon={getProductIcon(value)} className={compact ? 'size-3.5' : 'size-4'} />
       </button>

@@ -35,7 +35,7 @@ export function DealsGrid({ data, compare }) {
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4">
           {!data.exact_found ? (
-            <div className="col-span-full rounded-lg bg-amber-500/10 p-3 text-center text-sm text-amber-300">
+            <div className="col-span-full rounded-lg bg-warning-fill/15 p-3 text-center text-sm text-warning">
               Produto exato não encontrado. Estas são opções semelhantes.
             </div>
           ) : null}

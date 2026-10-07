@@ -59,7 +59,7 @@ export function ViewTabs({
               key={item.value}
               value={item.value}
               title={collapsed ? item.label : undefined}
-              className={cn('h-10 flex-none gap-3 px-3 text-sm data-active:bg-secondary', collapsed && 'justify-center! px-0')}
+              className={cn('h-10 flex-none gap-3 rounded-full px-3 text-sm after:hidden data-active:bg-bg-inverse! data-active:text-fg-inverse!', collapsed && 'justify-center! px-0')}
             >
               <FontAwesomeIcon icon={item.icon} className="size-4" />
               {collapsed ? null : <span className="truncate">{item.label}</span>}
@@ -83,7 +83,7 @@ export function ViewTabs({
             title="Sair"
             aria-label="Sair"
             className={cn(
-              'flex h-10 items-center gap-3 rounded-md px-3 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground',
+              'flex h-10 items-center gap-3 rounded-full px-3 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground',
               collapsed && 'justify-center px-0',
             )}
           >
@@ -96,7 +96,7 @@ export function ViewTabs({
             title={collapsed ? 'Expandir menu' : 'Recolher menu'}
             aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
             className={cn(
-              'flex h-10 items-center gap-3 rounded-md px-3 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground',
+              'flex h-10 items-center gap-3 rounded-full px-3 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground',
               collapsed && 'justify-center px-0',
             )}
           >

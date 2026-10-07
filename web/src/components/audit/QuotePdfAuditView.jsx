@@ -13,10 +13,10 @@ import { dedupeUnsatisfiedSuggestions } from '@/lib/suggestions'
 import { ProductFormDialog } from '@/components/products/ProductFormDialog'
 
 const SEVERITY_STYLES = {
-  critical: { border: 'border-l-flow-red', icon: faCircleExclamation, kind: 'Sem isso não liga' },
-  optional: { border: 'border-l-flow-orange', icon: faArrowRightArrowLeft, kind: 'Alternativa (opcional)' },
-  essential: { border: 'border-l-flow-amber', icon: faAsterisk, kind: 'Essencial' },
-  recommended: { border: 'border-l-flow-gray', icon: faLightbulb, kind: 'Recomendado' },
+  critical: { tone: 'text-negative', icon: faCircleExclamation, kind: 'Sem isso não liga' },
+  optional: { tone: 'text-info', icon: faArrowRightArrowLeft, kind: 'Alternativa (opcional)' },
+  essential: { tone: 'text-warning', icon: faAsterisk, kind: 'Essencial' },
+  recommended: { tone: 'text-fg-muted', icon: faLightbulb, kind: 'Recomendado' },
 }
 
 function suggestionStyle(req) {
@@ -33,10 +33,10 @@ function EngineFindingRow({ req, onSelect }) {
       <button
         type="button"
         onClick={() => onSelect(req)}
-        className={`w-full rounded-md border-l-2 bg-foreground/4 px-3 py-2 text-left transition-colors hover:bg-foreground/8 ${style.border}`}
+        className="w-full rounded-md bg-foreground/4 px-3 py-2 text-left transition-colors hover:bg-foreground/8"
       >
         <span className="mb-0.5 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-          <FontAwesomeIcon icon={style.icon} className="size-3" /> {style.kind}
+          <FontAwesomeIcon icon={style.icon} className={`size-3 ${style.tone}`} /> {style.kind}
         </span>
         <p className="text-sm">{req.reason || req.label}</p>
       </button>
@@ -308,14 +308,14 @@ export function QuotePdfAuditView() {
               </ul>
             ) : (
               <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <FontAwesomeIcon icon={faCircleCheck} className="size-3.5 text-flow-green" />
+                <FontAwesomeIcon icon={faCircleCheck} className="size-3.5 text-positive" />
                 Nenhuma pendência encontrada nos itens reconhecidos.
               </p>
             )}
             {unrecognizedItems.length ? (
               <div className="mt-2">
                 <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                  <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 size-3 shrink-0 text-flow-amber" />
+                  <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 size-3 shrink-0 text-warning" />
                   {unrecognizedItems.length} item(ns) do PDF não bateram com nenhuma categoria do cadastro,
                   então não entraram nessa checagem. Se for um produto de verdade, cadastre pra manter o catálogo atualizado:
                 </p>
@@ -324,7 +324,7 @@ export function QuotePdfAuditView() {
                     <li key={i} className="flex items-center justify-between gap-2 text-xs">
                       <span>{item.quantity}x {item.name}</span>
                       {registeredNames.has(item.name) ? (
-                        <span className="flex shrink-0 items-center gap-1 text-flow-green">
+                        <span className="flex shrink-0 items-center gap-1 text-positive">
                           <FontAwesomeIcon icon={faCircleCheck} className="size-3" /> Cadastrado
                         </span>
                       ) : (
