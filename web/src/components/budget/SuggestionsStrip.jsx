@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faArrowRightArrowLeft, faAsterisk, faLightbulb, faCircleExclamation, faPlus } from '@fortawesome/free-solid-svg-icons'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 const SEVERITY_STYLES = {
   critical: { tone: 'text-negative', bg: 'bg-negative-fill/12', icon: faCircleExclamation, kind: 'Sem isso não liga' },
@@ -19,9 +20,10 @@ function SuggestionCard({ req, onAdd }) {
   const [dragging, setDragging] = useState(false)
   const style = suggestionStyle(req)
   return (
+    <Tooltip>
+    <TooltipTrigger asChild>
     <div
       draggable
-      title={`${req.label} — ${req.reason || ''}`}
       onDragStart={(e) => {
         e.dataTransfer.setData('application/json', JSON.stringify({ key: req.key, label: req.label, categories: req.categories }))
         e.dataTransfer.effectAllowed = 'copy'
@@ -46,6 +48,19 @@ function SuggestionCard({ req, onAdd }) {
       </span>
       <span className="line-clamp-2 text-xs leading-snug text-muted-foreground">{req.reason || ''}</span>
     </div>
+    </TooltipTrigger>
+    {/* Coluna fica na borda direita do canvas — popup abre pra esquerda, sobre o quadro. */}
+    <TooltipContent side="left" className="flex flex-col gap-1">
+      <span className="font-semibold">{req.label}</span>
+      {req.reason && <span className="opacity-80">{req.reason}</span>}
+      {req.neededBy?.length > 0 && (
+        <span className="mt-1 border-t border-fg-inverse/20 pt-1">
+          <span className="opacity-80">Necessário para: </span>
+          <span className="font-semibold">{req.neededBy.join(', ')}</span>
+        </span>
+      )}
+    </TooltipContent>
+    </Tooltip>
   )
 }
 

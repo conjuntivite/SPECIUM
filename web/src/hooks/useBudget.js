@@ -644,10 +644,18 @@ export function useBudget(budgetId) {
   // Sugestões ainda não satisfeitas, deduplicadas entre âncoras que compartilham o mesmo requisito
   // (ex.: "Fonte 12V" pode ser sugestiva pro DVR e crítica/alternativa pra Câmera IP PoE ao mesmo
   // tempo) — fica a versão mais severa, não a primeira âncora processada.
-  const suggestions = useMemo(
-    () => dedupeUnsatisfiedSuggestions(suggestionsData.requirements_by_category),
-    [suggestionsData]
-  )
+  // `neededBy`: títulos dos equipamentos do quadro cuja categoria pede aquele requisito (popup).
+  const suggestions = useMemo(() => {
+    const byCategory = suggestionsData.requirements_by_category || {}
+    return dedupeUnsatisfiedSuggestions(byCategory).map((req) => {
+      const titles = new Set()
+      items.forEach((item, index) => {
+        const reqs = byCategory[suggestionsData.items?.[index]?.category]
+        if (reqs?.some((r) => r.key === req.key && !r.satisfied_by)) titles.add(item.title)
+      })
+      return { ...req, neededBy: [...titles] }
+    })
+  }, [items, suggestionsData])
 
   const total = useMemo(() => items.reduce((sum, item) => {
     const unitValue = parseBRL(item.averagePrice)
