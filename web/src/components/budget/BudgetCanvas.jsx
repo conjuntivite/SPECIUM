@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
-import { ReactFlow, Background, Panel, BackgroundVariant, applyNodeChanges, applyEdgeChanges, useReactFlow } from '@xyflow/react'
+import { ReactFlow, Background, Panel, BackgroundVariant, applyNodeChanges, applyEdgeChanges, useReactFlow, useNodesInitialized } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSackDollar, faExpand, faPlus, faTrashCan, faMagnifyingGlassPlus, faMagnifyingGlassMinus } from '@fortawesome/free-solid-svg-icons'
@@ -228,6 +228,17 @@ export const BudgetCanvas = forwardRef(function BudgetCanvas({ budget, onGoToPro
       },
     })))
   }, [budget.nodes, handleNodeRemove, budget.updateQuantity, handleToggleContainer, budget.removeFromContainer, budget.moveToContainer, budget.resizeContainer, handleAddCategoryToContainer, handleItemPickProduct, looseItems, readOnly, categoryValues])
+
+  // Ao abrir o canvas, centraliza no primeiro item adicionado (menor id entre os soltos) — uma vez
+  // só, depois que o React Flow mediu os cards (sem medida, fitView não sabe o tamanho do node).
+  const nodesInitialized = useNodesInitialized()
+  const centeredRef = useRef(false)
+  useEffect(() => {
+    if (centeredRef.current || !nodesInitialized || nodes.length === 0) return
+    const first = nodes.filter((n) => !n.parentId).reduce((a, b) => (b.data.item.id < a.data.item.id ? b : a))
+    fitView({ nodes: [{ id: first.id }], maxZoom: 1 })
+    centeredRef.current = true
+  }, [nodesInitialized, nodes, fitView])
 
   const onNodesChange = useCallback((changes) => {
     setNodes((nds) => applyNodeChanges(changes, nds))
