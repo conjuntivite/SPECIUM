@@ -501,9 +501,12 @@ export function MapCanvas({ budgetId, lat, lng, items, coverageByItemId, onSetIt
         </button>
       </div>
 
-      <p className="pointer-events-none absolute bottom-4 right-4 z-[1000] max-w-[230px] rounded-lg bg-card/80 px-2 py-1 text-right text-xs text-muted-foreground backdrop-blur">
+      <details className="pointer-events-auto absolute bottom-4 right-4 z-[1000] max-w-[260px] rounded-lg bg-card/85 px-2 py-1 text-xs text-muted-foreground backdrop-blur">
+        <summary className="cursor-pointer select-none text-right font-medium">Ajuda</summary>
+        <p className="mt-1 text-right">
         A quantidade em cada botão é a do orçamento — some pra 0/N quando todos já foram colocados. Clique num ícone com selo pra ver o que tem dentro dele. Botão direito remove. Arrastar move a posição (desligado enquanto "Ligar com linha" está ativo). Clique numa linha de ligação pra criar um ponto de dobra; arraste o ponto pra ajustar, botão direito nele remove a dobra. Equipamento com área de cobertura: arraste o ponto amarelo na ponta pra ajustar direção e alcance, ou clique no ícone pra digitar os valores.
-      </p>
+        </p>
+      </details>
     </div>
   )
 }
