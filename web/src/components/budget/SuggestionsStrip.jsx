@@ -54,10 +54,12 @@ function SuggestionCard({ req, onAdd }) {
       <span className="font-semibold">{req.label}</span>
       {req.reason && <span className="opacity-80">{req.reason}</span>}
       {req.neededBy?.length > 0 && (
-        <span className="mt-1 border-t border-fg-inverse/20 pt-1">
-          <span className="opacity-80">Necessário para: </span>
-          <span className="font-semibold">{req.neededBy.join(', ')}</span>
-        </span>
+        <div className="mt-1 border-t border-fg-inverse/20 pt-1">
+          <span className="opacity-80">Necessário para:</span>
+          <ul className="list-disc pl-4 font-semibold">
+            {req.neededBy.map((name) => <li key={name}>{name}</li>)}
+          </ul>
+        </div>
       )}
     </TooltipContent>
     </Tooltip>
