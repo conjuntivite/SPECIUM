@@ -41,13 +41,16 @@ const shadowClass = (dragging) => `transition-shadow duration-200 ${dragging ? '
 
 // Os 4 handles (topo/direita/baixo/esquerda) são iguais nos três formatos de card — todo capaz de
 // iniciar OU terminar uma ligação (isConnectableStart/End), ligação em modo "loose" no BudgetCanvas.
+// Todos type="source": o React Flow só procura o lado de SAÍDA da aresta entre handles "source" (o de
+// chegada, em loose, aceita qualquer um) — com topo/esquerda como "target", ligação topo→topo ou
+// esquerda→esquerda era aceita mas a linha não aparecia (erro 008, handle de origem não encontrado).
 function NodeHandles() {
   return (
     <>
-      <Handle id="top" type="target" position={Position.Top} className={handleClass} isConnectableStart isConnectableEnd />
+      <Handle id="top" type="source" position={Position.Top} className={handleClass} isConnectableStart isConnectableEnd />
       <Handle id="right" type="source" position={Position.Right} className={handleClass} isConnectableStart isConnectableEnd />
       <Handle id="bottom" type="source" position={Position.Bottom} className={handleClass} isConnectableStart isConnectableEnd />
-      <Handle id="left" type="target" position={Position.Left} className={handleClass} isConnectableStart isConnectableEnd />
+      <Handle id="left" type="source" position={Position.Left} className={handleClass} isConnectableStart isConnectableEnd />
     </>
   )
 }
